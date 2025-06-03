@@ -18,8 +18,8 @@ Tool for produces java source code from .class or jar file
 **No other dependencies**
 
 ```sh
-git clone https://github.com/neocanable/decompiler-garlic.git
-cd decompile-garlic
+git clone https://github.com/neocanable/garlic.git
+cd garlic
 cmake -B build
 cmake --build build
 ./build/garlic
