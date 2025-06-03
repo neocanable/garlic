@@ -1,0 +1,24 @@
+{
+  "name": "Arch Linux Codespace with Dockerfile",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "remoteUser": "codespace",
+   "containerEnv": {
+    "GIT_EDITOR": "code --wait"
+  },
+  "postStartCommand": "echo \"Attempting to configure Git. GIT_COMMITTER_NAME='${GIT_COMMITTER_NAME}', GIT_COMMITTER_EMAIL='${GIT_COMMITTER_EMAIL}'\"\nCURRENT_GIT_USER=$(git config --global --get user.name)\nCURRENT_GIT_EMAIL=$(git config --global --get user.email)\necho \"Current git config user.name='${CURRENT_GIT_USER}', user.email='${CURRENT_GIT_EMAIL}'\"\nif [ -z \"${GIT_COMMITTER_NAME}\" ] || [ -z \"${GIT_COMMITTER_EMAIL}\" ]; then\n  echo 'Warning: GIT_COMMITTER_NAME or GIT_COMMITTER_EMAIL is empty. Cannot automatically configure Git identity from these. Attempting gh auth setup-git.'\n  if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then\n    echo 'GitHub CLI is installed and authenticated. Running gh auth setup-git...'\n    gh auth setup-git\n    echo \"Git config after gh auth setup-git: user.name='$(git config --global user.name)', user.email='$(git config --global user.email)'\"\n  else\n    echo 'Warning: GitHub CLI not available or not authenticated. Please configure git manually: git config --global user.name \\\"Your Name\\\" && git config --global user.email \\\"you@example.com\\\"'\n  fi\nelif [ -z \"${CURRENT_GIT_USER}\" ] || [ -z \"${CURRENT_GIT_EMAIL}\" ] || [ \"${CURRENT_GIT_USER}\" != \"${GIT_COMMITTER_NAME}\" ] || [ \"${CURRENT_GIT_EMAIL}\" != \"${GIT_COMMITTER_EMAIL}\" ]; then\n  echo 'Configuring Git user name and email using Codespaces environment variables...'\n  git config --global user.name \"${GIT_COMMITTER_NAME}\"\n  git config --global user.email \"${GIT_COMMITTER_EMAIL}\"\n  echo \"Git configured with user: $(git config --global user.name), email: $(git config --global user.email)\"\nelse\n  echo 'Git user name and email already configured and match GIT_COMMITTER variables.'\nfi\necho 'Final git config:'\ngit config --global --list | grep user",
+
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "terminal.integrated.profiles.linux": {
+          "bash": {
+            "path": "/bin/bash"
+          }
+        }
+      }
+    }
+  }
+}
