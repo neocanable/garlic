@@ -3,6 +3,5 @@ build/
 .vscode/
 cmake-build-debug/
 doc/
-/*.txt
 cmake-build-release/
 /*.java
