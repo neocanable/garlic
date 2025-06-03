@@ -1,0 +1,6 @@
+#ifndef GARLIC_EXPRESSION_INNER_CLASS_H
+#define GARLIC_EXPRESSION_INNER_CLASS_H
+
+#include "decompiler/structure.h"
+
+#endif //GARLIC_EXPRESSION_INNER_CLASS_H
