@@ -19,7 +19,7 @@ jd_exp* build_string_exp(jd_exp *exp, string str)
     jd_exp_const *const_exp = make_obj(jd_exp_const);
     jd_val *val = stack_create_empty_val();
     val->type = JD_VAR_REFERENCE_T;
-    val->data->cname = g_str_String;
+    val->data->cname = (string)g_str_String;
     val->data->val = str_dup(str);
     const_exp->val = val;
     exp->data = const_exp;
@@ -184,31 +184,31 @@ static void build_cast_expression(jd_exp *exp, jd_ins *ins)
         case INS_I2L:
         case INS_F2L:
         case INS_D2L:
-            cast_exp->class_name = g_str_long;
+            cast_exp->class_name = (string)g_str_long;
             break;
         case INS_I2F:
         case INS_L2F:
         case INS_D2F:
-            cast_exp->class_name = g_str_float;
+            cast_exp->class_name = (string)g_str_float;
             break;
         case INS_I2D:
         case INS_L2D:
         case INS_F2D:
-            cast_exp->class_name = g_str_double;
+            cast_exp->class_name = (string)g_str_double;
             break;
         case INS_L2I:
         case INS_F2I:
         case INS_D2I:
-            cast_exp->class_name = g_str_int;
+            cast_exp->class_name = (string)g_str_int;
             break;
         case INS_I2B:
-            cast_exp->class_name = g_str_byte;
+            cast_exp->class_name = (string)g_str_byte;
             break;
         case INS_I2C:
-            cast_exp->class_name = g_str_char;
+            cast_exp->class_name = (string)g_str_char;
             break;
         case INS_I2S:
-            cast_exp->class_name = g_str_short;
+            cast_exp->class_name = (string)g_str_short;
             break;
         case INS_CHECKCAST: {
             u2 index = be16toh(ins->param[0] << 8 | ins->param[1]);
@@ -444,7 +444,7 @@ static void build_if_expression(jd_exp *exp, jd_ins *ins)
             right->type = JD_EXPRESSION_CONST;
             jd_exp_const *const_exp = make_obj(jd_exp_const);
             jd_val *val = stack_make_primitive_val(JD_VAR_NULL_T);
-            val->data->cname = g_str_null;
+            val->data->cname = (string)g_str_null;
             val->data->primitive->int_val = 0;
             const_exp->val = val;
             right->data = const_exp;
@@ -541,31 +541,31 @@ static void build_new_array_expression(jd_exp *exp, jd_ins *ins)
     if (jvm_ins_is_newarray(ins)) {
         switch (ins->param[0]) {
             case 4:
-                class_name = g_str_boolean;
+                class_name = (string)g_str_boolean;
                 break;
             case 5:
-                class_name = g_str_char;
+                class_name = (string)g_str_char;
                 break;
             case 6:
-                class_name = g_str_float;
+                class_name = (string)g_str_float;
                 break;
             case 7:
-                class_name = g_str_double;
+                class_name = (string)g_str_double;
                 break;
             case 8:
-                class_name = g_str_byte;
+                class_name = (string)g_str_byte;
                 break;
             case 9:
-                class_name = g_str_short;
+                class_name = (string)g_str_short;
                 break;
             case 10:
-                class_name = g_str_int;
+                class_name = (string)g_str_int;
                 break;
             case 11:
-                class_name = g_str_long;
+                class_name = (string)g_str_long;
                 break;
             default:
-                class_name = g_str_unknown;
+                class_name = (string)g_str_unknown;
                 break;
         }
     }

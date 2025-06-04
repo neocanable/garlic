@@ -7,7 +7,7 @@
  * It is public domain.
  * */
 
-#ifndef __APPLE__
+#ifdef __APPLE__
 #warning "This header file (endian.h) is MacOS X specific.\n"
 #include <libkern/OSByteOrder.h>
 
@@ -28,3 +28,12 @@
 
 #endif
 #endif	/* __FINK_ENDIANDEV_PKG_ENDIAN_H__ */
+
+#ifdef __linux__
+#include <endian.h>
+#include <netinet/in.h>
+#endif
+
+#ifdef _WIN32
+#include <winsock2.h>
+#endif

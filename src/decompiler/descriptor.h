@@ -28,34 +28,34 @@ static inline string descriptor_item_class_name(string arr_cname)
 //    printf("index: %d\n", index);
 
     if (memcmp(arr_cname, g_str_int, index) == 0) {
-        return g_str_int;
+        return (string)g_str_int;
     }
     else if (memcmp(arr_cname, g_str_long, index) == 0) {
-        return g_str_long;
+        return (string)g_str_long;
     }
     else if (memcmp(arr_cname, g_str_float, index) == 0) {
-        return g_str_float;
+        return (string)g_str_float;
     }
     else if (memcmp(arr_cname, g_str_double, index) == 0) {
-        return g_str_double;
+        return (string)g_str_double;
     }
     else if (memcmp(arr_cname, g_str_char, index) == 0) {
-        return g_str_char;
+        return (string)g_str_char;
     }
     else if (memcmp(arr_cname, g_str_byte, index) == 0) {
-        return g_str_byte;
+        return (string)g_str_byte;
     }
     else if (memcmp(arr_cname, g_str_short, index) == 0) {
-        return g_str_short;
+        return (string)g_str_short;
     }
     else if (memcmp(arr_cname, g_str_boolean, index) == 0) {
-        return g_str_boolean;
+        return (string)g_str_boolean;
     }
     else if (memcmp(arr_cname, g_str_String, index) == 0) {
-        return g_str_String;
+        return (string)g_str_String;
     }
     else if (memcmp(arr_cname, g_str_Object, index) == 0) {
-        return g_str_Object;
+        return (string)g_str_Object;
     }
     else {
         string str = x_alloc(index+1);
@@ -69,21 +69,21 @@ static inline string descriptor_class_name_of_primitive(char c)
 {
     switch (c) {
         case 'B':
-            return g_str_byte;
+            return (string)g_str_byte;
         case 'C':
-            return g_str_char;
+            return (string)g_str_char;
         case 'D':
-            return g_str_double;
+            return (string)g_str_double;
         case 'F':
-            return g_str_float;
+            return (string)g_str_float;
         case 'I':
-            return g_str_int;
+            return (string)g_str_int;
         case 'J':
-            return g_str_long;
+            return (string)g_str_long;
         case 'S':
-            return g_str_short;
+            return (string)g_str_short;
         case 'Z':
-            return g_str_boolean;
+            return (string)g_str_boolean;
         default:
             return str_dup(g_str_unknown);
     }

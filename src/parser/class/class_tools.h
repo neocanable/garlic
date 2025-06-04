@@ -2,15 +2,7 @@
 #define GARLIC_CLASS_TOOLS_H
 
 // Include our common endian header
-#include "common/endian.h"
-
-#ifdef __linux__
-#include <netinet/in.h>
-#endif
-
-#ifdef _WIN32
-#include <winsock2.h>
-#endif
+#include "common/endian_x.h"
 
 #include "class_structure.h"
 #include "decompiler/structure.h"
