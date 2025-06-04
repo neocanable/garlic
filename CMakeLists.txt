@@ -19,6 +19,9 @@ endif ()
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -flto")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-strict-aliasing")
 
+if (UNIX)
+    SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -pthread")
+endif ()
 
 include_directories(src/common)
 include_directories(src/libs/memory)
@@ -74,3 +77,7 @@ add_executable(garlic
         ${JAVA_DEC}
         src/jvm.c
 )
+
+if (UNIX)
+    target_link_libraries(garlic pthread)
+endif ()

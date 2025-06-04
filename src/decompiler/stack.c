@@ -16,7 +16,7 @@ jd_var* stack_define_var(jd_method *m, jd_val *val, int slot)
 //    else
 //        label = str_create("v_%x_%x", val->ins->offset, var->idx);
 
-//    var->name = str_create("v_%d", var->idx);
+    var->name = str_create("v_%d", var->idx);
     val->stack_var = var;
     var->def_val = val;
     ladd_obj(m->stack_variables, var);

@@ -1,5 +1,5 @@
 #include "decompiler/ssa.h"
-#include "common/endian.h"
+#include "common/endian_osx.h"
 #include "common/str_tools.h"
 #include "jvm/jvm_ins.h"
 #include "control_flow.h"

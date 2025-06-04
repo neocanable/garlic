@@ -12,6 +12,7 @@
 #include "libs/str/str.h"
 #include "libs/trie/trie_tree.h"
 #include "libs/threadpool/threadpool.h"
+#include "libs/threadpool/threadpool.h"
 
 
 typedef struct jd_nblock            jd_nblock;
@@ -1127,7 +1128,7 @@ struct jd_jar {
     struct zip_t    *zip;
 
     threadpool_t    *threadpool;
-    pthread_mutex_t lock;
+    pthread_mutex_t *lock;
 };
 
 struct jsource_file {

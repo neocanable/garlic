@@ -9,6 +9,42 @@
 
 typedef struct threadpool_t threadpool_t;
 
+
+typedef enum {
+    immediate_shutdown = 1,
+    graceful_shutdown  = 2
+} threadpool_shutdown_t;
+
+/**
+ *  @struct threadpool_task
+ *  @brief the work struct
+ *
+ *  @var function Pointer to the function that will perform the task.
+ *  @var argument Argument to be passed to the function.
+ */
+
+typedef struct {
+    void (*function)(void *);
+    void *argument;
+} threadpool_task_t;
+
+struct threadpool_t {
+    int init_count;
+    pthread_mutex_t *lock;
+    pthread_cond_t *notify;
+    pthread_cond_t *init_cond;
+    pthread_t *threads;
+    threadpool_task_t *queue;
+    int thread_count;
+    int queue_size;
+    int head;
+    int tail;
+    int count;
+    int shutdown;
+    int started;
+    mem_pool *mem_pool;
+};
+
 typedef enum {
     threadpool_invalid        = -1,
     threadpool_lock_failure   = -2,

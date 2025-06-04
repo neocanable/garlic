@@ -6,17 +6,18 @@
 #include "jvm/jvm_decompile.h"
 #include "decompiler/expression_writter.h"
 #include "common/file_tools.h"
+#include "libs/threadpool/threadpool.h"
 
 void jar_status(jd_jar *jar)
 {
-    pthread_mutex_lock(&jar->lock);
+    pthread_mutex_lock(jar->threadpool->lock);
     jar->done++;
     fflush(stdout);
     printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\bProgress : %d (%d)",
            jar->done,
            jar->added);
     fflush(stdout);
-    pthread_mutex_unlock(&jar->lock);
+    pthread_mutex_unlock(jar->threadpool->lock);
 }
 
 void jar_main_thread_status(jd_jar *jar)
@@ -185,7 +186,6 @@ static jd_jar* jar_obj_create(string path, string save_path, int thread_cnt)
 
     if (thread_cnt > 1) {
         jar->threadpool = threadpool_create_in(jar->pool, thread_cnt, 0);
-        pthread_mutex_init(&jar->lock, NULL);
     }
 
     jar_inner_and_anoymous_class(jar);
@@ -222,10 +222,8 @@ static void jar_threadpool_start(jd_jar *jar)
         jd_jar_entry *entry = lget_obj(jar->class_entries, i);
         if (entry->is_inner || entry->is_anoymous)
             continue;
-        pthread_mutex_lock(&jar->lock);
         threadpool_add(jar->threadpool, &jar_entry_thread_task, entry, 0);
         jar->added++;
-        pthread_mutex_unlock(&jar->lock);
     }
 }
 
@@ -234,7 +232,7 @@ jsource_file* jar_entry_anonymous_analyse(jd_jar *jar,
                                         jsource_file *parent)
 {
 
-    if (entry->jf == NULL) {
+//    if (entry->jf == NULL) {
         jclass_file *jc = parse_class_content_from_jar_entry(entry);
         jsource_file *jf = jc->jfile;
         jf->jar = jar;
@@ -248,13 +246,13 @@ jsource_file* jar_entry_anonymous_analyse(jd_jar *jar,
 
         tire_merge(jf->imports, parent->imports);
         return jc->jfile;
-    }
-    else {
-        jsource_file *_jf = entry->jf;
-        _jf->parent = parent;
-        _jf->source = parent->source;
-        return _jf;
-    }
+//    }
+//    else {
+//        jsource_file *_jf = entry->jf;
+//        _jf->parent = parent;
+//        _jf->source = parent->source;
+//        return _jf;
+//    }
 }
 
 jsource_file* jar_entry_analyse(jd_jar *jar,
