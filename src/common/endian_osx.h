@@ -7,7 +7,8 @@
  * It is public domain.
  * */
 
-#ifdef __APPLE__
+#ifndef __APPLE__
+#warning "This header file (endian.h) is MacOS X specific.\n"
 #include <libkern/OSByteOrder.h>
 
 #define htobe16(x) OSSwapHostToBigInt16(x)
@@ -25,34 +26,5 @@
 #define be64toh(x) OSSwapBigToHostInt64(x)
 #define le64toh(x) OSSwapLittleToHostInt64(x)
 
-#elif defined(_WIN32) || defined(__MINGW32__)
-#include <winsock2.h>
-#include <stdint.h>
-
-#define htobe16(x) htons(x)
-#define htole16(x) (x)
-#define be16toh(x) ntohs(x)
-#define le16toh(x) (x)
-
-#define htobe32(x) htonl(x)
-#define htole32(x) (x)
-#define be32toh(x) ntohl(x)
-#define le32toh(x) (x)
-
-// Windows doesn't have htonll/ntohll, so we define them
-#ifndef htonll
-#define htonll(x) ((((uint64_t)htonl(x)) << 32) + htonl((x) >> 32))
-#endif
-#ifndef ntohll
-#define ntohll(x) ((((uint64_t)ntohl(x)) << 32) + ntohl((x) >> 32))
-#endif
-
-#define htobe64(x) htonll(x)
-#define htole64(x) (x)
-#define be64toh(x) ntohll(x)
-#define le64toh(x) (x)
-
-#else
-#include <endian.h>
 #endif
 #endif	/* __FINK_ENDIANDEV_PKG_ENDIAN_H__ */
