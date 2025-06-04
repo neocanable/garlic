@@ -50,7 +50,7 @@ void* mem_pool_realloc(mem_pool *pool,
                        size_t new_size);
 
 
-mem_pool *global_pool;
+extern mem_pool *global_pool;
 
 void mem_init_pool();
 

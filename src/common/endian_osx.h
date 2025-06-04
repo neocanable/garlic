@@ -9,9 +9,6 @@
 
 #ifndef __APPLE__
 #warning "This header file (endian.h) is MacOS X specific.\n"
-#endif	/* __APPLE__ */
-
-#ifdef __APPLE__
 #include <libkern/OSByteOrder.h>
 
 #define htobe16(x) OSSwapHostToBigInt16(x)

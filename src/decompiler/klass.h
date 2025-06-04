@@ -2,7 +2,7 @@
 #define GARLIC_KLASS_H
 
 #include "decompiler/structure.h"
-#include "common/endian_osx.h"
+#include "common/endian.h"
 
 #define access_flags_contains(access_flags, flag) ((access_flags & flag) != 0)
 

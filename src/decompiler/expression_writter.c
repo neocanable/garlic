@@ -369,10 +369,16 @@ string lambada_method_ident(jd_method *m)
 // for lambda m?
 string method_block_to_string(jd_method *m, jd_node *node)
 {
-    string buf;
+    string buf = NULL;
     FILE *stream;
-    size_t len;
+    size_t len = 0;
+    
+#ifdef _WIN32
+    // Windows doesn't have open_memstream, use tmpfile as alternative
+    stream = tmpfile();
+#else
     stream = open_memstream(&buf, &len);
+#endif
 
     if (node == NULL)
         node = lget_obj_first(m->nodes);
@@ -432,12 +438,25 @@ string method_block_to_string(jd_method *m, jd_node *node)
             fflush(stream);
         }
     }
+#ifdef _WIN32
+    // For Windows tmpfile approach, we need to read back the content
+    fseek(stream, 0, SEEK_END);
+    len = ftell(stream);
+    fseek(stream, 0, SEEK_SET);
+    
+    string result = x_alloc(len + 1);
+    fread(result, 1, len, stream);
+    result[len] = '\0';
+    fclose(stream);
+    return result;
+#else
     string result = x_alloc(len+1);
     memcpy(result, buf, len+1);
     result[len] = '\0';
     free(buf);
     fclose(stream);
     return result;
+#endif
 }
 
 static void write_notice(jsource_file *jf)

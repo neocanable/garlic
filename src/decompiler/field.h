@@ -3,7 +3,7 @@
 #define GARLIC_FIELD_H
 
 #include "decompiler/structure.h"
-#include "common/endian_osx.h"
+#include "common/endian.h"
 #include "klass.h"
 
 
