@@ -5,6 +5,10 @@
 #include "jar/jar.h"
 #include "file_tools.h"
 #include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <libgen.h>
 
 typedef struct jd_opt {
     char *path;
@@ -20,6 +24,7 @@ static unsigned char* magic_of_file(char *filepath) {
         fprintf(stderr, "[garlic] open file: %s failed\n", filepath);
         return NULL;
     }
+    
     unsigned char *magic = calloc(1, 4);
     if (fread(magic, 1, 4, fp) != 4) {
         if (feof(fp))
@@ -67,22 +72,58 @@ static bool is_dex_file(jd_opt *opt)
 }
 
 static void prepare_opt_output(jd_opt *opt) {
+    if (!opt) {
+        return;
+    }
+    
     char *out = opt->out;
+    
     if (out == NULL) {
+        if (!opt->path) {
+            return;
+        }
+        
         char *last_slash = strrchr(opt->path, '/');
-        size_t len = last_slash - opt->path + 1;
-        char *jar_name = malloc(len + 1);
-        memcpy(jar_name, last_slash+1, len);
-        jar_name[len] = '\0';
+        char *jar_name;
+        
+        if (last_slash != NULL) {
+            // Extract filename after the last slash
+            jar_name = malloc(strlen(last_slash + 1) + 1);
+            strcpy(jar_name, last_slash + 1);
+        } else {
+            // No slash found, use the entire path as filename
+            jar_name = malloc(strlen(opt->path) + 1);
+            strcpy(jar_name, opt->path);
+        }
+        
         str_replace_char(jar_name, '.', '_');
 
-
-        char *jar_dir = dirname(opt->path);
-        out = malloc(strlen(jar_dir) + strlen(jar_name) + 2);
-        sprintf(out, "%s/%s", jar_dir, jar_name);
+        // Create a copy of the path for dirname (dirname may modify the string)
+        char *path_copy = malloc(strlen(opt->path) + 1);
+        strcpy(path_copy, opt->path);
+        char *jar_dir = dirname(path_copy);
+        
+        if (!jar_dir || !jar_name) {
+            free(jar_name);
+            free(path_copy);
+            return;
+        }
+        
+        size_t out_len = strlen(jar_dir) + strlen(jar_name) + 2;
+        out = malloc(out_len);
+        if (!out) {
+            free(jar_name);
+            free(path_copy);
+            return;
+        }
+        
+        snprintf(out, out_len, "%s/%s", jar_dir, jar_name);
+        
         free(jar_name);
+        free(path_copy);
         opt->out = out;
     }
+    
     mkdir_p(out);
 }
 
@@ -106,34 +147,52 @@ static void opt_usage(const char *progname) {
 }
 
 static jd_opt* parse_opt(int argc, char **argv) {
+    // fprintf(stderr, "DEBUG: parse_opt started, argc=%d\n", argc);
+    // fflush(stderr);
+    
     int oc;
     optind = 2;
     opterr = 0; // Disable getopt error messages
 
+    // fprintf(stderr, "DEBUG: checking argv[1]\n");
+    // fflush(stderr);
+    
     char *path = argv[1];
     if (path == NULL || (path != NULL && (STR_EQL(path, "-h") || STR_EQL(path, "--help")))) {
         opt_usage(argv[0]);
         exit(EXIT_SUCCESS);
     }
+    
+    // fprintf(stderr, "DEBUG: calling magic_of_file with path: %s\n", path);
+    // fflush(stderr);
+    
     unsigned char *magic = magic_of_file(path);
     if (magic == NULL)
         exit(EXIT_FAILURE);
 
+    // fprintf(stderr, "DEBUG: allocating jd_opt\n");
+    // fflush(stderr);
+    
     jd_opt *opt = malloc(sizeof(jd_opt));
     opt->magic = magic;
     opt->path = path;
+    opt->out = NULL;  // Initialize to NULL
+    opt->option = 0;  // Initialize to 0
+    opt->thread_num = 0;  // Initialize to 0
 
     while ((oc = getopt(argc, argv, "po:t:h")) != -1) {
+        // fprintf(stderr, "DEBUG: processing option %c\n", oc);
+        // fflush(stderr);
+        
         switch (oc) {
             case 'p': { // like javap
                 opt->option = 1;
                 break;
             }
             case 'o': {
-                opt->out = optarg;
                 opt->out = malloc(strlen(optarg) + 1);
                 strcpy(opt->out, optarg);
-                opt->out[strlen(opt->out)] = '\0';
+                opt->out[strlen(optarg)] = '\0';  // Use strlen(optarg) instead of strlen(opt->out)
                 break;
             }
             case 't': {
@@ -166,6 +225,10 @@ static jd_opt* parse_opt(int argc, char **argv) {
                 exit(EXIT_FAILURE);
         }
     }
+    
+    // fprintf(stderr, "DEBUG: parse_opt completed successfully\n");
+    // fflush(stderr);
+    
     return opt;
 }
 
@@ -192,39 +255,72 @@ static void run_for_jvm_class(jd_opt *opt) {
 }
 
 static void run_for_jvm_jar(jd_opt *opt) {
+    // fprintf(stderr, "DEBUG: run_for_jvm_jar started\n");
+    // fflush(stderr);
+    
+    // fprintf(stderr, "DEBUG: calling prepare_opt_output\n");
+    // fflush(stderr);
+    
     prepare_opt_output(opt);
+    
+    // fprintf(stderr, "DEBUG: calling prepare_opt_threads\n");
+    // fflush(stderr);
+    
     prepare_opt_threads(opt);
+    
+    // fprintf(stderr, "DEBUG: printing analysis info\n");
+    // fflush(stderr);
+    
     printf("[Garlic] JAR file analysis\n");
     printf("File     : %s\n", opt->path);
     printf("Save to  : %s\n", opt->out);
     printf("Thread   : %d\n", opt->thread_num);
+    
+    // fprintf(stderr, "DEBUG: calling jar_file_analyse\n");
+    // fflush(stderr);
+    
     jar_file_analyse(opt->path, opt->out, opt->thread_num);
     printf("\n[Done]\n");
 }
 
 int main(int argc, char **argv)
 {
+    // fprintf(stderr, "DEBUG: main started, argc=%d\n", argc);
+    
     jd_opt *opt = parse_opt(argc, argv);
+    // fprintf(stderr, "DEBUG: parse_opt completed\n");
 
+    // fprintf(stderr, "DEBUG: checking if is_jvm_class\n");
+    fflush(stderr);
+    
     if (is_jvm_class(opt)) {
+        // fprintf(stderr, "DEBUG: running for jvm class\n");
         run_for_jvm_class(opt);
         free_opt(opt);
     }
-    else if (is_jar_file(opt)) {
-        run_for_jvm_jar(opt);
-        free_opt(opt);
-    }
-    else if (is_dex_file(opt)) {
-        fprintf(stderr, "[garlic] DEX file is not supported for open source version yet.\n");
-        fprintf(stderr, "         Please contact the author on github\n");
-
-        free_opt(opt);
-        exit(EXIT_FAILURE);
-    }
     else {
-        fprintf(stderr, "[garlic] Unsupported file type: %s\n", opt->path);
-        free_opt(opt);
-        exit(EXIT_FAILURE);
+        // fprintf(stderr, "DEBUG: checking if is_jar_file\n");
+        fflush(stderr);
+        
+        if (is_jar_file(opt)) {
+            // fprintf(stderr, "DEBUG: running for jar file\n");
+            fflush(stderr);
+            
+            run_for_jvm_jar(opt);
+            free_opt(opt);
+        }
+        else if (is_dex_file(opt)) {
+            fprintf(stderr, "[garlic] DEX file is not supported for open source version yet.\n");
+            fprintf(stderr, "         Please contact the author on github\n");
+
+            free_opt(opt);
+            exit(EXIT_FAILURE);
+        }
+        else {
+            fprintf(stderr, "[garlic] Unsupported file type: %s\n", opt->path);
+            free_opt(opt);
+            exit(EXIT_FAILURE);
+        }
     }
     return 0;
 }

@@ -3,6 +3,11 @@
 #define GARLIC_THREAD_POOL_H
 
 #include "mem_pool.h"
+#include <pthread.h>
+
+// External declarations for TLS globals
+extern pthread_key_t tls_key;
+extern pthread_once_t tls_init_once;
 
 #define MAX_THREADS 64
 #define MAX_QUEUE 65536
@@ -25,9 +30,6 @@ typedef struct {
     int thread_id;
     mem_pool *pool;
 } thread_local_data;
-
-static pthread_key_t tls_key;
-static pthread_once_t tls_init_once = PTHREAD_ONCE_INIT;
 
 threadpool_t* threadpool_create_in(mem_pool *mem_pool,
                                    int cnt,

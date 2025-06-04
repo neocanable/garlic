@@ -851,14 +851,40 @@ static void build_monitorexit_expression(jd_exp *exp, jd_ins *ins)
 
 static void increase_assignment_expression_dupped_count(jd_val *val)
 {
+    if (val == NULL) {
+        DEBUG_PRINT("[increase_assignment_expression_dupped_count] val is NULL\n");
+        return;
+    }
+    
     jd_ins *ins = val->ins;
+    if (ins == NULL) {
+        DEBUG_PRINT("[increase_assignment_expression_dupped_count] ins is NULL\n");
+        return;
+    }
+    
     jd_exp *exp = ins->expression;
-    assert(exp_is_assignment(exp));
+    if (exp == NULL) {
+        DEBUG_PRINT("[increase_assignment_expression_dupped_count] exp is NULL\n");
+        return;
+    }
+    
+    if (!exp_is_assignment(exp)) {
+        DEBUG_PRINT("[increase_assignment_expression_dupped_count] exp is not assignment type: %d\n", exp->type);
+        return;
+    }
+    
     jd_exp_assignment *assignment = exp->data;
+    if (assignment == NULL) {
+        DEBUG_PRINT("[increase_assignment_expression_dupped_count] assignment data is NULL\n");
+        return;
+    }
+    
     assignment->dupped_count ++;
     assignment->def_count ++;
 
-    val->stack_var->def_count ++;
+    if (val->stack_var != NULL) {
+        val->stack_var->def_count ++;
+    }
 }
 
 static void dup_a_stack_var_expression(jd_exp *exp, jd_ins *ins, jd_var *var)
@@ -909,22 +935,49 @@ static void build_dup_expression(jd_exp *exp, jd_ins *ins)
 //    exp->type = JD_EXPRESSION_EMPTY;
 //    exp->ins = ins;
 
+    if (ins == NULL) {
+        DEBUG_PRINT("[build_dup_expression] ins is NULL\n");
+        return;
+    }
+    
+    if (ins->stack_in == NULL) {
+        DEBUG_PRINT("[build_dup_expression] stack_in is NULL\n");
+        return;
+    }
+    
+    if (ins->stack_in->vals == NULL) {
+        DEBUG_PRINT("[build_dup_expression] stack_in->vals is NULL\n");
+        return;
+    }
+
     switch (ins->code) {
         case INS_DUP:
         case INS_DUP_X1:
         case INS_DUP_X2: {
+            if (ins->stack_in->vals[0] == NULL) {
+                DEBUG_PRINT("[build_dup_expression] stack_in->vals[0] is NULL\n");
+                break;
+            }
             jd_val *item0 = ins->stack_in->vals[0];
             jd_var *var0 = item0->stack_var;
             increase_assignment_expression_dupped_count(item0);
             break;
         }
         case INS_DUP2: {
+            if (ins->stack_in->vals[0] == NULL) {
+                DEBUG_PRINT("[build_dup_expression] stack_in->vals[0] is NULL for DUP2\n");
+                break;
+            }
             jd_val *item0 = ins->stack_in->vals[0];
             if (jd_stack_val_is_compute_category2(item0)) {
                 jd_var *var0 = item0->stack_var;
                 increase_assignment_expression_dupped_count(item0);
             }
             else {
+                if (ins->stack_in->vals[1] == NULL) {
+                    DEBUG_PRINT("[build_dup_expression] stack_in->vals[1] is NULL for DUP2\n");
+                    break;
+                }
                 jd_var *var0 = item0->stack_var;
                 jd_val *item1 = ins->stack_in->vals[1];
                 jd_var *var1 = item1->stack_var;
@@ -934,6 +987,10 @@ static void build_dup_expression(jd_exp *exp, jd_ins *ins)
             break;
         }
         case INS_DUP2_X1: {
+            if (ins->stack_in->vals[0] == NULL || ins->stack_in->vals[1] == NULL) {
+                DEBUG_PRINT("[build_dup_expression] stack_in vals are NULL for DUP2_X1\n");
+                break;
+            }
             jd_val *item0 = ins->stack_in->vals[0];
             jd_val *item1 = ins->stack_in->vals[1];
             jd_var *var0 = item0->stack_var;
@@ -953,6 +1010,10 @@ static void build_dup_expression(jd_exp *exp, jd_ins *ins)
             break;
         }
         case INS_DUP2_X2: {
+            if (ins->stack_in->vals[0] == NULL || ins->stack_in->vals[1] == NULL) {
+                DEBUG_PRINT("[build_dup_expression] stack_in vals are NULL for DUP2_X2\n");
+                break;
+            }
             jd_val *item0 = ins->stack_in->vals[0];
             jd_val *item1 = ins->stack_in->vals[1];
             jd_var *var0 = item0->stack_var;
@@ -964,6 +1025,11 @@ static void build_dup_expression(jd_exp *exp, jd_ins *ins)
                 //..., value1, value2, value1
                 increase_assignment_expression_dupped_count(item0);
                 increase_assignment_expression_dupped_count(item1);
+                break;
+            }
+            
+            if (ins->stack_in->vals[2] == NULL) {
+                DEBUG_PRINT("[build_dup_expression] stack_in->vals[2] is NULL for DUP2_X2\n");
                 break;
             }
             jd_val *item2 = ins->stack_in->vals[2];

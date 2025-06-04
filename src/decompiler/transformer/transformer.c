@@ -122,6 +122,16 @@ string exp_to_s(jd_exp *expression)
 
 void expression_to_stream(FILE *stream, jd_node *node, jd_exp *expression)
 {
+    if (stream == NULL) {
+        fprintf(stderr, "ERROR: stream is NULL in expression_to_stream\n");
+        return;
+    }
+    
+    if (expression == NULL) {
+        fprintf(stderr, "ERROR: expression is NULL in expression_to_stream\n");
+        return;
+    }
+    
     switch(expression->type) {
         case JD_EXPRESSION_INVOKE: {
             jd_ins_fn *fn = expression->ins->fn;

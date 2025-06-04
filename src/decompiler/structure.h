@@ -413,7 +413,7 @@ typedef enum {
     JD_EXPRESSION_MONITOR_EXIT      ,
     JD_EXPRESSION_STRING_CONCAT     ,
     JD_EXPRESSION_ENUM              ,
-    JD_EXPRESSION_IF_BREAK          ,
+    JD_EXPRESSION_IF_BREAK          
 } jd_expression_type;
 
 typedef enum {

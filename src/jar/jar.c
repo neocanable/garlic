@@ -148,15 +148,34 @@ static void jar_inner_and_anoymous_class(jd_jar *jar)
 
 static void jar_entry_source_file(jclass_file *jc, string dir, string name)
 {
+    // Get thread-local memory pool
+    thread_local_data *tls = get_thread_local_data();
+    mem_pool *pool = tls ? tls->pool : NULL;
+    
     struct stat sb;
-    string full_dir = str_create("%s/%s", dir, dirname(name));
+    
+    // Make a safe copy of name since dirname can modify its argument
+    string name_copy = pool ? 
+        str_create_in(pool, "%s", name) :
+        str_create("%s", name);
+    
+    // Use thread-local memory allocation
+    string full_dir = pool ? 
+        str_create_in(pool, "%s/%s", dir, dirname(name_copy)) :
+        str_create("%s/%s", dir, dirname(name_copy));
+    
     if (stat(full_dir, &sb) == -1)
         make_dir(full_dir);
 
     jcp_info *info = pool_item(jc, jc->this_class);
     string full = get_class_name(jc, info);
     string class_name = class_simple_name(full);
-    string path = str_create("%s/%s.java", full_dir, class_name);
+    
+    // Use thread-local memory allocation
+    string path = pool ?
+        str_create_in(pool, "%s/%s.java", full_dir, class_name) :
+        str_create("%s/%s.java", full_dir, class_name);
+    
     FILE *stream = fopen(path, "w");
     if (stream == NULL)
         printf("[error]: path: %s, error: %s\n", path, strerror(errno));
@@ -203,17 +222,63 @@ static void jar_obj_release(jd_jar *jar)
 
 void jar_entry_thread_task(jd_jar_entry *entry)
 {
-    thread_local_data *tls = get_thread_local_data();
-    tls->pool = mem_create_pool();
-
-    jsource_file *jf = jar_entry_analyse(entry->jar, entry, NULL);
-    if (jf->parent == NULL) {
-        writter_for_class(jf, NULL);
-        fclose(jf->source);
+    // printf("DEBUG: jar_entry_thread_task started for entry: %s\n", 
+    //        entry ? entry->cname : "NULL entry");
+    
+    if (!entry) {
+        fprintf(stderr, "ERROR: entry is NULL in jar_entry_thread_task\n");
+        return;
     }
-    mem_pool_free(tls->pool);
+    
+    if (!entry->jar) {
+        fprintf(stderr, "ERROR: entry->jar is NULL in jar_entry_thread_task\n");
+        return;
+    }
+    
+    thread_local_data *tls = get_thread_local_data();
+    // printf("DEBUG: got thread_local_data: %p\n", (void*)tls);
+    
+    if (!tls) {
+        fprintf(stderr, "ERROR: Failed to get thread local data\n");
+        return;
+    }
+    
+    tls->pool = mem_create_pool();
+    // printf("DEBUG: created memory pool: %p\n", (void*)tls->pool);
+    
+    if (!tls->pool) {
+        fprintf(stderr, "ERROR: Failed to create memory pool\n");
+        return;
+    }
 
+    // printf("DEBUG: calling jar_entry_analyse\n");
+    jsource_file *jf = jar_entry_analyse(entry->jar, entry, NULL);
+    // printf("DEBUG: jar_entry_analyse returned: %p\n", (void*)jf);
+    
+    if (jf && jf->parent == NULL) {
+        // printf("DEBUG: writing class file\n");
+        writter_for_class(jf, NULL);
+        
+        // printf("DEBUG: closing file stream\n");
+        if (jf->source != NULL) {
+            // printf("DEBUG: fclose called on stream: %p\n", (void*)jf->source);
+            if (fclose(jf->source) != 0) {
+                printf("ERROR: fclose failed: %s\n", strerror(errno));
+            } else {
+                // printf("DEBUG: fclose successful\n");
+            }
+            jf->source = NULL;
+        } else {
+            // printf("DEBUG: jf->source is NULL, no need to close\n");
+        }
+    }
+    
+    // printf("DEBUG: freeing memory pool\n");
+    mem_pool_free(tls->pool);
+    
+    // printf("DEBUG: calling jar_status\n");
     jar_status(entry->jar);
+    // printf("DEBUG: jar_entry_thread_task completed\n");
 }
 
 static void jar_threadpool_start(jd_jar *jar)

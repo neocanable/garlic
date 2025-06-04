@@ -1,4 +1,3 @@
-
 #include <stdlib.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -7,6 +6,11 @@
 
 #include "threadpool.h"
 #include "debug.h"
+
+// Thread-local storage globals - declared here to have external linkage
+pthread_key_t tls_key;
+pthread_once_t tls_init_once = PTHREAD_ONCE_INIT;
+static int tls_key_initialized = 0;
 
 typedef enum {
     immediate_shutdown = 1,
@@ -46,13 +50,23 @@ static void *threadpool_thread(void *threadpool);
 int threadpool_free(threadpool_t *pool);
 
 void create_tls_key() {
-    pthread_key_create(&tls_key, NULL);
+    int result = pthread_key_create(&tls_key, NULL);
+    
+    if (result != 0) {
+        fprintf(stderr, "ERROR: pthread_key_create failed with code: %d\n", result);
+        exit(EXIT_FAILURE);
+    }
+    
+    tls_key_initialized = 1;
 }
 
 thread_local_data* get_thread_local_data() {
-    if (tls_key == 0)
+    if (!tls_key_initialized) {
         return NULL;
-    return pthread_getspecific(tls_key);
+    }
+    
+    thread_local_data *tls = pthread_getspecific(tls_key);
+    return tls;
 }
 
 threadpool_t* threadpool_create_in(mem_pool *mem_pool, int cnt, int flags)
@@ -200,13 +214,42 @@ int threadpool_free(threadpool_t *pool)
 }
 
 void thread_local_data_init(threadpool_t *pool, pthread_t tid) {
+    // printf("DEBUG: thread_local_data_init called for thread %lu\n", (unsigned long)tid);
+    
     pthread_once(&tls_init_once, create_tls_key);
+    // printf("DEBUG: tls_key after pthread_once: %u, initialized: %d\n", 
+    //        (unsigned int)tls_key, tls_key_initialized);
+    
+    if (!tls_key_initialized) {
+        fprintf(stderr, "ERROR: TLS key initialization failed\n");
+        exit(EXIT_FAILURE);
+    }
+    
     thread_local_data *tls = x_alloc_in(pool->mem_pool, sizeof(thread_local_data));
+    // printf("DEBUG: allocated thread_local_data: %p\n", (void*)tls);
+    
     if (!tls) {
         perror("Failed to allocate thread local storage");
         exit(EXIT_FAILURE);
     }
-    pthread_setspecific(tls_key, tls);
+    
+    // Initialize the thread local data
+    memset(tls, 0, sizeof(thread_local_data));
+    tls->thread_id = 0; // Will be set later if needed
+    tls->pool = NULL;   // Will be set by jar_entry_thread_task
+    
+    int result = pthread_setspecific(tls_key, tls);
+    // printf("DEBUG: pthread_setspecific returned: %d\n", result);
+    
+    if (result != 0) {
+        fprintf(stderr, "ERROR: pthread_setspecific failed with code: %d\n", result);
+        exit(EXIT_FAILURE);
+    }
+    
+    // Verify it was set correctly
+    thread_local_data *verify_tls = pthread_getspecific(tls_key);
+    // printf("DEBUG: verification - retrieved tls: %p (should match %p)\n", 
+    //        (void*)verify_tls, (void*)tls);
 }
 
 static void *threadpool_thread(void *threadpool)

@@ -34,54 +34,119 @@ static bool replace_expression_with_local_variable(jd_exp *expression,
                                            int args_len,
                                            jd_exp *args)
 {
+    if (expression == NULL) {
+        DEBUG_PRINT("[replace_expression_with_local_variable] expression is NULL\n");
+        return false;
+    }
+    
+    if (args == NULL) {
+        DEBUG_PRINT("[replace_expression_with_local_variable] args is NULL\n");
+        return false;
+    }
+    
+    if (expression->data == NULL) {
+        DEBUG_PRINT("[replace_expression_with_local_variable] expression->data is NULL\n");
+        return false;
+    }
+    
     bool replaced = false;
     jd_exp_store *store = expression->data;
+    if (store->list == NULL) {
+        DEBUG_PRINT("[replace_expression_with_local_variable] store->list is NULL\n");
+        return false;
+    }
+    
     jd_exp *left = &store->list->args[0];
+    if (left == NULL || left->data == NULL) {
+        DEBUG_PRINT("[replace_expression_with_local_variable] left or left->data is NULL\n");
+        return false;
+    }
+    
     jd_val *val = left->data;
     jd_var *var = val->stack_var;
     jd_exp *right = &store->list->args[1];
 
     for (int i = 0; i < args_len; ++i) {
         jd_exp *arg = &args[i];
+        if (arg == NULL) {
+            DEBUG_PRINT("[replace_expression_with_local_variable] arg[%d] is NULL\n", i);
+            continue;
+        }
+        
+        // Check if the expression is properly initialized
+        if (arg->type == 0) {
+            DEBUG_PRINT("[replace_expression_with_local_variable] arg[%d] has invalid type: %d\n", i, arg->type);
+            continue;
+        }
+        
         if (exp_is_local_variable(arg)) {
+            if (arg->data == NULL) {
+                DEBUG_PRINT("[replace_expression_with_local_variable] arg->data is NULL\n");
+                continue;
+            }
             jd_val *other_val = arg->data;
             jd_var *other_var = other_val->stack_var;
             if (var == other_var) {
                 arg->type = right->type;
                 arg->ins = right->ins;
                 arg->data = right->data;
-                var->use_count --;
-                if (var->redef_count >= 0)
-                    var->redef_count --;
-                if (var->dupped_count > 0)
-                    var->dupped_count --;
+                if (var != NULL) {
+                    var->use_count --;
+                    if (var->redef_count >= 0)
+                        var->redef_count --;
+                    if (var->dupped_count > 0)
+                        var->dupped_count --;
+                }
                 replaced = true;
             }
         }
-        else
+        else {
             replaced |= do_copy_propagation(expression, arg);
+        }
     }
 
-    if (replaced && var->use_count == 0)
+    if (replaced && var != NULL && var->use_count == 0)
         exp_mark_nopped(expression);
     return replaced;
 }
 
 static bool do_copy_propagation(jd_exp *expression, jd_exp *other)
 {
+    if (expression == NULL || other == NULL) {
+        DEBUG_PRINT("[do_copy_propagation] expression or other is NULL\n");
+        return false;
+    }
+    
+    if (other->data == NULL) {
+        DEBUG_PRINT("[do_copy_propagation] other->data is NULL\n");
+        return false;
+    }
+    
     switch(other->type) {
         case JD_EXPRESSION_ASSIGNMENT: {
             jd_exp_assignment *other_assignment = other->data;
+            if (other_assignment == NULL) {
+                DEBUG_PRINT("[do_copy_propagation] other_assignment is NULL\n");
+                return false;
+            }
             jd_exp *o = other_assignment->right;
             return do_copy_propagation(expression, o);
         }
         case JD_EXPRESSION_IF: {
             jd_exp_if *if_exp = other->data;
+            if (if_exp == NULL) {
+                DEBUG_PRINT("[do_copy_propagation] if_exp is NULL\n");
+                return false;
+            }
             jd_exp *exp = if_exp->expression;
             return do_copy_propagation(expression, exp);
         }
         case JD_EXPRESSION_STORE: {
             jd_exp_store *store = other->data;
+            if (store == NULL || store->list == NULL) {
+                DEBUG_PRINT("[do_copy_propagation] store or store->list is NULL\n");
+                return false;
+            }
             jd_exp *right = &store->list->args[1];
             return do_copy_propagation(expression, right);
         }
@@ -114,7 +179,19 @@ static bool do_copy_propagation(jd_exp *expression, jd_exp *other)
         case JD_EXPRESSION_MONITOR_EXIT:
         case JD_EXPRESSION_STRING_CONCAT: {
             jd_exp_reader *reader_exp = other->data;
+            if (reader_exp == NULL) {
+                DEBUG_PRINT("[do_copy_propagation] reader_exp is NULL\n");
+                return false;
+            }
             jd_exp_list *list = reader_exp->list;
+            if (list == NULL) {
+                DEBUG_PRINT("[do_copy_propagation] list is NULL\n");
+                return false;
+            }
+            if (list->args == NULL) {
+                DEBUG_PRINT("[do_copy_propagation] list->args is NULL\n");
+                return false;
+            }
             return replace_expression_with_local_variable(expression,
                                                   list->len, list->args);
         }

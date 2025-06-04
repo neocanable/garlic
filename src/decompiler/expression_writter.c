@@ -12,7 +12,20 @@
 
 static inline FILE* file_output(jsource_file *jf)
 {
-    return jf->source == NULL ? DEFAULT_WRITE_OUT : jf->source;
+    if (jf == NULL) {
+        fprintf(stderr, "ERROR: jsource_file is NULL in file_output\n");
+        return DEFAULT_WRITE_OUT;
+    }
+    
+    FILE *stream = jf->source == NULL ? DEFAULT_WRITE_OUT : jf->source;
+    
+    // Validate the file pointer
+    if (stream == NULL) {
+        fprintf(stderr, "ERROR: FILE stream is NULL, falling back to stdout\n");
+        return stdout;
+    }
+    
+    return stream;
 }
 
 static inline string front_ins_string(jd_exp *expression, jd_ins *ins)
