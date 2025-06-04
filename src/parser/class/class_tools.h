@@ -10,7 +10,7 @@
 
 
 #ifdef __APPLE__
-#include "endian.h"
+#include "endian_osx.h"
 #endif
 
 #ifdef __linux__

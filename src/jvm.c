@@ -120,6 +120,7 @@ static jd_opt* parse_opt(int argc, char **argv) {
         exit(EXIT_FAILURE);
 
     jd_opt *opt = malloc(sizeof(jd_opt));
+    memset(opt, 0, sizeof(jd_opt));
     opt->magic = magic;
     opt->path = path;
 

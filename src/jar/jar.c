@@ -197,8 +197,8 @@ static void jar_obj_release(jd_jar *jar)
 {
     if (jar->threadpool)
         threadpool_destroy(jar->threadpool, 1);
-    mem_pool_free(jar->pool);
     zip_close(jar->zip);
+    mem_pool_free(jar->pool);
 }
 
 void jar_entry_thread_task(jd_jar_entry *entry)
