@@ -81,3 +81,7 @@ add_executable(garlic
 if (UNIX)
     target_link_libraries(garlic pthread)
 endif ()
+
+if (WIN32)
+    target_link_libraries(garlic ws2_32)
+endif ()

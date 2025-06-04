@@ -22,10 +22,18 @@ static inline void make_dir(const char *dir)
     for (p = tmp + 1; *p; p++)
         if (*p == '/') {
             *p = 0;
+#ifdef _WIN32
+            mkdir(tmp);
+#else
             mkdir(tmp, S_IRWXU);
+#endif
             *p = '/';
         }
+#ifdef _WIN32
+    mkdir(tmp);
+#else
     mkdir(tmp, S_IRWXU);
+#endif
 }
 
 static inline void mkdir_p(string dir)
