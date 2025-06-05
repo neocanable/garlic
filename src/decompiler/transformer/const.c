@@ -59,7 +59,7 @@ static string get_const_value(jd_exp *expression)
                 return str_create("%s", const_exp->val->data->val);
         }
         default:
-            return g_str_unknown;
+            return (string)g_str_unknown;
     }
 }
 

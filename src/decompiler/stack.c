@@ -29,7 +29,7 @@ void stack_create_method_this_val(jd_method *m, int slot, string cname)
     this->slot = slot;
     this->type = JD_VAR_REFERENCE_T;
     this->ins  = NULL;
-    this->name = g_str_this;
+    this->name = (string)g_str_this;
     m->variable_counter++;
     this->data->cname = cname;
     m->enter->local_vars[slot] = this;

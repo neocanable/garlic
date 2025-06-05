@@ -69,7 +69,7 @@ static bool goto_is_goto_loop_head(jd_node *loop,
                                    jd_node *node,
                                    jd_node *target)
 {
-    return target = lget_obj_first(loop->children);
+    return target == lget_obj_first(loop->children);
 }
 
 static bool goto_is_goto_post_condition_last(jd_node *loop,

@@ -74,7 +74,7 @@ string get_operator_name(jd_operator op)
         case JD_OP_XOR_ASSIGN:
             return "^=";
         default:
-            return g_str_unknown;
+            return (string)g_str_unknown;
     }
 }
 

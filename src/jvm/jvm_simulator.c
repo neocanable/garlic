@@ -110,7 +110,7 @@ static void jvm_run_load_local_variable(jd_ins *ins)
                slot);
         jd_val *push0 = stack_out->vals[0];
         push0->data = make_obj(jd_val_data);
-        push0->data->cname = g_str_Object;
+        push0->data->cname = (string)g_str_Object;
         push0->type = JD_VAR_REFERENCE_T;
         push0->slot = slot;
         push0->ins  = ins;

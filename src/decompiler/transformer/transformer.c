@@ -115,7 +115,7 @@ string exp_to_s(jd_exp *expression)
         case JD_EXPRESSION_IF_BREAK:
             return exp_if_break_to_s(expression);
         default: {
-            return g_str_unknown;
+            return (string)g_str_unknown;
         }
     }
 }

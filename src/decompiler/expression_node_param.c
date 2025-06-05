@@ -81,8 +81,7 @@ static jd_exp* make_true_exp()
     exp_const->data = make_obj(jd_val_data);
     exp_const->data->primitive = make_obj(jd_primitive_union);
     exp_const->data->primitive->int_val = 1;
-//    exp_const->data->cname = g_str_boolean;
-    exp_const->data->cname = g_str_boolean;
+    exp_const->data->cname = (string)g_str_boolean;
     exp->data = exp_const;
     exp->type = JD_EXPRESSION_CONST;
     return exp;

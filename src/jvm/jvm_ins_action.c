@@ -26,19 +26,19 @@ static void primitive_val_type(jd_ins *ins, jd_val *val, jd_var_types type)
     val->ins = ins;
     switch (type) {
         case JD_VAR_INT_T:
-            val->data->cname = g_str_int;
+            val->data->cname = (string)g_str_int;
             break;
         case JD_VAR_LONG_T:
-            val->data->cname = g_str_long;
+            val->data->cname = (string)g_str_long;
             break;
         case JD_VAR_FLOAT_T:
-            val->data->cname = g_str_float;
+            val->data->cname = (string)g_str_float;
             break;
         case JD_VAR_DOUBLE_T:
-            val->data->cname = g_str_double;
+            val->data->cname = (string)g_str_double;
             break;
         case JD_VAR_REFERENCE_T:
-            val->data->cname = g_str_Object;
+            val->data->cname = (string)g_str_Object;
             break;
         default:
             break;
@@ -64,20 +64,20 @@ static void build_jvm_ins_ldc_action(jd_ins *ins)
         case CONST_LONG_TAG: {
             push0->type = JD_VAR_LONG_T;
             push0->data->primitive = make_obj(jd_primitive_union);
-            push0->data->cname = g_str_long;
+            push0->data->cname = (string)g_str_long;
             push0->data->primitive->long_val = get_const_long(info);
             break;
         }
         case CONST_DOUBLE_TAG: {
             push0->type = JD_VAR_DOUBLE_T;
             push0->data->primitive = make_obj(jd_primitive_union);
-            push0->data->cname = g_str_double;
+            push0->data->cname = (string)g_str_double;
             push0->data->primitive->double_val = get_const_double(info);
             break;
         }
         case CONST_STRING_TAG: {
             push0->type = JD_VAR_REFERENCE_T;
-            push0->data->cname = g_str_String;
+            push0->data->cname = (string)g_str_String;
             push0->data->val = get_const_string(jc, info);
             break;
         }
@@ -85,20 +85,20 @@ static void build_jvm_ins_ldc_action(jd_ins *ins)
             push0->type = JD_VAR_INT_T;
             push0->data->primitive = make_obj(jd_primitive_union);
             push0->data->primitive->int_val = get_const_int(info);
-            push0->data->cname = g_str_int;
+            push0->data->cname = (string)g_str_int;
             break;
         }
         case CONST_FLOAT_TAG: {
             push0->type = JD_VAR_FLOAT_T;
             push0->data->primitive = make_obj(jd_primitive_union);
             push0->data->primitive->float_val = get_const_float(info);
-            push0->data->cname = g_str_float;
+            push0->data->cname = (string)g_str_float;
             break;
         }
         case CONST_CLASS_TAG: {
             push0->type = JD_VAR_REFERENCE_T;
             push0->data->val = get_class_name(jc, info);
-            push0->data->cname = g_str_Class;
+            push0->data->cname = (string)g_str_Class;
             break;
         }
         case CONST_METHODHANDLE_TAG: {
@@ -209,27 +209,27 @@ static void build_jvm_ins_xconst_action(jd_ins *ins, jd_var_types type)
     switch (type) {
         case JD_VAR_INT_T: {
             pri->int_val = jvm_ins_iconst_value(ins);
-            push0->data->cname = g_str_int;
+            push0->data->cname = (string)g_str_int;
             break;
         }
         case JD_VAR_LONG_T: {
             pri->long_val = jvm_ins_lconst_value(ins);
-            push0->data->cname = g_str_long;
+            push0->data->cname = (string)g_str_long;
             break;
         }
         case JD_VAR_FLOAT_T: {
             pri->float_val = jvm_ins_fconst_value(ins);
-            push0->data->cname = g_str_float;
+            push0->data->cname = (string)g_str_float;
             break;
         }
         case JD_VAR_DOUBLE_T: {
             pri->double_val = jvm_ins_dconst_value(ins);
-            push0->data->cname = g_str_double;
+            push0->data->cname = (string)g_str_double;
             break;
         }
         case JD_VAR_REFERENCE_T: {
-            push0->data->cname = g_str_Object;
-            push0->data->val = g_str_null;
+            push0->data->cname = (string)g_str_Object;
+            push0->data->val = (string)g_str_null;
             break;
         }
         default:
@@ -359,7 +359,7 @@ static void build_jvm_ins_array_length_action(jd_ins *ins)
 {
     jd_val *push0 = ins->stack_out->vals[0];
     push0->type = JD_VAR_INT_T;
-    push0->data->cname = g_str_int;
+    push0->data->cname = (string)g_str_int;
     push0->ins = ins;
 }
 
@@ -367,7 +367,7 @@ static void build_jvm_ins_athrow_action(jd_ins *ins)
 {
     jd_val *push0 = ins->stack_out->vals[0];
     push0->type = JD_VAR_REFERENCE_T;
-    push0->data->cname = g_str_Throwable;
+    push0->data->cname = (string)g_str_Throwable;
     push0->ins = ins;
 }
 
@@ -387,7 +387,7 @@ static void build_jvm_ins_instanceof_action(jd_ins *ins)
     jd_val *push0 = ins->stack_out->vals[0];
     push0->type = JD_VAR_INT_T;
     push0->ins = ins;
-    push0->data->cname = g_str_boolean;
+    push0->data->cname = (string)g_str_boolean;
 }
 
 static void dup_copy_action(jd_ins *ins, int to_index, int copy)

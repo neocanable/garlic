@@ -87,7 +87,7 @@ static void prepare_jar_zip(jd_jar *jar)
 
     for (int i = 0; i < jar->entries_size; ++i) {
         zip_entry_openbyindex(zip, i);
-        string path_in_jar = zip_entry_name(zip);
+        string path_in_jar = (string)zip_entry_name(zip);
         string full_path = str_create_in(jar->pool, "%s", path_in_jar);
         if (!str_end_with(path_in_jar, ".class")) {
             zip_entry_close(zip); // only deal with .class files

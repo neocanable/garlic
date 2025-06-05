@@ -146,14 +146,14 @@ string class_full_name(string descriptor)
 {
     size_t len = strlen(descriptor);
     switch (descriptor[0]) {
-        case 'I': return g_str_int;
-        case 'J': return g_str_long;
-        case 'F': return g_str_float;
-        case 'D': return g_str_double;
-        case 'B': return g_str_byte;
-        case 'C': return g_str_char;
-        case 'S': return g_str_short;
-        case 'Z': return g_str_boolean;
+        case 'I': return (string)g_str_int;
+        case 'J': return (string)g_str_long;
+        case 'F': return (string)g_str_float;
+        case 'D': return (string)g_str_double;
+        case 'B': return (string)g_str_byte;
+        case 'C': return (string)g_str_char;
+        case 'S': return (string)g_str_short;
+        case 'Z': return (string)g_str_boolean;
         case '[': {
             char c = descriptor[0];
             int depth = 0;
@@ -172,14 +172,14 @@ string class_full_name(string descriptor)
                         class_name[_tmp_len-1] = '\0';
                     return class_name;
                 }
-                case 'I': return class_type_array_name(g_str_int, depth);
-                case 'J': return class_type_array_name(g_str_long, depth);
-                case 'F': return class_type_array_name(g_str_float, depth);
-                case 'D': return class_type_array_name(g_str_double, depth);
-                case 'B': return class_type_array_name(g_str_byte, depth);
-                case 'C': return class_type_array_name(g_str_char, depth);
-                case 'S': return class_type_array_name(g_str_short, depth);
-                case 'Z': return class_type_array_name(g_str_boolean, depth);
+                case 'I': return class_type_array_name((string)g_str_int, depth);
+                case 'J': return class_type_array_name((string)g_str_long, depth);
+                case 'F': return class_type_array_name((string)g_str_float, depth);
+                case 'D': return class_type_array_name((string)g_str_double, depth);
+                case 'B': return class_type_array_name((string)g_str_byte, depth);
+                case 'C': return class_type_array_name((string)g_str_char, depth);
+                case 'S': return class_type_array_name((string)g_str_short, depth);
+                case 'Z': return class_type_array_name((string)g_str_boolean, depth);
                 default:
                     return NULL;
             }
@@ -203,15 +203,15 @@ string class_simple_name(string full)
 {
     if (strlen(full) == 1) {
         switch(full[0]) {
-            case 'I': return g_str_int;
-            case 'J': return g_str_long;
-            case 'F': return g_str_float;
-            case 'D': return g_str_double;
-            case 'B': return g_str_byte;
-            case 'C': return g_str_char;
-            case 'S': return g_str_short;
-            case 'Z': return g_str_boolean;
-            case 'V': return g_str_void;
+            case 'I': return (string)g_str_int;
+            case 'J': return (string)g_str_long;
+            case 'F': return (string)g_str_float;
+            case 'D': return (string)g_str_double;
+            case 'B': return (string)g_str_byte;
+            case 'C': return (string)g_str_char;
+            case 'S': return (string)g_str_short;
+            case 'Z': return (string)g_str_boolean;
+            case 'V': return (string)g_str_void;
             default: return full;
         }
     }
@@ -222,14 +222,14 @@ string class_simple_name(string full)
             int depth = (int)(last_square - full) + 1;
             char c = full[depth];
             switch (c) {
-                case 'I': return class_type_array_name(g_str_int, depth);
-                case 'J': return class_type_array_name(g_str_long, depth);
-                case 'F': return class_type_array_name(g_str_float, depth);
-                case 'D': return class_type_array_name(g_str_double, depth);
-                case 'B': return class_type_array_name(g_str_byte, depth);
-                case 'C': return class_type_array_name(g_str_char, depth);
-                case 'S': return class_type_array_name(g_str_short, depth);
-                case 'Z': return class_type_array_name(g_str_boolean, depth);
+                case 'I': return class_type_array_name((string)g_str_int, depth);
+                case 'J': return class_type_array_name((string)g_str_long, depth);
+                case 'F': return class_type_array_name((string)g_str_float, depth);
+                case 'D': return class_type_array_name((string)g_str_double, depth);
+                case 'B': return class_type_array_name((string)g_str_byte, depth);
+                case 'C': return class_type_array_name((string)g_str_char, depth);
+                case 'S': return class_type_array_name((string)g_str_short, depth);
+                case 'Z': return class_type_array_name((string)g_str_boolean, depth);
                 default: {
                     // L
                     string short_name = class_path_to_short(full);
@@ -266,15 +266,15 @@ void class_import(jsource_file *jf, string path)
     if (str_start_with(path, "java/lang") ||
         str_start_with(path, jf->fname) ||
         (jf->pname != NULL && str_start_with(path, jf->pname)) ||
-        str_start_with(path, g_str_int) ||
-        str_start_with(path, g_str_long) ||
-        str_start_with(path, g_str_float) ||
-        str_start_with(path, g_str_double) ||
-        str_start_with(path, g_str_byte) ||
-        str_start_with(path, g_str_char) ||
-        str_start_with(path, g_str_short) ||
-        str_start_with(path, g_str_boolean) ||
-        str_start_with(path, g_str_void) ||
+        str_start_with(path, (string)g_str_int) ||
+        str_start_with(path, (string)g_str_long) ||
+        str_start_with(path, (string)g_str_float) ||
+        str_start_with(path, (string)g_str_double) ||
+        str_start_with(path, (string)g_str_byte) ||
+        str_start_with(path, (string)g_str_char) ||
+        str_start_with(path, (string)g_str_short) ||
+        str_start_with(path, (string)g_str_boolean) ||
+        str_start_with(path, (string)g_str_void) ||
         path[0] == '[')
         return;
 

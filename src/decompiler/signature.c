@@ -137,7 +137,7 @@ string field_type_sig_to_s(field_type_sig *fts)
             return field_type_sig_to_s(fts->type->field_type);
         }
         default:
-            return g_str_unknown;
+            return (string)g_str_unknown;
     }
 }
 

@@ -49,7 +49,7 @@ void print_expression(jd_exp *expression, jd_ins *ins)
 
 
     if (DEBUG_INS_AND_NODE_INFO) {
-        if (DEFAULT_WRITE_OUT == stdout) {
+        if (!isatty(fileno(stdout))) {
             if (DEBUG_WRITE_COLOR) {
                 if (!exp_is_copy(expression)) {
                     printf("\033[0;31m");
@@ -89,7 +89,7 @@ void print_exp_full(jd_exp *expression, jd_ins *ins)
         return;
 
     if (DEBUG_INS_AND_NODE_INFO) {
-        if (DEFAULT_WRITE_OUT == stdout) {
+        if (!isatty(fileno(stdout))) {
             if (DEBUG_WRITE_COLOR) {
                 printf("\033[0;31m");
                 printf("%s ", front_ins_string(expression, ins));
