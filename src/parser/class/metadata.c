@@ -15,7 +15,7 @@ jsource_file* init_java_source_file(jclass_file *jc)
     if (jc->super_class > 0)
         jf->super_cname = pool_str(jc, jc->super_class);
     else
-        jf->super_cname = g_str_Object;
+        jf->super_cname = (string)g_str_Object;
 
     jf->imports          = trie_create_node("");
     jf->source           = NULL;
@@ -280,10 +280,15 @@ void parse_constant_pool_section(jclass_file *jc)
 
                 jclass_read2(jc, &utf8->length);
                 uint16_t _utf8_length = be16toh(utf8->length);
-                utf8->bytes = x_alloc(_utf8_length);
-                jclass_read(jc, utf8->bytes, _utf8_length);
-
-                item->readable = str_create("%s", utf8->bytes);
+                if (_utf8_length == 0) {
+                    item->readable = (string)g_str_empty;
+                } else {
+                    utf8->bytes = x_alloc(_utf8_length);
+                    jclass_read(jc, utf8->bytes, _utf8_length);
+                    item->readable = x_alloc(_utf8_length+1);
+                    memcpy(item->readable, utf8->bytes, _utf8_length);
+                    item->readable[_utf8_length] = '\0';
+                }
                 item->name = str_utf8;
                 break;
             }
