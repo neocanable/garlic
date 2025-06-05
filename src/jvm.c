@@ -6,64 +6,71 @@
 #include "file_tools.h"
 #include <unistd.h>
 
+#define JAVA_CLASS_MAGIC 0xCAFEBABE
+#define JAR_FILE_MAGIC   0x504B0304
+#define DEX_FILE_MAGIC   0x6465780A
+
+typedef enum {
+    JD_FILE_TYPE_UNKNOWN = 0,
+    JD_FILE_TYPE_JAVA_CLASS,
+    JD_FILE_TYPE_JAR,
+    JD_FILE_TYPE_DEX
+} jd_file_type_t;
+
 typedef struct jd_opt {
     char *path;
     char *out;
-    unsigned char *magic;
+    jd_file_type_t ft;
     int option;
     int thread_num;
 } jd_opt;
 
-static unsigned char* magic_of_file(char *filepath) {
+static jd_file_type_t magic_of_file(char *filepath) {
     FILE *fp = fopen(filepath, "rb");
     if (fp == NULL) {
-        fprintf(stderr, "[garlic] open file: %s failed\n", filepath);
-        return NULL;
+        fprintf(stderr, "[garlic] Open file: %s failed\n", filepath);
+        return JD_FILE_TYPE_UNKNOWN;
     }
-    unsigned char *magic = calloc(1, 4);
-    if (fread(magic, 1, 4, fp) != 4) {
-        if (feof(fp))
-            fprintf(stderr, "[garlic] file: %s less than 4 bytes\n", filepath);
-        else
-            fprintf(stderr, "[garlic] read file: %s error\n", filepath);
-        return NULL;
+    uint32_t magic = 0;
+    size_t bytes_read = fread(&magic, 1, sizeof(magic), fp);
+    if (bytes_read != sizeof(magic)) {
+        fprintf(stderr, "[garlic] File %s read error.\n", filepath);
+        return JD_FILE_TYPE_UNKNOWN;
     }
     fclose(fp);
 
-    if (magic[0] == 0xCA && magic[1] == 0xFE && magic[2] == 0xBA && magic[3] == 0xBE) {
-        DEBUG_PRINT("valid java class file\n");
-    }
-    else if (magic[0] == 0x50 && magic[1] == 0x4B && magic[2] == 0x03 && magic[3] == 0x04) {
-        DEBUG_PRINT("valid jar file\n");
-    }
-    else if (magic[0] == 0x64 && magic[1] == 0x65 && magic[2] == 0x78 && magic[3] == 0x0A) {
-        DEBUG_PRINT("valid dex file\n");
-    }
-    else {
-        fprintf(stderr, "[garlic] file: %s is not a valid Java class/JAR/DEX file\n", filepath);
-        free(magic);
-        return NULL;
-    }
+    uint32_t be_magic = ((magic & 0xFF) << 24) |
+                        (((magic >> 8) & 0xFF) << 16) |
+                        (((magic >> 16) & 0xFF) << 8) |
+                        ((magic >> 24) & 0xFF);
 
-    return magic;
+    switch (be_magic) {
+        case JAVA_CLASS_MAGIC:
+            return JD_FILE_TYPE_JAVA_CLASS;
+        case JAR_FILE_MAGIC:
+            return JD_FILE_TYPE_JAR;
+        case DEX_FILE_MAGIC:
+            return JD_FILE_TYPE_DEX;
+        default:
+            fprintf(stderr, "[garlic] file: %s is not a "
+                            "valid Java class/JAR/DEX file\n", filepath);
+            return JD_FILE_TYPE_UNKNOWN;
+    }
 }
 
-static bool is_jvm_class(jd_opt *opt)
+static inline bool is_jvm_class(jd_opt *opt)
 {
-    return (opt->magic[0] == 0xCA && opt->magic[1] == 0xFE &&
-            opt->magic[2] == 0xBA && opt->magic[3] == 0xBE);
+    return opt->ft == JD_FILE_TYPE_JAVA_CLASS;
 }
 
 static bool is_jar_file(jd_opt *opt)
 {
-    return (opt->magic[0] == 0x50 && opt->magic[1] == 0x4B &&
-            opt->magic[2] == 0x03 && opt->magic[3] == 0x04);
+    return opt->ft == JD_FILE_TYPE_JAR;
 }
 
 static bool is_dex_file(jd_opt *opt)
 {
-    return (opt->magic[0] == 0x64 && opt->magic[1] == 0x65 &&
-            opt->magic[2] == 0x78 && opt->magic[3] == 0x0A);
+    return opt->ft == JD_FILE_TYPE_DEX;
 }
 
 static void prepare_opt_output(jd_opt *opt) {
@@ -108,18 +115,18 @@ static jd_opt* parse_opt(int argc, char **argv) {
     opterr = 0; // Disable getopt error messages
 
     char *path = argv[1];
-    if (path == NULL || (path != NULL && (STR_EQL(path, "-h") || STR_EQL(path, "--help")))) {
+    if (path == NULL || ((STR_EQL(path, "-h") || STR_EQL(path, "--help")))) {
         opt_usage(argv[0]);
         exit(EXIT_SUCCESS);
     }
-    unsigned char *magic = magic_of_file(path);
-    if (magic == NULL)
+    jd_file_type_t ft = magic_of_file(path);
+    if (ft == JD_FILE_TYPE_UNKNOWN)
         exit(EXIT_FAILURE);
 
     jd_opt *opt = malloc(sizeof(jd_opt));
     memset(opt, 0, sizeof(jd_opt));
-    opt->magic = magic;
     opt->path = path;
+    opt->ft = ft;
 
     while ((oc = getopt(argc, argv, "po:t:h")) != -1) {
         switch (oc) {
@@ -168,9 +175,6 @@ static jd_opt* parse_opt(int argc, char **argv) {
 }
 
 static void free_opt(jd_opt *opt) {
-    if (opt->magic != NULL) {
-        free(opt->magic);
-    }
     if (opt->out != NULL) {
         free(opt->out);
     }
