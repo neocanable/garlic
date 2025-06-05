@@ -4,6 +4,7 @@
 #include "decompiler/expression.h"
 #include "jvm/jvm_expression_builder.h"
 #include "expression_writter.h"
+#include "dominator_tree.h"
 
 void make_logic_not(jd_exp *expression)
 {
@@ -136,8 +137,8 @@ bool identify_logical_operations(jd_method *m)
                 }
 
                 // TODO: 这里需要unlink_blocks(basic_block, target)
-                //       compute_dominates_block(m, basic_block);
-                //       compute_dominates_block(m, next_block);
+                       compute_dominates_block(m, basic_block);
+                       compute_dominates_block(m, next_block);
                 cfg_unlink_blocks(basic_block, other);
 
                 for (int l = 0; l < basic_block->dominates->size; ++l) {

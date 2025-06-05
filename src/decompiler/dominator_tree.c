@@ -192,7 +192,7 @@ void dominate_blocks(jd_method *m, jd_bblock *block)
 
 void dominator_tree(jd_method *m)
 {
-    // 计算所有的block的dominator
+    // compute dominator tree
     jd_bblock *enter_block = block_enter(m);
     enter_block->idom = enter_block;
     int changed = 1;
@@ -225,7 +225,7 @@ void create_dominator_tree(jd_method *m)
 {
     dominator_tree(m);
     dominance_frontier(m);
-    dominate_blocks(m, NULL);
+    // dominate_blocks(m, NULL);
 }
 
 void clear_dominator_data(jd_method *m)
