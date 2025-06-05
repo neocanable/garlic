@@ -37,11 +37,11 @@ void tire_merge(jd_trie_node *dst_root, jd_trie_node *src_root)
     tire_travel_merge(dst_root, src_root);
 }
 
-// 插入一个字符串到Trie中
 void trie_insert(jd_trie_node *root, string path) {
     char *token;
-    char *copy = strdup(path);
-    token = strtok(copy, TRIE_SPLIT_STR);
+    char *copy = str_dup(path);
+    char *saveptr;
+    token = strtok_r(copy, TRIE_SPLIT_STR, &saveptr);
     jd_trie_node *current_level = root;
 
     bool add_new_leaf = false;
@@ -50,14 +50,13 @@ void trie_insert(jd_trie_node *root, string path) {
         current_node = current_level->child;
         jd_trie_node *prev = NULL;
 
-        // 在当前层寻找是否存在相同的segment
-        while(current_node != NULL && 
+        while(current_node != NULL &&
                 strcmp(current_node->segment, token) != 0) {
             prev = current_node;
             current_node = current_node->next;
         }
 
-        if(current_node == NULL) { // 如果没有找到匹配的节点，则创建新节点
+        if(current_node == NULL) {
             current_node = trie_create_node(token);
             add_new_leaf = true;
             if(prev == NULL) {
@@ -67,21 +66,19 @@ void trie_insert(jd_trie_node *root, string path) {
             }
         }
 
-        current_level = current_node; // 移动到下一层
-        token = strtok(NULL, TRIE_SPLIT_STR);
+        current_level = current_node;
+        token = strtok_r(NULL, TRIE_SPLIT_STR, &saveptr);
     }
     if (add_new_leaf) {
         current_node->is_leaf = true;
         current_node->full = path;
     }
-
-    free(copy); // 释放复制的字符串
 }
 
 // 搜索特定路径是否存在于Trie中
 int trie_search(jd_trie_node *root, string path) {
     const char* current_path = path;
-    jd_trie_node *current_node = root->child; // 从第一个实际数据节点开始
+    jd_trie_node *current_node = root->child;
 
     while (*current_path != '\0' && current_node != NULL) {
         // 跳过点号
