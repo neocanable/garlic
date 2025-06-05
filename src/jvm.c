@@ -69,18 +69,15 @@ static bool is_dex_file(jd_opt *opt)
 static void prepare_opt_output(jd_opt *opt) {
     char *out = opt->out;
     if (out == NULL) {
-        char *last_slash = strrchr(opt->path, '/');
-        size_t len = last_slash ? last_slash - opt->path + 1 : strlen(opt->path)+1;
-//        size_t len = last_slash - opt->path + 1;
-        char *jar_name = malloc(len + 1);
-        memcpy(jar_name, last_slash ? last_slash+1 : opt->path, len);
-        jar_name[len] = '\0';
+        char *copy_path = strdup(opt->path);
+        char *jar_name = strdup(basename(opt->path));
+        char *jar_dir = dirname(copy_path);
         str_replace_char(jar_name, '.', '_');
 
-        char *jar_dir = dirname(opt->path);
         out = malloc(strlen(jar_dir) + strlen(jar_name) + 2);
         sprintf(out, "%s/%s", jar_dir, jar_name);
         free(jar_name);
+        free(copy_path);
         opt->out = out;
     }
     mkdir_p(out);
