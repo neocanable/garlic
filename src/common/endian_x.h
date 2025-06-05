@@ -8,7 +8,8 @@
  * */
 
 #ifdef __APPLE__
-#warning "This header file (endian.h) is MacOS X specific.\n"
+// disabled
+// #warning "This header file (endian.h) is MacOS X specific.\n"
 #include <libkern/OSByteOrder.h>
 
 #define htobe16(x) OSSwapHostToBigInt16(x)
@@ -34,6 +35,31 @@
 #include <netinet/in.h>
 #endif
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__MINGW32__)
 #include <winsock2.h>
+#include <stdint.h>
+#define htobe16(x) htons(x)
+
+#define htobe16(x) htons(x)
+#define htole16(x) (x)
+#define be16toh(x) ntohs(x)
+#define le16toh(x) (x)
+
+#define htobe32(x) htonl(x)
+#define htole32(x) (x)
+#define be32toh(x) ntohl(x)
+#define le32toh(x) (x)
+
+#ifndef htonll
+#define htonll(x) ((((uint64_t)htonl(x)) << 32) + htonl((x) >> 32))
+#endif
+#ifndef ntohll
+#define ntohll(x) ((((uint64_t)ntohl(x)) << 32) + ntohl((x) >> 32))
+#endif
+
+#define htobe64(x) htonll(x)
+#define htole64(x) (x)
+#define be64toh(x) ntohll(x)
+#define le64toh(x) (x)
+
 #endif
