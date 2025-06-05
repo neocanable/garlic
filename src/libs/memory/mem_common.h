@@ -45,5 +45,6 @@ static const char* g_str_String = "String";
 static const char* g_str_Class = "Class";
 static const char* g_str_Throwable = "Throwable";
 static const char* g_str_Exception = "Exception";
+static const char* g_str_empty = "";
 
 #endif //GARLIC_MEM_COMMON_H
