@@ -741,7 +741,7 @@ void sform_for_local_variable(jd_method *m)
 }
 
 void sform_for_stack_variable(jd_method *m)
-{    
+{
     sform_stack_variable_insert_phi_v2(m);
 }
 

@@ -372,7 +372,7 @@ string method_block_to_string(jd_method *m, jd_node *node)
     string buf = NULL;
     FILE *stream;
     size_t len = 0;
-    
+
 #ifdef _WIN32
     // Windows doesn't have open_memstream, use tmpfile as alternative
     stream = tmpfile();

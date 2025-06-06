@@ -1,4 +1,3 @@
-
 #ifndef GARLIC_THREAD_POOL_H
 #define GARLIC_THREAD_POOL_H
 

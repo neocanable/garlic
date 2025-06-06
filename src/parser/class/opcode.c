@@ -1,1499 +1,553 @@
 #include "hashmap_tools.h"
 #include "metadata.h"
 
+#include "jvm/jvm_ins_helper.h"
+
 string jvm_opcode_name(u1 code)
 {
     switch(code) {
-        case  0x00:
-            return  "nop";
-        case  0x01:
-            return  "aconst_null";
-        case  0x02:
-            return  "iconst_m1";
-        case  0x03:
-            return  "iconst_0";
-        case  0x04:
-            return  "iconst_1";
-        case  0x05:
-            return  "iconst_2";
-        case  0x06:
-            return  "iconst_3";
-        case  0x07:
-            return  "iconst_4";
-        case  0x08:
-            return  "iconst_5";
-        case  0x09:
-            return  "lconst_0";
-        case  0x0a:
-            return  "lconst_1";
-        case  0x0b:
-            return  "fconst_0";
-        case  0x0c:
-            return  "fconst_1";
-        case  0x0d:
-            return  "fconst_2";
-        case  0x0e:
-            return  "dconst_0";
-        case  0x0f:
-            return  "dconst_1";
-        case  0x10:
-            return  "bipush";
-        case  0x11:
-            return  "sipush";
-        case  0x12:
-            return  "ldc";
-        case  0x13:
-            return  "ldc_w";
-        case  0x14:
-            return  "ldc2_w";
-        case  0x15:
-            return  "iload";
-        case  0x16:
-            return  "lload";
-        case  0x17:
-            return  "fload";
-        case  0x18:
-            return  "dload";
-        case  0x19:
-            return  "aload";
-        case  0x1a:
-            return  "iload_0";
-        case  0x1b:
-            return  "iload_1";
-        case  0x1c:
-            return  "iload_2";
-        case  0x1d:
-            return  "iload_3";
-        case  0x1e:
-            return  "lload_0";
-        case  0x1f:
-            return  "lload_1";
-        case  0x20:
-            return  "lload_2";
-        case  0x21:
-            return  "lload_3";
-        case  0x22:
-            return  "fload_0";
-        case  0x23:
-            return  "fload_1";
-        case  0x24:
-            return  "fload_2";
-        case  0x25:
-            return  "fload_3";
-        case  0x26:
-            return  "dload_0";
-        case  0x27:
-            return  "dload_1";
-        case  0x28:
-            return  "dload_2";
-        case  0x29:
-            return  "dload_3";
-        case  0x2a:
-            return  "aload_0";
-        case  0x2b:
-            return  "aload_1";
-        case  0x2c:
-            return  "aload_2";
-        case  0x2d:
-            return  "aload_3";
-        case  0x2e:
-            return  "iaload";
-        case  0x2f:
-            return  "laload";
-        case  0x30:
-            return  "faload";
-        case  0x31:
-            return  "daload";
-        case  0x32:
-            return  "aaload";
-        case  0x33:
-            return  "baload";
-        case  0x34:
-            return  "caload";
-        case  0x35:
-            return  "saload";
-        case  0x36:
-            return  "istore";
-        case  0x37:
-            return  "lstore";
-        case  0x38:
-            return  "fstore";
-        case  0x39:
-            return  "dstore";
-        case  0x3a:
-            return  "astore";
-        case  0x3b:
-            return  "istore_0";
-        case  0x3c:
-            return  "istore_1";
-        case  0x3d:
-            return  "istore_2";
-        case  0x3e:
-            return  "istore_3";
-        case  0x3f:
-            return  "lstore_0";
-        case  0x40:
-            return  "lstore_1";
-        case  0x41:
-            return  "lstore_2";
-        case  0x42:
-            return  "lstore_3";
-        case  0x43:
-            return  "fstore_0";
-        case  0x44:
-            return  "fstore_1";
-        case  0x45:
-            return  "fstore_2";
-        case  0x46:
-            return  "fstore_3";
-        case  0x47:
-            return  "dstore_0";
-        case  0x48:
-            return  "dstore_1";
-        case  0x49:
-            return  "dstore_2";
-        case  0x4a:
-            return  "dstore_3";
-        case  0x4b:
-            return  "astore_0";
-        case  0x4c:
-            return  "astore_1";
-        case  0x4d:
-            return  "astore_2";
-        case  0x4e:
-            return  "astore_3";
-        case  0x4f:
-            return  "iastore";
-        case  0x50:
-            return  "lastore";
-        case  0x51:
-            return  "fastore";
-        case  0x52:
-            return  "dastore";
-        case  0x53:
-            return  "aastore";
-        case  0x54:
-            return  "bastore";
-        case  0x55:
-            return  "castore";
-        case  0x56:
-            return  "sastore";
-        case  0x57:
-            return  "pop";
-        case  0x58:
-            return  "pop2";
-        case  0x59:
-            return  "dup";
-        case  0x5a:
-            return  "dup_x1";
-        case  0x5b:
-            return  "dup_x2";
-        case  0x5c:
-            return  "dup2";
-        case  0x5d:
-            return  "dup2_x1";
-        case  0x5e:
-            return  "dup2_x2";
-        case  0x5f:
-            return  "swap";
-        case  0x60:
-            return  "iadd";
-        case  0x61:
-            return  "ladd";
-        case  0x62:
-            return  "fadd";
-        case  0x63:
-            return  "dadd";
-        case  0x64:
-            return  "isub";
-        case  0x65:
-            return  "lsub";
-        case  0x66:
-            return  "fsub";
-        case  0x67:
-            return  "dsub";
-        case  0x68:
-            return  "imul";
-        case  0x69:
-            return  "lmul";
-        case  0x6a:
-            return  "fmul";
-        case  0x6b:
-            return  "dmul";
-        case  0x6c:
-            return  "idiv";
-        case  0x6d:
-            return  "ldiv";
-        case  0x6e:
-            return  "fdiv";
-        case  0x6f:
-            return  "ddiv";
-        case  0x70:
-            return  "irem";
-        case  0x71:
-            return  "lrem";
-        case  0x72:
-            return  "frem";
-        case  0x73:
-            return  "drem";
-        case  0x74:
-            return  "ine";
-        case  0x75:
-            return  "lne";
-        case  0x76:
-            return  "fne";
-        case  0x77:
-            return  "dne";
-        case  0x78:
-            return  "ishl";
-        case  0x79:
-            return  "lshl";
-        case  0x7a:
-            return  "ishr";
-        case  0x7b:
-            return  "lshr";
-        case  0x7c:
-            return  "iushr";
-        case  0x7d:
-            return  "lushr";
-        case  0x7e:
-            return  "iand";
-        case  0x7f:
-            return  "land";
-        case  0x80:
-            return  "ior";
-        case  0x81:
-            return  "lor";
-        case  0x82:
-            return  "ixor";
-        case  0x83:
-            return  "lxor";
-        case  0x84:
-            return  "iinc";
-        case  0x85:
-            return  "i2l";
-        case  0x86:
-            return  "i2f";
-        case  0x87:
-            return  "i2d";
-        case  0x88:
-            return  "l2i";
-        case  0x89:
-            return  "l2f";
-        case  0x8a:
-            return  "l2d";
-        case  0x8b:
-            return  "f2i";
-        case  0x8c:
-            return  "f2l";
-        case  0x8d:
-            return  "f2d";
-        case  0x8e:
-            return  "d2i";
-        case  0x8f:
-            return  "d2l";
-        case  0x90:
-            return  "d2f";
-        case  0x91:
-            return  "i2b";
-        case  0x92:
-            return  "i2c";
-        case  0x93:
-            return  "i2s";
-        case  0x94:
-            return  "lcmp";
-        case  0x95:
-            return  "fcmpl";
-        case  0x96:
-            return  "fcmp";
-        case  0x97:
-            return  "dcmpl";
-        case  0x98:
-            return  "dcmp";
-        case  0x99:
-            return  "ifeq";
-        case  0x9a:
-            return  "ifne";
-        case  0x9b:
-            return  "iflt";
-        case  0x9c:
-            return  "ifge";
-        case  0x9d:
-            return  "ifgt";
-        case  0x9e:
-            return  "ifle";
-        case  0x9f:
-            return  "if_icmpeq";
-        case  0xa0:
-            return  "if_icmpne";
-        case  0xa1:
-            return  "if_icmplt";
-        case  0xa2:
-            return  "if_icmpge";
-        case  0xa3:
-            return  "if_icmpgt";
-        case  0xa4:
-            return  "if_icmple";
-        case  0xa5:
-            return  "if_acmpeq";
-        case  0xa6:
-            return  "if_acmpne";
-        case  0xa7:
-            return  "goto";
-        case  0xa8:
-            return  "jsr";
-        case  0xa9:
-            return  "ret";
-        case  0xaa:
-            return  "tableswitch";
-        case  0xab:
-            return  "lookupswitch";
-        case  0xac:
-            return  "ireturn";
-        case  0xad:
-            return  "lreturn";
-        case  0xae:
-            return  "freturn";
-        case  0xaf:
-            return  "dreturn";
-        case  0xb0:
-            return  "areturn";
-        case  0xb1:
-            return  "return";
-        case  0xb2:
-            return  "getstatic";
-        case  0xb3:
-            return  "putstatic";
-        case  0xb4:
-            return  "getfield";
-        case  0xb5:
-            return  "putfield";
-        case  0xb6:
-            return  "invokevirtual";
-        case  0xb7:
-            return  "invokespecial";
-        case  0xb8:
-            return  "invokestatic";
-        case  0xb9:
-            return  "invokeinterface";
-        case  0xba:
-            return  "invokedynamic";
-        case  0xbb:
-            return  "new";
-        case  0xbc:
-            return  "newarray";
-        case  0xbd:
-            return  "anewarray";
-        case  0xbe:
-            return  "arraylength";
-        case  0xbf:
-            return  "athrow";
-        case  0xc0:
-            return  "checkcast";
-        case  0xc1:
-            return  "instanceof";
-        case  0xc2:
-            return  "monitorenter";
-        case  0xc3:
-            return  "monitorexit";
-        case  0xc4:
-            return  "wide";
-        case  0xc5:
-            return  "multianewarray";
-        case  0xc6:
-            return  "ifnull";
-        case  0xc7:
-            return  "ifnonnull";
-        case  0xc8:
-            return  "goto_w";
-        case  0xc9:
-            return  "jsr_w";
-        case  0xca:
-            return  "breakpoint";
-        case  0xfe:
-            return  "impdep1";
-        case  0xff:
-            return  "leavefinally";
-        default:
-            return "unknown";
+        case INS_NOP: return "nop";
+        case INS_ACONST_NULL: return "aconst_null";
+        case INS_ICONST_M1: return "iconst_m1";
+        case INS_ICONST_0: return "iconst_0";
+        case INS_ICONST_1: return "iconst_1";
+        case INS_ICONST_2: return "iconst_2";
+        case INS_ICONST_3: return "iconst_3";
+        case INS_ICONST_4: return "iconst_4";
+        case INS_ICONST_5: return "iconst_5";
+        case INS_LCONST_0: return "lconst_0";
+        case INS_LCONST_1: return "lconst_1";
+        case INS_FCONST_0: return "fconst_0";
+        case INS_FCONST_1: return "fconst_1";
+        case INS_FCONST_2: return "fconst_2";
+        case INS_DCONST_0: return "dconst_0";
+        case INS_DCONST_1: return "dconst_1";
+        case INS_BIPUSH: return "bipush";
+        case INS_SIPUSH: return "sipush";
+        case INS_LDC: return "ldc";
+        case INS_LDC_W: return "ldc_w";
+        case INS_LDC2_W: return "ldc2_w";
+        case INS_ILOAD: return "iload";
+        case INS_LLOAD: return "lload";
+        case INS_FLOAD: return "fload";
+        case INS_DLOAD: return "dload";
+        case INS_ALOAD: return "aload";
+        case INS_ILOAD_0: return "iload_0";
+        case INS_ILOAD_1: return "iload_1";
+        case INS_ILOAD_2: return "iload_2";
+        case INS_ILOAD_3: return "iload_3";
+        case INS_LLOAD_0: return "lload_0";
+        case INS_LLOAD_1: return "lload_1";
+        case INS_LLOAD_2: return "lload_2";
+        case INS_LLOAD_3: return "lload_3";
+        case INS_FLOAD_0: return "fload_0";
+        case INS_FLOAD_1: return "fload_1";
+        case INS_FLOAD_2: return "fload_2";
+        case INS_FLOAD_3: return "fload_3";
+        case INS_DLOAD_0: return "dload_0";
+        case INS_DLOAD_1: return "dload_1";
+        case INS_DLOAD_2: return "dload_2";
+        case INS_DLOAD_3: return "dload_3";
+        case INS_ALOAD_0: return "aload_0";
+        case INS_ALOAD_1: return "aload_1";
+        case INS_ALOAD_2: return "aload_2";
+        case INS_ALOAD_3: return "aload_3";
+        case INS_IALOAD: return "iaload";
+        case INS_LALOAD: return "laload";
+        case INS_FALOAD: return "faload";
+        case INS_DALOAD: return "daload";
+        case INS_AALOAD: return "aaload";
+        case INS_BALOAD: return "baload";
+        case INS_CALOAD: return "caload";
+        case INS_SALOAD: return "saload";
+        case INS_ISTORE: return "istore";
+        case INS_LSTORE: return "lstore";
+        case INS_FSTORE: return "fstore";
+        case INS_DSTORE: return "dstore";
+        case INS_ASTORE: return "astore";
+        case INS_ISTORE_0: return "istore_0";
+        case INS_ISTORE_1: return "istore_1";
+        case INS_ISTORE_2: return "istore_2";
+        case INS_ISTORE_3: return "istore_3";
+        case INS_LSTORE_0: return "lstore_0";
+        case INS_LSTORE_1: return "lstore_1";
+        case INS_LSTORE_2: return "lstore_2";
+        case INS_LSTORE_3: return "lstore_3";
+        case INS_FSTORE_0: return "fstore_0";
+        case INS_FSTORE_1: return "fstore_1";
+        case INS_FSTORE_2: return "fstore_2";
+        case INS_FSTORE_3: return "fstore_3";
+        case INS_DSTORE_0: return "dstore_0";
+        case INS_DSTORE_1: return "dstore_1";
+        case INS_DSTORE_2: return "dstore_2";
+        case INS_DSTORE_3: return "dstore_3";
+        case INS_ASTORE_0: return "astore_0";
+        case INS_ASTORE_1: return "astore_1";
+        case INS_ASTORE_2: return "astore_2";
+        case INS_ASTORE_3: return "astore_3";
+        case INS_IASTORE: return "iastore";
+        case INS_LASTORE: return "lastore";
+        case INS_FASTORE: return "fastore";
+        case INS_DASTORE: return "dastore";
+        case INS_AASTORE: return "aastore";
+        case INS_BASTORE: return "bastore";
+        case INS_CASTORE: return "castore";
+        case INS_SASTORE: return "sastore";
+        case INS_POP: return "pop";
+        case INS_POP2: return "pop2";
+        case INS_DUP: return "dup";
+        case INS_DUP_X1: return "dup_x1";
+        case INS_DUP_X2: return "dup_x2";
+        case INS_DUP2: return "dup2";
+        case INS_DUP2_X1: return "dup2_x1";
+        case INS_DUP2_X2: return "dup2_x2";
+        case INS_SWAP: return "swap";
+        case INS_IADD: return "iadd";
+        case INS_LADD: return "ladd";
+        case INS_FADD: return "fadd";
+        case INS_DADD: return "dadd";
+        case INS_ISUB: return "isub";
+        case INS_LSUB: return "lsub";
+        case INS_FSUB: return "fsub";
+        case INS_DSUB: return "dsub";
+        case INS_IMUL: return "imul";
+        case INS_LMUL: return "lmul";
+        case INS_FMUL: return "fmul";
+        case INS_DMUL: return "dmul";
+        case INS_IDIV: return "idiv";
+        case INS_LDIV: return "ldiv";
+        case INS_FDIV: return "fdiv";
+        case INS_DDIV: return "ddiv";
+        case INS_IREM: return "irem";
+        case INS_LREM: return "lrem";
+        case INS_FREM: return "frem";
+        case INS_DREM: return "drem";
+        case INS_INEG: return "ineg";
+        case INS_LNEG: return "lneg";
+        case INS_FNEG: return "fneg";
+        case INS_DNEG: return "dneg";
+        case INS_ISHL: return "ishl";
+        case INS_LSHL: return "lshl";
+        case INS_ISHR: return "ishr";
+        case INS_LSHR: return "lshr";
+        case INS_IUSHR: return "iushr";
+        case INS_LUSHR: return "lushr";
+        case INS_IAND: return "iand";
+        case INS_LAND: return "land";
+        case INS_IOR: return "ior";
+        case INS_LOR: return "lor";
+        case INS_IXOR: return "ixor";
+        case INS_LXOR: return "lxor";
+        case INS_IINC: return "iinc";
+        case INS_I2L: return "i2l";
+        case INS_I2F: return "i2f";
+        case INS_I2D: return "i2d";
+        case INS_L2I: return "l2i";
+        case INS_L2F: return "l2f";
+        case INS_L2D: return "l2d";
+        case INS_F2I: return "f2i";
+        case INS_F2L: return "f2l";
+        case INS_F2D: return "f2d";
+        case INS_D2I: return "d2i";
+        case INS_D2L: return "d2l";
+        case INS_D2F: return "d2f";
+        case INS_I2B: return "i2b";
+        case INS_I2C: return "i2c";
+        case INS_I2S: return "i2s";
+        case INS_LCMP: return "lcmp";
+        case INS_FCMPL: return "fcmpl";
+        case INS_FCMPG: return "fcmpg";
+        case INS_DCMPL: return "dcmpl";
+        case INS_DCMPG: return "dcmpg";
+        case INS_IFEQ: return "ifeq";
+        case INS_IFNE: return "ifne";
+        case INS_IFLT: return "iflt";
+        case INS_IFGE: return "ifge";
+        case INS_IFGT: return "ifgt";
+        case INS_IFLE: return "ifle";
+        case INS_IF_ICMPEQ: return "if_icmpeq";
+        case INS_IF_ICMPNE: return "if_icmpne";
+        case INS_IF_ICMPLT: return "if_icmplt";
+        case INS_IF_ICMPGE: return "if_icmpge";
+        case INS_IF_ICMPGT: return "if_icmpgt";
+        case INS_IF_ICMPLE: return "if_icmple";
+        case INS_IF_ACMPEQ: return "if_acmpeq";
+        case INS_IF_ACMPNE: return "if_acmpne";
+        case INS_GOTO: return "goto";
+        case INS_JSR: return "jsr";
+        case INS_RET: return "ret";
+        case INS_TABLESWITCH: return "tableswitch";
+        case INS_LOOKUPSWITCH: return "lookupswitch";
+        case INS_IRETURN: return "ireturn";
+        case INS_LRETURN: return "lreturn";
+        case INS_FRETURN: return "freturn";
+        case INS_DRETURN: return "dreturn";
+        case INS_ARETURN: return "areturn";
+        case INS_RETURN: return "return";
+        case INS_GETSTATIC: return "getstatic";
+        case INS_PUTSTATIC: return "putstatic";
+        case INS_GETFIELD: return "getfield";
+        case INS_PUTFIELD: return "putfield";
+        case INS_INVOKEVIRTUAL: return "invokevirtual";
+        case INS_INVOKESPECIAL: return "invokespecial";
+        case INS_INVOKESTATIC: return "invokestatic";
+        case INS_INVOKEINTERFACE: return "invokeinterface";
+        case INS_INVOKEDYNAMIC: return "invokedynamic";
+        case INS_NEW: return "new";
+        case INS_NEWARRAY: return "newarray";
+        case INS_ANEWARRAY: return "anewarray";
+        case INS_ARRAYLENGTH: return "arraylength";
+        case INS_ATHROW: return "athrow";
+        case INS_CHECKCAST: return "checkcast";
+        case INS_INSTANCEOF: return "instanceof";
+        case INS_MONITORENTER: return "monitorenter";
+        case INS_MONITOREXIT: return "monitorexit";
+        case INS_WIDE: return "wide";
+        case INS_MULTIANEWARRAY: return "multianewarray";
+        case INS_IFNULL: return "ifnull";
+        case INS_IFNONNULL: return "ifnonnull";
+        case INS_GOTO_W: return "goto_w";
+        case INS_JSR_W: return "jsr_w";
+        case INS_BREAKPOINT: return "breakpoint";
+        case INS_IMPDEP1: return "impdep1";
+        case INS_LEAVEFINALLY: return "leavefinally";
+        default: return (string)g_str_unknown;
     }
 }
 
 int jvm_opcode_popped(u1 code)
 {
     switch(code) {
-        case  0x00:
-            return  0;
-        case  0x01:
-            return  0;
-        case  0x02:
-            return  0;
-        case  0x03:
-            return  0;
-        case  0x04:
-            return  0;
-        case  0x05:
-            return  0;
-        case  0x06:
-            return  0;
-        case  0x07:
-            return  0;
-        case  0x08:
-            return  0;
-        case  0x09:
-            return  0;
-        case  0x0a:
-            return  0;
-        case  0x0b:
-            return  0;
-        case  0x0c:
-            return  0;
-        case  0x0d:
-            return  0;
-        case  0x0e:
-            return  0;
-        case  0x0f:
-            return  0;
-        case  0x10:
-            return  0;
-        case  0x11:
-            return  0;
-        case  0x12:
-            return  0;
-        case  0x13:
-            return  0;
-        case  0x14:
-            return  0;
-        case  0x15:
-            return  0;
-        case  0x16:
-            return  0;
-        case  0x17:
-            return  0;
-        case  0x18:
-            return  0;
-        case  0x19:
-            return  0;
-        case  0x1a:
-            return  0;
-        case  0x1b:
-            return  0;
-        case  0x1c:
-            return  0;
-        case  0x1d:
-            return  0;
-        case  0x1e:
-            return  0;
-        case  0x1f:
-            return  0;
-        case  0x20:
-            return  0;
-        case  0x21:
-            return  0;
-        case  0x22:
-            return  0;
-        case  0x23:
-            return  0;
-        case  0x24:
-            return  0;
-        case  0x25:
-            return  0;
-        case  0x26:
-            return  0;
-        case  0x27:
-            return  0;
-        case  0x28:
-            return  0;
-        case  0x29:
-            return  0;
-        case  0x2a:
-            return  0;
-        case  0x2b:
-            return  0;
-        case  0x2c:
-            return  0;
-        case  0x2d:
-            return  0;
-        case  0x2e:
-            return  2;
-        case  0x2f:
-            return  2;
-        case  0x30:
-            return  2;
-        case  0x31:
-            return  2;
-        case  0x32:
-            return  2;
-        case  0x33:
-            return  2;
-        case  0x34:
-            return  2;
-        case  0x35:
-            return  2;
-        case  0x36:
-            return  1;
-        case  0x37:
-            return  1;
-        case  0x38:
-            return  1;
-        case  0x39:
-            return  1;
-        case  0x3a:
-            return  1;
-        case  0x3b:
-            return  1;
-        case  0x3c:
-            return  1;
-        case  0x3d:
-            return  1;
-        case  0x3e:
-            return  1;
-        case  0x3f:
-            return  1;
-        case  0x40:
-            return  1;
-        case  0x41:
-            return  1;
-        case  0x42:
-            return  1;
-        case  0x43:
-            return  1;
-        case  0x44:
-            return  1;
-        case  0x45:
-            return  1;
-        case  0x46:
-            return  1;
-        case  0x47:
-            return  1;
-        case  0x48:
-            return  1;
-        case  0x49:
-            return  1;
-        case  0x4a:
-            return  1;
-        case  0x4b:
-            return  1;
-        case  0x4c:
-            return  1;
-        case  0x4d:
-            return  1;
-        case  0x4e:
-            return  1;
-        case  0x4f:
-            return  3;
-        case  0x50:
-            return  3;
-        case  0x51:
-            return  3;
-        case  0x52:
-            return  3;
-        case  0x53:
-            return  3;
-        case  0x54:
-            return  3;
-        case  0x55:
-            return  3;
-        case  0x56:
-            return  3;
-        case  0x57:
-            return  0;
-        case  0x58:
-            return  0;
-        case  0x59:
-            return  0;
-        case  0x5a:
-            return  0;
-        case  0x5b:
-            return  0;
-        case  0x5c:
-            return  0;
-        case  0x5d:
-            return  0;
-        case  0x5e:
-            return  0;
-        case  0x5f:
-            return  0;
-        case  0x60:
-            return  2;
-        case  0x61:
-            return  2;
-        case  0x62:
-            return  2;
-        case  0x63:
-            return  2;
-        case  0x64:
-            return  2;
-        case  0x65:
-            return  2;
-        case  0x66:
-            return  2;
-        case  0x67:
-            return  2;
-        case  0x68:
-            return  2;
-        case  0x69:
-            return  2;
-        case  0x6a:
-            return  2;
-        case  0x6b:
-            return  2;
-        case  0x6c:
-            return  2;
-        case  0x6d:
-            return  2;
-        case  0x6e:
-            return  2;
-        case  0x6f:
-            return  2;
-        case  0x70:
-            return  2;
-        case  0x71:
-            return  2;
-        case  0x72:
-            return  2;
-        case  0x73:
-            return  2;
-        case  0x74:
-            return  1;
-        case  0x75:
-            return  1;
-        case  0x76:
-            return  1;
-        case  0x77:
-            return  1;
-        case  0x78:
-            return  2;
-        case  0x79:
-            return  2;
-        case  0x7a:
-            return  2;
-        case  0x7b:
-            return  2;
-        case  0x7c:
-            return  2;
-        case  0x7d:
-            return  2;
-        case  0x7e:
-            return  2;
-        case  0x7f:
-            return  2;
-        case  0x80:
-            return  2;
-        case  0x81:
-            return  2;
-        case  0x82:
-            return  2;
-        case  0x83:
-            return  2;
-        case  0x84:
-            return  0;
-        case  0x85:
-            return  1;
-        case  0x86:
-            return  1;
-        case  0x87:
-            return  1;
-        case  0x88:
-            return  1;
-        case  0x89:
-            return  1;
-        case  0x8a:
-            return  1;
-        case  0x8b:
-            return  1;
-        case  0x8c:
-            return  1;
-        case  0x8d:
-            return  1;
-        case  0x8e:
-            return  1;
-        case  0x8f:
-            return  1;
-        case  0x90:
-            return  1;
-        case  0x91:
-            return  1;
-        case  0x92:
-            return  1;
-        case  0x93:
-            return  1;
-        case  0x94:
-            return  2;
-        case  0x95:
-            return  2;
-        case  0x96:
-            return  2;
-        case  0x97:
-            return  2;
-        case  0x98:
-            return  2;
-        case  0x99:
-            return  1;
-        case  0x9a:
-            return  1;
-        case  0x9b:
-            return  1;
-        case  0x9c:
-            return  1;
-        case  0x9d:
-            return  1;
-        case  0x9e:
-            return  1;
-        case  0x9f:
-            return  2;
-        case  0xa0:
-            return  2;
-        case  0xa1:
-            return  2;
-        case  0xa2:
-            return  2;
-        case  0xa3:
-            return  2;
-        case  0xa4:
-            return  2;
-        case  0xa5:
-            return  2;
-        case  0xa6:
-            return  2;
-        case  0xa7:
-            return  0;
-        case  0xa8:
-            return  0;
-        case  0xa9:
-            return  0;
-        case  0xaa:
-            return  1;
-        case  0xab:
-            return  1;
-        case  0xac:
-            return  1;
-        case  0xad:
-            return  1;
-        case  0xae:
-            return  1;
-        case  0xaf:
-            return  1;
-        case  0xb0:
-            return  1;
-        case  0xb1:
-            return  0;
-        case  0xb2:
-            return  0;
-        case  0xb3:
-            return  1;
-        case  0xb4:
-            return  1;
-        case  0xb5:
-            return  2;
-        case  0xb6:
-            return  0;
-        case  0xb7:
-            return  0;
-        case  0xb8:
-            return  0;
-        case  0xb9:
-            return  0;
-        case  0xba:
-            return  0;
-        case  0xbb:
-            return  0;
-        case  0xbc:
-            return  1;
-        case  0xbd:
-            return  1;
-        case  0xbe:
-            return  1;
-        case  0xbf:
-            return  1;
-        case  0xc0:
-            return  1;
-        case  0xc1:
-            return  1;
-        case  0xc2:
-            return  1;
-        case  0xc3:
-            return  1;
-        case  0xc4:
-            return  0;
-        case  0xc5:
-            return  0;
-        case  0xc6:
-            return  1;
-        case  0xc7:
-            return  1;
-        case  0xc8:
-            return  0;
-        case  0xc9:
-            return  0;
-        case  0xca:
-            return  0;
-        case  0xfe:
-            return  0;
-        case  0xff:
-            return  0;
-        default:
-            return 0;
+        case INS_ISTORE:
+        case INS_LSTORE:
+        case INS_FSTORE:
+        case INS_DSTORE:
+        case INS_ASTORE:
+        case INS_ISTORE_0:
+        case INS_ISTORE_1:
+        case INS_ISTORE_2:
+        case INS_ISTORE_3:
+        case INS_LSTORE_0:
+        case INS_LSTORE_1:
+        case INS_LSTORE_2:
+        case INS_LSTORE_3:
+        case INS_FSTORE_0:
+        case INS_FSTORE_1:
+        case INS_FSTORE_2:
+        case INS_FSTORE_3:
+        case INS_DSTORE_0:
+        case INS_DSTORE_1:
+        case INS_DSTORE_2:
+        case INS_DSTORE_3:
+        case INS_ASTORE_0:
+        case INS_ASTORE_1:
+        case INS_ASTORE_2:
+        case INS_ASTORE_3:
+        case INS_INEG:
+        case INS_LNEG:
+        case INS_FNEG:
+        case INS_DNEG:
+        case INS_I2L:
+        case INS_I2F:
+        case INS_I2D:
+        case INS_L2I:
+        case INS_L2F:
+        case INS_L2D:
+        case INS_F2I:
+        case INS_F2L:
+        case INS_F2D:
+        case INS_D2I:
+        case INS_D2L:
+        case INS_D2F:
+        case INS_I2B:
+        case INS_I2C:
+        case INS_I2S:
+        case INS_IFEQ:
+        case INS_IFNE:
+        case INS_IFLT:
+        case INS_IFGE:
+        case INS_IFGT:
+        case INS_IFLE:
+        case INS_TABLESWITCH:
+        case INS_LOOKUPSWITCH:
+        case INS_IRETURN:
+        case INS_LRETURN:
+        case INS_FRETURN:
+        case INS_DRETURN:
+        case INS_ARETURN:
+        case INS_PUTSTATIC:
+        case INS_GETFIELD:
+        case INS_NEWARRAY:
+        case INS_ANEWARRAY:
+        case INS_ARRAYLENGTH:
+        case INS_ATHROW:
+        case INS_CHECKCAST:
+        case INS_INSTANCEOF:
+        case INS_MONITORENTER:
+        case INS_MONITOREXIT:
+        case INS_IFNULL:
+        case INS_IFNONNULL:
+            return 1;
+        case INS_IALOAD:
+        case INS_LALOAD:
+        case INS_FALOAD:
+        case INS_DALOAD:
+        case INS_AALOAD:
+        case INS_BALOAD:
+        case INS_CALOAD:
+        case INS_SALOAD:
+        case INS_IADD:
+        case INS_LADD:
+        case INS_FADD:
+        case INS_DADD:
+        case INS_ISUB:
+        case INS_LSUB:
+        case INS_FSUB:
+        case INS_DSUB:
+        case INS_IMUL:
+        case INS_LMUL:
+        case INS_FMUL:
+        case INS_DMUL:
+        case INS_IDIV:
+        case INS_LDIV:
+        case INS_FDIV:
+        case INS_DDIV:
+        case INS_IREM:
+        case INS_LREM:
+        case INS_FREM:
+        case INS_DREM:
+        case INS_ISHL:
+        case INS_LSHL:
+        case INS_ISHR:
+        case INS_LSHR:
+        case INS_IUSHR:
+        case INS_LUSHR:
+        case INS_IAND:
+        case INS_LAND:
+        case INS_IOR:
+        case INS_LOR:
+        case INS_IXOR:
+        case INS_LXOR:
+        case INS_LCMP:
+        case INS_FCMPL:
+        case INS_FCMPG:
+        case INS_DCMPL:
+        case INS_DCMPG:
+        case INS_IF_ICMPEQ:
+        case INS_IF_ICMPNE:
+        case INS_IF_ICMPLT:
+        case INS_IF_ICMPGE:
+        case INS_IF_ICMPGT:
+        case INS_IF_ICMPLE:
+        case INS_IF_ACMPEQ:
+        case INS_IF_ACMPNE:
+        case INS_PUTFIELD:
+            return 2;
+        case INS_IASTORE:
+        case INS_LASTORE:
+        case INS_FASTORE:
+        case INS_DASTORE:
+        case INS_AASTORE:
+        case INS_BASTORE:
+        case INS_CASTORE:
+        case INS_SASTORE:
+            return 3;
+        default: return 0;
     }
-
 }
 
 int jvm_opcode_pushed(u1 code)
 {
     switch(code) {
-        case  0x00:
-            return 0;
-        case  0x01:
-            return 1;
-        case  0x02:
-            return 1;
-        case  0x03:
-            return 1;
-        case  0x04:
-            return 1;
-        case  0x05:
-            return 1;
-        case  0x06:
-            return 1;
-        case  0x07:
-            return 1;
-        case  0x08:
-            return 1;
-        case  0x09:
-            return 1;
-        case  0x0a:
-            return 1;
-        case  0x0b:
-            return 1;
-        case  0x0c:
-            return 1;
-        case  0x0d:
-            return 1;
-        case  0x0e:
-            return 1;
-        case  0x0f:
-            return 1;
-        case  0x10:
-            return 1;
-        case  0x11:
-            return 1;
-        case  0x12:
-            return 1;
-        case  0x13:
-            return 1;
-        case  0x14:
-            return 1;
-        case  0x15:
-            return 1;
-        case  0x16:
-            return 1;
-        case  0x17:
-            return 1;
-        case  0x18:
-            return 1;
-        case  0x19:
-            return 1;
-        case  0x1a:
-            return 1;
-        case  0x1b:
-            return 1;
-        case  0x1c:
-            return 1;
-        case  0x1d:
-            return 1;
-        case  0x1e:
-            return 1;
-        case  0x1f:
-            return 1;
-        case  0x20:
-            return 1;
-        case  0x21:
-            return 1;
-        case  0x22:
-            return 1;
-        case  0x23:
-            return 1;
-        case  0x24:
-            return 1;
-        case  0x25:
-            return 1;
-        case  0x26:
-            return 1;
-        case  0x27:
-            return 1;
-        case  0x28:
-            return 1;
-        case  0x29:
-            return 1;
-        case  0x2a:
-            return 1;
-        case  0x2b:
-            return 1;
-        case  0x2c:
-            return 1;
-        case  0x2d:
-            return 1;
-        case  0x2e:
-            return 1;
-        case  0x2f:
-            return 1;
-        case  0x30:
-            return 1;
-        case  0x31:
-            return 1;
-        case  0x32:
-            return 1;
-        case  0x33:
-            return 1;
-        case  0x34:
-            return 1;
-        case  0x35:
-            return 1;
-        case  0x36:
-            return 0;
-        case  0x37:
-            return 0;
-        case  0x38:
-            return 0;
-        case  0x39:
-            return 0;
-        case  0x3a:
-            return 0;
-        case  0x3b:
-            return 0;
-        case  0x3c:
-            return 0;
-        case  0x3d:
-            return 0;
-        case  0x3e:
-            return 0;
-        case  0x3f:
-            return 0;
-        case  0x40:
-            return 0;
-        case  0x41:
-            return 0;
-        case  0x42:
-            return 0;
-        case  0x43:
-            return 0;
-        case  0x44:
-            return 0;
-        case  0x45:
-            return 0;
-        case  0x46:
-            return 0;
-        case  0x47:
-            return 0;
-        case  0x48:
-            return 0;
-        case  0x49:
-            return 0;
-        case  0x4a:
-            return 0;
-        case  0x4b:
-            return 0;
-        case  0x4c:
-            return 0;
-        case  0x4d:
-            return 0;
-        case  0x4e:
-            return 0;
-        case  0x4f:
-            return 0;
-        case  0x50:
-            return 0;
-        case  0x51:
-            return 0;
-        case  0x52:
-            return 0;
-        case  0x53:
-            return 0;
-        case  0x54:
-            return 0;
-        case  0x55:
-            return 0;
-        case  0x56:
-            return 0;
-        case  0x57:
-            return 0;
-        case  0x58:
-            return 0;
-        case  0x59:
-            return 0;
-        case  0x5a:
-            return 0;
-        case  0x5b:
-            return 0;
-        case  0x5c:
-            return 0;
-        case  0x5d:
-            return 0;
-        case  0x5e:
-            return 0;
-        case  0x5f:
-            return 0;
-        case  0x60:
-            return 1;
-        case  0x61:
-            return 1;
-        case  0x62:
-            return 1;
-        case  0x63:
-            return 1;
-        case  0x64:
-            return 1;
-        case  0x65:
-            return 1;
-        case  0x66:
-            return 1;
-        case  0x67:
-            return 1;
-        case  0x68:
-            return 1;
-        case  0x69:
-            return 1;
-        case  0x6a:
-            return 1;
-        case  0x6b:
-            return 1;
-        case  0x6c:
-            return 1;
-        case  0x6d:
-            return 1;
-        case  0x6e:
-            return 1;
-        case  0x6f:
-            return 1;
-        case  0x70:
-            return 1;
-        case  0x71:
-            return 1;
-        case  0x72:
-            return 1;
-        case  0x73:
-            return 1;
-        case  0x74:
-            return 1;
-        case  0x75:
-            return 1;
-        case  0x76:
-            return 1;
-        case  0x77:
-            return 1;
-        case  0x78:
-            return 1;
-        case  0x79:
-            return 1;
-        case  0x7a:
-            return 1;
-        case  0x7b:
-            return 1;
-        case  0x7c:
-            return 1;
-        case  0x7d:
-            return 1;
-        case  0x7e:
-            return 1;
-        case  0x7f:
-            return 1;
-        case  0x80:
-            return 1;
-        case  0x81:
-            return 1;
-        case  0x82:
-            return 1;
-        case  0x83:
-            return 1;
-        case  0x84:
-            return 0;
-        case  0x85:
-            return 1;
-        case  0x86:
-            return 1;
-        case  0x87:
-            return 1;
-        case  0x88:
-            return 1;
-        case  0x89:
-            return 1;
-        case  0x8a:
-            return 1;
-        case  0x8b:
-            return 1;
-        case  0x8c:
-            return 1;
-        case  0x8d:
-            return 1;
-        case  0x8e:
-            return 1;
-        case  0x8f:
-            return 1;
-        case  0x90:
-            return 1;
-        case  0x91:
-            return 1;
-        case  0x92:
-            return 1;
-        case  0x93:
-            return 1;
-        case  0x94:
-            return 1;
-        case  0x95:
-            return 1;
-        case  0x96:
-            return 1;
-        case  0x97:
-            return 1;
-        case  0x98:
-            return 1;
-        case  0x99:
-            return 0;
-        case  0x9a:
-            return 0;
-        case  0x9b:
-            return 0;
-        case  0x9c:
-            return 0;
-        case  0x9d:
-            return 0;
-        case  0x9e:
-            return 0;
-        case  0x9f:
-            return 0;
-        case  0xa0:
-            return 0;
-        case  0xa1:
-            return 0;
-        case  0xa2:
-            return 0;
-        case  0xa3:
-            return 0;
-        case  0xa4:
-            return 0;
-        case  0xa5:
-            return 0;
-        case  0xa6:
-            return 0;
-        case  0xa7:
-            return 0;
-        case  0xa8:
-            return 0;
-        case  0xa9:
-            return 0;
-        case  0xaa:
-            return 0;
-        case  0xab:
-            return 0;
-        case  0xac:
-            return 0;
-        case  0xad:
-            return 0;
-        case  0xae:
-            return 0;
-        case  0xaf:
-            return 0;
-        case  0xb0:
-            return 0;
-        case  0xb1:
-            return 0;
-        case  0xb2:
-            return 1;
-        case  0xb3:
-            return 0;
-        case  0xb4:
-            return 1;
-        case  0xb5:
-            return 0;
-        case  0xb6:
-            return 0;
-        case  0xb7:
-            return 0;
-        case  0xb8:
-            return 0;
-        case  0xb9:
-            return 0;
-        case  0xba:
-            return 0;
-        case  0xbb:
-            return 1;
-        case  0xbc:
-            return 1;
-        case  0xbd:
-            return 1;
-        case  0xbe:
-            return 1;
-        case  0xbf:
-            return 1;
-        case  0xc0:
-            return 1;
-        case  0xc1:
-            return 1;
-        case  0xc2:
-            return 0;
-        case  0xc3:
-            return 0;
-        case  0xc4:
-            return 0;
-        case  0xc5:
-            return 1;
-        case  0xc6:
-            return 0;
-        case  0xc7:
-            return 0;
-        case  0xc8:
-            return 0;
-        case  0xc9:
-            return 0;
-        case  0xca:
-            return 0;
-        case  0xfe:
-            return 0;
-        case  0xff:
-            return 0;
-        default:
-            return 0;
+        case INS_ACONST_NULL:
+        case INS_ICONST_M1:
+        case INS_ICONST_0:
+        case INS_ICONST_1:
+        case INS_ICONST_2:
+        case INS_ICONST_3:
+        case INS_ICONST_4:
+        case INS_ICONST_5:
+        case INS_LCONST_0:
+        case INS_LCONST_1:
+        case INS_FCONST_0:
+        case INS_FCONST_1:
+        case INS_FCONST_2:
+        case INS_DCONST_0:
+        case INS_DCONST_1:
+        case INS_BIPUSH:
+        case INS_SIPUSH:
+        case INS_LDC:
+        case INS_LDC_W:
+        case INS_LDC2_W:
+        case INS_ILOAD:
+        case INS_LLOAD:
+        case INS_FLOAD:
+        case INS_DLOAD:
+        case INS_ALOAD:
+        case INS_ILOAD_0:
+        case INS_ILOAD_1:
+        case INS_ILOAD_2:
+        case INS_ILOAD_3:
+        case INS_LLOAD_0:
+        case INS_LLOAD_1:
+        case INS_LLOAD_2:
+        case INS_LLOAD_3:
+        case INS_FLOAD_0:
+        case INS_FLOAD_1:
+        case INS_FLOAD_2:
+        case INS_FLOAD_3:
+        case INS_DLOAD_0:
+        case INS_DLOAD_1:
+        case INS_DLOAD_2:
+        case INS_DLOAD_3:
+        case INS_ALOAD_0:
+        case INS_ALOAD_1:
+        case INS_ALOAD_2:
+        case INS_ALOAD_3:
+        case INS_IALOAD:
+        case INS_LALOAD:
+        case INS_FALOAD:
+        case INS_DALOAD:
+        case INS_AALOAD:
+        case INS_BALOAD:
+        case INS_CALOAD:
+        case INS_SALOAD:
+        case INS_IADD:
+        case INS_LADD:
+        case INS_FADD:
+        case INS_DADD:
+        case INS_ISUB:
+        case INS_LSUB:
+        case INS_FSUB:
+        case INS_DSUB:
+        case INS_IMUL:
+        case INS_LMUL:
+        case INS_FMUL:
+        case INS_DMUL:
+        case INS_IDIV:
+        case INS_LDIV:
+        case INS_FDIV:
+        case INS_DDIV:
+        case INS_IREM:
+        case INS_LREM:
+        case INS_FREM:
+        case INS_DREM:
+        case INS_INEG:
+        case INS_LNEG:
+        case INS_FNEG:
+        case INS_DNEG:
+        case INS_ISHL:
+        case INS_LSHL:
+        case INS_ISHR:
+        case INS_LSHR:
+        case INS_IUSHR:
+        case INS_LUSHR:
+        case INS_IAND:
+        case INS_LAND:
+        case INS_IOR:
+        case INS_LOR:
+        case INS_IXOR:
+        case INS_LXOR:
+        case INS_I2L:
+        case INS_I2F:
+        case INS_I2D:
+        case INS_L2I:
+        case INS_L2F:
+        case INS_L2D:
+        case INS_F2I:
+        case INS_F2L:
+        case INS_F2D:
+        case INS_D2I:
+        case INS_D2L:
+        case INS_D2F:
+        case INS_I2B:
+        case INS_I2C:
+        case INS_I2S:
+        case INS_LCMP:
+        case INS_FCMPL:
+        case INS_FCMPG:
+        case INS_DCMPL:
+        case INS_DCMPG:
+        case INS_GETSTATIC:
+        case INS_GETFIELD:
+        case INS_NEW:
+        case INS_NEWARRAY:
+        case INS_ANEWARRAY:
+        case INS_ARRAYLENGTH:
+        case INS_ATHROW:
+        case INS_CHECKCAST:
+        case INS_INSTANCEOF:
+        case INS_MULTIANEWARRAY:
+            return 1;
+        default: return 0;
     }
 }
 
 int jvm_opcode_param_len(u1 code)
 {
     switch(code) {
-        case  0x00:
-        case  0x01:
-        case  0x02:
-        case  0x03:
-        case  0x04:
-        case  0x05:
-        case  0x06:
-        case  0x07:
-        case  0x08:
-        case  0x09:
-        case  0x0a:
-        case  0x0b:
-        case  0x0c:
-        case  0x0d:
-        case  0x0e:
-        case  0x0f:
-            return  0;
-        case  0x10:
-            return  1;
-        case  0x11:
-            return  2;
-        case  0x12:
-            return  1;
-        case  0x13:
-        case  0x14:
-            return  2;
-        case  0x15:
-        case  0x16:
-        case  0x17:
-        case  0x18:
-        case  0x19:
-            return  1;
-        case  0x1a:
-        case  0x1b:
-        case  0x1c:
-        case  0x1d:
-        case  0x1e:
-        case  0x1f:
-        case  0x20:
-        case  0x21:
-        case  0x22:
-        case  0x23:
-        case  0x24:
-        case  0x25:
-        case  0x26:
-        case  0x27:
-        case  0x28:
-        case  0x29:
-        case  0x2a:
-        case  0x2b:
-        case  0x2c:
-        case  0x2d:
-        case  0x2e:
-        case  0x2f:
-        case  0x30:
-        case  0x31:
-        case  0x32:
-        case  0x33:
-        case  0x34:
-        case  0x35:
-            return  0;
-        case  0x36:
-        case  0x37:
-        case  0x38:
-        case  0x39:
-        case  0x3a:
-            return  1;
-        case  0x3b:
-        case  0x3c:
-        case  0x3d:
-        case  0x3e:
-        case  0x3f:
-        case  0x40:
-        case  0x41:
-        case  0x42:
-        case  0x43:
-        case  0x44:
-        case  0x45:
-        case  0x46:
-        case  0x47:
-        case  0x48:
-        case  0x49:
-        case  0x4a:
-        case  0x4b:
-        case  0x4c:
-        case  0x4d:
-        case  0x4e:
-        case  0x4f:
-        case  0x50:
-        case  0x51:
-        case  0x52:
-        case  0x53:
-        case  0x54:
-        case  0x55:
-        case  0x56:
-        case  0x57:
-        case  0x58:
-        case  0x59:
-        case  0x5a:
-        case  0x5b:
-        case  0x5c:
-        case  0x5d:
-        case  0x5e:
-        case  0x5f:
-        case  0x60:
-        case  0x61:
-        case  0x62:
-        case  0x63:
-        case  0x64:
-        case  0x65:
-        case  0x66:
-        case  0x67:
-        case  0x68:
-        case  0x69:
-        case  0x6a:
-        case  0x6b:
-        case  0x6c:
-        case  0x6d:
-        case  0x6e:
-        case  0x6f:
-        case  0x70:
-        case  0x71:
-        case  0x72:
-        case  0x73:
-        case  0x74:
-        case  0x75:
-        case  0x76:
-        case  0x77:
-        case  0x78:
-        case  0x79:
-        case  0x7a:
-        case  0x7b:
-        case  0x7c:
-        case  0x7d:
-        case  0x7e:
-        case  0x7f:
-        case  0x80:
-        case  0x81:
-        case  0x82:
-        case  0x83:
-            return  0;
-        case  0x84:
-            return  2;
-        case  0x85:
-        case  0x86:
-        case  0x87:
-        case  0x88:
-        case  0x89:
-        case  0x8a:
-        case  0x8b:
-        case  0x8c:
-        case  0x8d:
-        case  0x8e:
-        case  0x8f:
-        case  0x90:
-        case  0x91:
-        case  0x92:
-        case  0x93:
-        case  0x94:
-        case  0x95:
-        case  0x96:
-        case  0x97:
-        case  0x98:
-            return  0;
-        case  0x99:
-        case  0x9a:
-        case  0x9b:
-        case  0x9c:
-        case  0x9d:
-        case  0x9e:
-        case  0x9f:
-        case  0xa0:
-        case  0xa1:
-        case  0xa2:
-        case  0xa3:
-        case  0xa4:
-        case  0xa5:
-        case  0xa6:
-        case  0xa7:
-        case  0xa8:
-            return  2;
-        case  0xa9:
-            return  1;
-        case  0xaa:
-            return  16;
-        case  0xab:
-            return  8;
-        case  0xac:
-        case  0xad:
-        case  0xae:
-        case  0xaf:
-        case  0xb0:
-        case  0xb1:
-            return  0;
-        case  0xb2:
-        case  0xb3:
-        case  0xb4:
-        case  0xb5:
-        case  0xb6:
-        case  0xb7:
-        case  0xb8:
-            return  2;
-        case  0xb9:
-        case  0xba:
-            return  4;
-        case  0xbb:
-            return  2;
-        case  0xbc:
-            return  1;
-        case  0xbd:
-            return  2;
-        case  0xbe:
-        case  0xbf:
-            return  0;
-        case  0xc0:
-        case  0xc1:
-            return  2;
-        case  0xc2:
-        case  0xc3:
-            return  0;
-        case  0xc4:
-        case  0xc5:
-            return  3;
-        case  0xc6:
-        case  0xc7:
-            return  2;
-        case  0xc8:
-        case  0xc9:
-            return  4;
-        case  0xca:
-        case  0xfe:
-        case  0xff:
-            return  0;
-        default:
-            return 0;
+        case INS_BIPUSH:
+        case INS_LDC:
+        case INS_ILOAD:
+        case INS_LLOAD:
+        case INS_FLOAD:
+        case INS_DLOAD:
+        case INS_ALOAD:
+        case INS_ISTORE:
+        case INS_LSTORE:
+        case INS_FSTORE:
+        case INS_DSTORE:
+        case INS_ASTORE:
+        case INS_RET:
+        case INS_NEWARRAY:
+            return 1;
+        case INS_SIPUSH:
+        case INS_LDC_W:
+        case INS_LDC2_W:
+        case INS_IINC:
+        case INS_IFEQ:
+        case INS_IFNE:
+        case INS_IFLT:
+        case INS_IFGE:
+        case INS_IFGT:
+        case INS_IFLE:
+        case INS_IF_ICMPEQ:
+        case INS_IF_ICMPNE:
+        case INS_IF_ICMPLT:
+        case INS_IF_ICMPGE:
+        case INS_IF_ICMPGT:
+        case INS_IF_ICMPLE:
+        case INS_IF_ACMPEQ:
+        case INS_IF_ACMPNE:
+        case INS_GOTO:
+        case INS_JSR:
+        case INS_GETSTATIC:
+        case INS_PUTSTATIC:
+        case INS_GETFIELD:
+        case INS_PUTFIELD:
+        case INS_INVOKEVIRTUAL:
+        case INS_INVOKESPECIAL:
+        case INS_INVOKESTATIC:
+        case INS_NEW:
+        case INS_ANEWARRAY:
+        case INS_CHECKCAST:
+        case INS_INSTANCEOF:
+        case INS_IFNULL:
+        case INS_IFNONNULL:
+            return 2;
+        case INS_WIDE:
+        case INS_MULTIANEWARRAY:
+            return 3;
+        case INS_INVOKEINTERFACE:
+        case INS_INVOKEDYNAMIC:
+        case INS_GOTO_W:
+        case INS_JSR_W:
+            return 4;
+        case INS_LOOKUPSWITCH:
+            return 8;
+        case INS_TABLESWITCH:
+            return 16;
+        default: return 0;
     }
 }
 

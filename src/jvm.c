@@ -63,12 +63,12 @@ static inline bool is_jvm_class(jd_opt *opt)
     return opt->ft == JD_FILE_TYPE_JAVA_CLASS;
 }
 
-static bool is_jar_file(jd_opt *opt)
+static inline bool is_jar_file(jd_opt *opt)
 {
     return opt->ft == JD_FILE_TYPE_JAR;
 }
 
-static bool is_dex_file(jd_opt *opt)
+static inline bool is_dex_file(jd_opt *opt)
 {
     return opt->ft == JD_FILE_TYPE_DEX;
 }
