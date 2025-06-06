@@ -505,8 +505,6 @@ void jvm_method(jclass_file *jc, jd_method *m, jmethod *jm)
 
     jvm_simulator(m);
 
-    mark_unreachable_instruction(m);
-
     cfg_remove_exception_block(m);
 
     optimize_jvm_method(m);

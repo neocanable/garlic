@@ -444,6 +444,8 @@ void jvm_simulator(jd_method *m)
 
     jvm_process_instruction_action(m, jvm_ins_cb);
 
+    mark_unreachable_instruction(m);
+
     sform_for_local_variable(m);
 
     sform_for_stack_variable(m);

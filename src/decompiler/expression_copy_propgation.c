@@ -150,26 +150,6 @@ bool copy_propagation_of_expression(jd_method *m)
     return result;
 }
 
-static bool dupped_get_field_can_copy(jd_exp *left, jd_exp *right)
-{
-    // get field's object is a local variable
-    // assignment varibale to itself's field
-    jd_val *val = left->data;
-    jd_var *var = val->stack_var;
-
-    jd_exp_get_field *get_field = right->data;
-    jd_exp *get_field_obj = &get_field->list->args[0];
-
-    if (exp_is_local_variable(get_field_obj)) {
-        jd_val *other_val = get_field_obj->data;
-        jd_var *other_var = other_val->stack_var;
-        if (var == other_var) {
-            return false;
-        }
-    }
-    return true;
-}
-
 bool copy_propagation_of_dup_local_variable(jd_method *m)
 {
     bool result = false;
@@ -182,7 +162,6 @@ bool copy_propagation_of_dup_local_variable(jd_method *m)
         jd_exp *right = &store->list->args[1];
         if (!exp_is_local_variable(right) &&
             !exp_is_get_static(right) &&
-            !exp_is_get_field(right) &&
             !exp_is_arraylength(right))
             continue;
 
@@ -190,11 +169,6 @@ bool copy_propagation_of_dup_local_variable(jd_method *m)
             !duped_store_exp_can_copy(exp))
             continue;
 
-        if (exp_is_get_field(right)) {
-            jd_exp *left = &store->list->args[0];
-            if (!dupped_get_field_can_copy(left, right))
-                continue;
-        }
 
         bool tmp = false;
         for (int j = i+1; j < m->expressions->size; ++j) {
