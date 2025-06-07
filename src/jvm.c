@@ -1,9 +1,10 @@
 #include "parser/class/metadata.h"
 #include "jvm/jvm_decompile.h"
 #include "common/str_tools.h"
+#include "common/file_tools.h"
 #include "decompiler/klass.h"
 #include "jar/jar.h"
-#include "file_tools.h"
+#include "dalvik/dex_dump.h"
 #include <unistd.h>
 
 #define JAVA_CLASS_MAGIC 0xCAFEBABE
@@ -204,6 +205,19 @@ static void run_for_jvm_jar(jd_opt *opt) {
     printf("\n[Done]\n");
 }
 
+static void run_for_dex(jd_opt *opt)
+{
+    if (opt->option == 1) {
+        printf("[Garlic] DEX file info\n");
+        dex_file_dump(opt->path);
+        return;
+    }
+    else {
+        fprintf(stderr, "[garlic] DEX file is not supported for open source version yet.\n");
+        fprintf(stderr, "         Please contact the author on github\n");
+    }
+}
+
 int main(int argc, char **argv)
 {
     jd_opt *opt = parse_opt(argc, argv);
@@ -217,11 +231,8 @@ int main(int argc, char **argv)
         free_opt(opt);
     }
     else if (is_dex_file(opt)) {
-        fprintf(stderr, "[garlic] DEX file is not supported for open source version yet.\n");
-        fprintf(stderr, "         Please contact the author on github\n");
-
+        run_for_dex(opt);
         free_opt(opt);
-        exit(EXIT_FAILURE);
     }
     else {
         fprintf(stderr, "[garlic] Unsupported file type: %s\n", opt->path);
