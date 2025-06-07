@@ -52,6 +52,7 @@ aux_source_directory(src/decompiler DECOMPILER)
 aux_source_directory(src/decompiler/transformer TRANSFORMER)
 aux_source_directory(src/jar JAR)
 aux_source_directory(src/jvm JVM)
+aux_source_directory(src/dalvik DEX)
 aux_source_directory(src/libs/trie TRIE)
 
 set(JAVA_DEC
@@ -70,6 +71,7 @@ set(JAVA_DEC
         ${JVM}
         ${ZIP}
         ${JAR}
+        ${DEX}
         ${THREADPOOL}
 )
 
