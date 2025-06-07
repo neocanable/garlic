@@ -10,11 +10,6 @@ jd_var* stack_define_var(jd_method *m, jd_val *val, int slot)
     var->ins = val->ins;
     var->idx = m->stack_variables->size;
     var->cname = val->data->cname;
-//    string label;
-//    if (val->ins == NULL)
-//        label = str_create("v_%x_%x", 0, var->idx);
-//    else
-//        label = str_create("v_%x_%x", val->ins->offset, var->idx);
 
     var->name = str_create("v_%d", var->idx);
     val->stack_var = var;
@@ -94,14 +89,8 @@ void stack_val_name(jd_method *m, jd_ins *ins, jd_val *val, int slot)
             counter = 0;
         hset_i2i(m->slot_counter_map, slot, counter + 1);
         val->name = str_create("var_%d_%d", slot, counter);
-//        int len = number_digits(slot) + number_digits(counter) + 6; // "var_"
-//        val->name = x_alloc(len);
-//        snprintf(val->name, len, "var_%d_%d", slot, counter);
     }
     else {
-//        int len = number_digits(m->variable_counter) + 5; // "var_"
-//        val->name = x_alloc(len);
-//        snprintf(val->name, len, "var_%d", m->variable_counter);
         val->name = str_create("var_%d", m->variable_counter);
 
         m->variable_counter++;
@@ -118,11 +107,6 @@ static jd_var* stack_find_var_by_idx(jd_method *m, int idx)
 
 jd_var* stack_find_var(jd_method *m, jd_ins *ins, int slot)
 {
-//    int idx = hget_i2i(m->offset2varidx_map, ins->offset);
-//    if (idx == -1)
-//        return NULL;
-//    return stack_find_var_by_idx(m, idx);
-
     return hget_i2o(m->offset2var_map, ins->offset);
 }
 
