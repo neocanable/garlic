@@ -56,7 +56,7 @@ cmake --build build
 
 * dexdump
     ```sh
-    garlic /path/to/dalvik.dex -p           # unsupport now
+    garlic /path/to/dalvik.dex -p           # only support dexdump
 
     ```
 
