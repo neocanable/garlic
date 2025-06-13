@@ -221,11 +221,16 @@ static void run_for_dex(jd_opt *opt)
     if (opt->option == 1) {
         printf("[Garlic] DEX file info\n");
         dex_file_dump(opt->path);
-        return;
     }
     else {
-        fprintf(stderr, "[garlic] DEX file is not supported for open source version yet.\n");
-        fprintf(stderr, "         Please contact the author on github\n");
+        prepare_opt_output(opt);
+        prepare_opt_threads(opt);
+        printf("[Garlic] DEX file analysis\n");
+        printf("File     : %s\n", opt->path);
+        printf("Save to  : %s\n", opt->out);
+        printf("Thread   : %d\n", opt->thread_num);
+        dex_file_analyse(opt->path, opt->out, opt->thread_num);
+        printf("\n[Done]\n");
     }
 }
 
