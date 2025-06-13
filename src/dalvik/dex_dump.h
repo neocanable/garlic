@@ -2,6 +2,6 @@
 #define GARLIC_DEX_DUMP_H
 #include "dex_structure.h"
 
-void dex_file_dump(string path);
+void dexdump(jd_meta_dex *dex);
 
 #endif //GARLIC_DEX_DUMP_H

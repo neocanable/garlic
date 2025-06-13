@@ -43,10 +43,6 @@ threadpool_t* threadpool_create_in(mem_pool *mem_pool, int cnt, int flags)
     pool->init_cond = malloc(sizeof(pthread_cond_t));
     pool->notify = malloc(sizeof(pthread_cond_t));
 
-//    pool->lock = x_alloc_in(mem_pool, sizeof(pthread_mutex_t));
-//    pool->init_cond = x_alloc_in(mem_pool, sizeof(pthread_cond_t));
-//    pool->notify = x_alloc_in(mem_pool, sizeof(pthread_cond_t));
-
     if((pthread_mutex_init(pool->lock, NULL) != 0) ||
        (pthread_cond_init(pool->notify, NULL) != 0) ||
        (pthread_cond_init(pool->init_cond, NULL) != 0) ||
@@ -99,8 +95,9 @@ int threadpool_add(threadpool_t *pool,
 
     do {
         if(pool->count == pool->queue_size) {
-            err = threadpool_queue_full;
-            break;
+            pool->queue = x_realloc(pool->queue,
+                                    sizeof(threadpool_task_t) * pool->queue_size,
+                                    pool->queue_size * 2 * sizeof(threadpool_task_t));
         }
 
         if(pool->shutdown) {

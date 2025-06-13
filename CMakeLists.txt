@@ -15,8 +15,8 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif ()
 
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os")
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -flto")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -flto")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-strict-aliasing")
 
 if (UNIX)
@@ -52,6 +52,7 @@ aux_source_directory(src/decompiler DECOMPILER)
 aux_source_directory(src/decompiler/transformer TRANSFORMER)
 aux_source_directory(src/jar JAR)
 aux_source_directory(src/jvm JVM)
+aux_source_directory(src/apk APK)
 aux_source_directory(src/dalvik DEX)
 aux_source_directory(src/libs/trie TRIE)
 
@@ -71,6 +72,7 @@ set(JAVA_DEC
         ${JVM}
         ${ZIP}
         ${JAR}
+        ${APK}
         ${DEX}
         ${THREADPOOL}
 )
@@ -86,4 +88,11 @@ endif ()
 
 if (WIN32)
     target_link_libraries(garlic ws2_32)
+endif ()
+
+if (UNIX)
+    add_custom_command(
+            TARGET garlic POST_BUILD
+            COMMAND strip $<TARGET_FILE:garlic>
+    )
 endif ()

@@ -1,5 +1,5 @@
 #include "parser/dex/metadata.h"
-#include "dex_ins_helper.h"
+#include "dex_ins.h"
 #include "dex_meta_helper.h"
 
 static void dexdump_method_defination(jd_meta_dex *dex,
@@ -230,7 +230,7 @@ static void dexdump_write_method(jd_meta_dex *dex,
                 u4 low = code->insns[i+1];
                 u4 high = code->insns[i+2];
                 u8 v_b = (u8)high << 32 | low;
-                printf("v%d, %llu\n", v_a, v_b);
+                printf("v%d, %lu\n", v_a, v_b);
                 break;
             }
             case DEX_INS_CONST_HIGH16: { // const/high16
@@ -254,7 +254,7 @@ static void dexdump_write_method(jd_meta_dex *dex,
                 s4 b1 = code->insns[i+1];
                 s4 b2 = code->insns[i+2];
                 s8 v_b = (s8)b1 << 32 | b2;
-                printf("v%d, %lld\n", v_a, v_b);
+                printf("v%d, %ld\n", v_a, v_b);
                 break;
             }
             case DEX_INS_CONST_WIDE: { // const-wide vAA, #+BBBBBBBBBBBBBBBB
@@ -265,7 +265,7 @@ static void dexdump_write_method(jd_meta_dex *dex,
                 s4 b3 = code->insns[i+3];
                 s4 b4 = code->insns[i+4];
                 s8 v_b = (s8)b1 << 48 | (s8)b2 << 32 | (s8)b3 << 16 | b4;
-                printf("v%d, %lld\n", v_a, v_b);
+                printf("v%d, %ld\n", v_a, v_b);
                 break;
             }
             case DEX_INS_CONST_WIDE_HIGH16: { // const-wide/high16
@@ -273,7 +273,7 @@ static void dexdump_write_method(jd_meta_dex *dex,
                 u1 v_a = (*item >> 8);
                 s2 b1 = code->insns[i+1];
                 s8 v_b = (s8)b1 << 48;
-                printf("v%d, %lld\n", v_a, v_b);
+                printf("v%d, %ld\n", v_a, v_b);
                 break;
             }
             case DEX_INS_CONST_STRING: { // const-string
@@ -1068,12 +1068,4 @@ void dexdump(jd_meta_dex *dex)
             dexdump_write_method(dex, m, code, 1);
         }
     }
-}
-
-void dex_file_dump(string path)
-{
-    mem_init_pool();
-    jd_meta_dex *meta = parse_dex_file(path);
-    dexdump(meta);
-    mem_free_pool();
 }

@@ -5,6 +5,8 @@
 
 jd_meta_dex* parse_dex_file(string path);
 
+jd_meta_dex* parse_dex_from_buffer(char *buffer, size_t size);
+
 string dex_opcode_name(u1 code);
 
 int dex_opcode_len(u1 code);

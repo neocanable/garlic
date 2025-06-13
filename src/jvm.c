@@ -2,9 +2,9 @@
 #include "jvm/jvm_decompile.h"
 #include "common/str_tools.h"
 #include "common/file_tools.h"
-#include "decompiler/klass.h"
 #include "jar/jar.h"
-#include "dalvik/dex_dump.h"
+#include "apk/apk.h"
+#include "dalvik/dex_decompile.h"
 #include <unistd.h>
 
 #define JAVA_CLASS_MAGIC 0xCAFEBABE
@@ -15,7 +15,8 @@ typedef enum {
     JD_FILE_TYPE_UNKNOWN = 0,
     JD_FILE_TYPE_JAVA_CLASS,
     JD_FILE_TYPE_JAR,
-    JD_FILE_TYPE_DEX
+    JD_FILE_TYPE_DEX,
+    JD_FILE_TYPE_APK,
 } jd_file_type_t;
 
 typedef struct jd_opt {
@@ -48,8 +49,13 @@ static jd_file_type_t magic_of_file(char *filepath) {
     switch (be_magic) {
         case JAVA_CLASS_MAGIC:
             return JD_FILE_TYPE_JAVA_CLASS;
-        case JAR_FILE_MAGIC:
-            return JD_FILE_TYPE_JAR;
+        case JAR_FILE_MAGIC: {
+            if (str_end_with(filepath, ".apk")) {
+                return JD_FILE_TYPE_APK;
+            } else {
+                return JD_FILE_TYPE_JAR;
+            }
+        }
         case DEX_FILE_MAGIC:
             return JD_FILE_TYPE_DEX;
         default:
@@ -72,6 +78,11 @@ static inline bool is_jar_file(jd_opt *opt)
 static inline bool is_dex_file(jd_opt *opt)
 {
     return opt->ft == JD_FILE_TYPE_DEX;
+}
+
+static inline bool is_apk_file(jd_opt *opt)
+{
+    return opt->ft == JD_FILE_TYPE_APK;
 }
 
 static void prepare_opt_output(jd_opt *opt) {
@@ -210,12 +221,29 @@ static void run_for_dex(jd_opt *opt)
     if (opt->option == 1) {
         printf("[Garlic] DEX file info\n");
         dex_file_dump(opt->path);
-        return;
     }
     else {
-        fprintf(stderr, "[garlic] DEX file is not supported for open source version yet.\n");
-        fprintf(stderr, "         Please contact the author on github\n");
+        prepare_opt_output(opt);
+        prepare_opt_threads(opt);
+        printf("[Garlic] DEX file analysis\n");
+        printf("File     : %s\n", opt->path);
+        printf("Save to  : %s\n", opt->out);
+        printf("Thread   : %d\n", opt->thread_num);
+        dex_file_analyse(opt->path, opt->out, opt->thread_num);
+        printf("\n[Done]\n");
     }
+}
+
+static void run_for_apk(jd_opt *opt)
+{
+    prepare_opt_output(opt);
+    prepare_opt_threads(opt);
+    printf("[Garlic] APK file analysis\n");
+    printf("File     : %s\n", opt->path);
+    printf("Save to  : %s\n", opt->out);
+    printf("Thread   : %d\n", opt->thread_num);
+    apk_file_analyse(opt->path, opt->out, opt->thread_num);
+    printf("\n[Done]\n");
 }
 
 int main(int argc, char **argv)
@@ -232,6 +260,10 @@ int main(int argc, char **argv)
     }
     else if (is_dex_file(opt)) {
         run_for_dex(opt);
+        free_opt(opt);
+    }
+    else if (is_apk_file(opt)) {
+        run_for_apk(opt);
         free_opt(opt);
     }
     else {
