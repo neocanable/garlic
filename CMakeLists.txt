@@ -79,7 +79,7 @@ set(JAVA_DEC
 
 add_executable(garlic 
         ${JAVA_DEC}
-        src/jvm.c
+        src/garlic.c
 )
 
 if (UNIX)
