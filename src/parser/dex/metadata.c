@@ -71,61 +71,6 @@ int read_signed_leb128(jd_meta_dex *dex)
     return result;
 }
 
-bool dex_class_is_inner_class(jd_meta_dex *meta, dex_class_def *cf) {
-    string cname = dex_str_of_type_id(meta, cf->class_idx);
-    string class_name = class_simple_name(cname);
-
-    bool result = is_inner_class(class_name);
-
-    if (!result) return result;
-
-    dex_annotations_directory_item *annotations = cf->annotations;
-    if (annotations == NULL)
-        return result;
-    annotation_set_item *set_item = annotations->class_annotation;
-    if (set_item == NULL)
-        return result;
-
-    for (int i = 0; i < set_item->size; ++i) {
-        annotation_item *item = &set_item->entries[i];
-        u4 type_idx = item->encoded_annotation->type_idx;
-        string type_name = dex_str_of_type_id(meta, type_idx);
-        // printf("annotation type: %s\n", type);
-        if (STR_EQL(type_name, "Ldalvik/annotation/InnerClass;")) {
-            result = true;
-            break;
-        }
-    }
-    return result;
-}
-
-int dex_class_is_anonymous_class(jd_meta_dex *meta, dex_class_def *cf) {
-    string cname = dex_str_of_type_id(meta, cf->class_idx);
-    string class_name = class_simple_name(cname);
-    bool result = is_anonymous_class(class_name);
-    if (!result) return result;
-
-    dex_annotations_directory_item *annotations = cf->annotations;
-    if (annotations == NULL)
-        return result;
-    annotation_set_item *set_item = annotations->class_annotation;
-    if (set_item == NULL)
-        return result;
-
-    for (int i = 0; i < set_item->size; ++i) {
-        annotation_item *item = &set_item->entries[i];
-        u4 type_idx = item->encoded_annotation->type_idx;
-        string type_name = dex_str_of_type_id(meta, type_idx);
-        // printf("annotation type: %s\n", type);
-        if (STR_EQL(type_name, "Ldalvik/annotation/EnclosingClass;")) {
-            result = true;
-            break;
-        }
-    }
-
-    return result;
-}
-
 static void setup_current_offset(jd_meta_dex *dex, size_t offset)
 {
     dex->bin->cur_off = offset;
@@ -1020,3 +965,36 @@ jd_meta_dex* parse_dex_file(string path)
     return dex;
 }
 
+
+jd_meta_dex* parse_dex_from_buffer(char *buffer, size_t size)
+{
+    mem_pool *pool = mem_create_pool();
+    jd_meta_dex *meta = make_obj_in(jd_meta_dex, pool);
+    meta->pool = pool;
+    meta->bin = make_obj_in(jd_bin, pool);
+    meta->bin->buffer_size = size;
+    meta->bin->buffer = buffer;
+    meta->bin->cur_off = 0;
+
+    init_dex_extract_data(meta);
+
+    parse_dex_header(meta);
+
+    parse_dex_links(meta);
+
+    parse_dex_map_list(meta);
+
+    parse_dex_string_ids(meta);
+
+    parse_dex_type_ids(meta);
+
+    parse_dex_proto_ids(meta);
+
+    parse_dex_field_ids(meta);
+
+    parse_dex_method_ids(meta);
+
+    parse_dex_class_defs(meta);
+
+    return meta;
+}

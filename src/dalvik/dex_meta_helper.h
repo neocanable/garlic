@@ -2,6 +2,7 @@
 #define GARLIC_DEX_META_HELPER_H
 
 #include "dalvik/dex_structure.h"
+#include "dalvik/dex_ins.h"
 
 static inline string dex_str_of_idx(jd_meta_dex *meta, u4 idx)
 {

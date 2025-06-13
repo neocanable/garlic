@@ -3,6 +3,7 @@
 
 #include <unistd.h>
 #include <stdbool.h>
+#include <sys/stat.h>
 
 static bool inline file_exist(const char *path)
 {
