@@ -121,7 +121,7 @@ cmake --build build
 
 * dexdump
     ```sh
-    garlic /path/to/dalvik.dex -p           # only support dexdump
+    garlic /path/to/dalvik.dex -p           
 
     ```
 
