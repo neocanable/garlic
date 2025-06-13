@@ -133,6 +133,20 @@ static bool block_can_execute(jd_method *m, jd_dex_ins *ins, jd_dex_ins *start)
     return true;
 }
 
+static void merge_local_variables_for_exception_block(jd_dex_ins *ins,
+                                                     jd_dex_ins *suc_ins)
+{
+    for (int j = 0; j < ins->stack_out->local_vars_count; ++j) {
+        jd_val *local_var = ins->stack_out->local_vars[j];
+        if (local_var == NULL)
+            continue;
+        jd_val *suc_var = suc_ins->stack_in->local_vars[j];
+        if (suc_var == NULL) {
+            suc_ins->stack_in->local_vars[j] = local_var;
+        }
+    }
+}
+
 static void dex_fill_watch_successors(jd_method *m, jd_dex_ins *ins)
 {
     jd_bblock *block = ins->block;
@@ -175,11 +189,15 @@ static void dex_fill_visit_queue(jd_method *m, jd_dex_ins *ins)
         jd_dex_ins *suc_ins = lget_obj(m->ins_watch_successors, i);
         int is_handler_start = ins_is_handler_start(m, suc_ins);
         if (is_handler_start &&
-            block_can_execute(m, ins, suc_ins) &&
-            suc_ins->stack_in == NULL) {
-            suc_ins->stack_in = dex_exception_stack(m,
-                                                    suc_ins, ins->stack_out);
-            queue_add_object(m->ins_visit_queue, suc_ins);
+            block_can_execute(m, ins, suc_ins)) {
+            if (suc_ins->stack_in != NULL) {
+                merge_local_variables_for_exception_block(ins, suc_ins);
+            }
+            else {
+                suc_ins->stack_in = dex_exception_stack(m, suc_ins,
+                                                        ins->stack_out);
+                queue_add_object(m->ins_visit_queue, suc_ins);
+            }
         }
         else if (suc_ins->stack_in == NULL && !is_handler_start) {
             suc_ins->stack_in = stack_clone(ins->stack_out);
