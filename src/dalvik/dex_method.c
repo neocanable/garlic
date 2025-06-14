@@ -139,7 +139,7 @@ static void init_dex_sparse_switch_jump(jd_dex_ins *ins)
     u2 *params = packed_ins->param;
     for (int i = 0; i < size; ++i) {
         int key = params[3+i*2] << 16 | params[2+i*2];
-        int val = params[3+size*2+i*2] | params[2+size*2+i*2];
+        int val = params[3+size*2+i*2] << 16 | params[2+size*2+i*2];
         int target_id = hget_i2i(m->offset2id_map, ins->offset + val);
         jd_dex_ins *target_ins = get_dex_ins(m, target_id);
         ladd_obj(ins->targets, target_ins);
