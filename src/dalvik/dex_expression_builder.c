@@ -749,6 +749,18 @@ static void dex_static_put_expression(jd_exp *exp, jd_dex_ins *ins)
     exp->data = put_static;
 }
 
+static bool is_nested_inner_class(dex_class_def *cf, jsource_file *jf)
+{
+    jsource_file *parent = jf;
+    while (parent != NULL) {
+        if (parent->jclass == cf) {
+            return true;
+        }
+        parent = parent->parent;
+    }
+    return false;
+}
+
 static void dex_invoke_expression(jd_exp *exp, jd_dex_ins *ins)
 {
     jd_exp_invoke *invoke = make_obj(jd_exp_invoke);
@@ -819,8 +831,7 @@ static void dex_invoke_expression(jd_exp *exp, jd_dex_ins *ins)
         dex_class_def *cf = hget_u4obj(meta->synthetic_classes_map,
                                        method_id->class_idx);
 
-        // nested loop here, cf == jf->jclass
-        if (cf != NULL && cf != jf->jclass) {
+        if (cf != NULL && !is_nested_inner_class(cf, jf)) {
             jsource_file *_inner = dex_class_inside(dex, cf, jf);
             _inner->parent = ins->method->jfile;
             _inner->source = _inner->parent->source;
@@ -831,7 +842,7 @@ static void dex_invoke_expression(jd_exp *exp, jd_dex_ins *ins)
 
         cf = hget_u4obj(meta->class_type_id_map, method_id->class_idx);
         if (cf != NULL &&
-            cf != jf->jclass &&
+            !is_nested_inner_class(cf, jf) &&
             dex_class_is_anonymous_class(meta, cf)) {
             jsource_file *parent = ins->method->jfile;
             jsource_file *_inner = dex_inner_class(dex, parent, cf);

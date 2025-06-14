@@ -182,7 +182,8 @@ bool identify_reverse_logical_operation(jd_method *m)
             // assert生成的if表达式不合并
             if (!exp_is_if(exp) ||
                 exp_is_nopped(exp) ||
-                if_expression_is_assert(exp))
+                if_expression_is_assert(exp) ||
+                ins->fn->is_goto_back(ins))
                 continue;
 
             jd_exp_if *if_exp = exp->data;
