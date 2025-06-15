@@ -174,8 +174,8 @@ static void dex_fill_watch_successors(jd_method *m, jd_dex_ins *ins)
             if (target_block->type == JD_BB_EXCEPTION /* &&
                 ins_is_try_end(m, block_end_ins)*/) {
                 jd_eblock *eblock = target_block->ub->eblock;
-                jd_bblock *handler_block = block_start_offset(m,
-                                                              eblock->handler_start_offset);
+                uint32_t hstart_off = eblock->handler_start_offset;
+                jd_bblock *handler_block = block_start_offset(m, hstart_off);
                 ladd_obj(m->ins_watch_successors,
                          handler_block->ub->nblock->start_ins);
             }
@@ -183,10 +183,36 @@ static void dex_fill_watch_successors(jd_method *m, jd_dex_ins *ins)
     }
 }
 
-// TODO: need refactor
-void merge_all_try_start_block(jd_method *m, jd_ins *ins)
+static void merge_stack_to_handler_start(jd_method *m,
+                                         jd_dex_ins *ins,
+                                         jd_dex_ins *start_ins)
 {
-    jd_mix_exception *result = NULL;
+    if (start_ins->stack_in == NULL) return;
+    if (ins->stack_in == NULL) {
+        dex_exception_stack(m, ins, start_ins->stack_in);
+    } else {
+        for (int k = 0; k < start_ins->stack_in->local_vars_count; ++k) {
+            jd_val *val = start_ins->stack_in->local_vars[k];
+            if (val == NULL) continue;
+            ins->stack_in->local_vars[k] = val;
+        }
+    }
+}
+
+static void merge_all_try_start_block(jd_method *m, jd_ins *ins)
+{
+    /*
+     * if ins is handler's start instruction
+     * find the handler's try start instructions
+     * then merge all try start instructions stack_in's variables
+     * try {
+     *  // try first instruction
+     * }
+     * catch(Exception e) {
+     * // handler first instruction
+     * }
+     *
+     **/
     for (int i = 0; i < m->mix_exceptions->size; ++i) {
         jd_mix_exception *e = lget_obj(m->mix_exceptions, i);
         if (!is_list_empty(e->catches)) {
@@ -195,36 +221,13 @@ void merge_all_try_start_block(jd_method *m, jd_ins *ins)
                 if (range->start_offset != ins->offset)
                     continue;
 
-
                 jd_ins *start_ins = get_ins(m, e->try->start_idx);
-                if (start_ins->stack_in == NULL) continue;
-
-                if (ins->stack_in == NULL) {
-                    dex_exception_stack(m, ins, start_ins->stack_in);
-                } else {
-                    for (int k = 0; k < start_ins->stack_in->local_vars_count; ++k) {
-                        jd_val *val = start_ins->stack_in->local_vars[k];
-                        if (val == NULL) continue;
-                        ins->stack_in->local_vars[k] = val;
-                    }
-                }
-
-
+                merge_stack_to_handler_start(m, ins, start_ins);
             }
         }
         if (e->finally != NULL && e->finally->start_offset == ins->offset) {
             jd_ins *start_ins = get_ins(m, e->try->start_idx);
-            if (start_ins->stack_in == NULL) continue;
-
-            if (ins->stack_in == NULL) {
-                dex_exception_stack(m, ins, start_ins->stack_in);
-            } else {
-                for (int k = 0; k < start_ins->stack_in->local_vars_count; ++k) {
-                    jd_val *val = start_ins->stack_in->local_vars[k];
-                    if (val == NULL) continue;
-                    ins->stack_in->local_vars[k] = val;
-                }
-            }
+            merge_stack_to_handler_start(m, ins, start_ins);
         }
     }
 }

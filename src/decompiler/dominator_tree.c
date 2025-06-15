@@ -103,7 +103,8 @@ static inline bool block_in_list(const jd_bblock *block, const jd_bblock *list)
     return block_in_list(block, list->idom);
 }
 
-static const jd_bblock* same_dom_block(const jd_bblock *b1, const jd_bblock *b2)
+static const jd_bblock* same_dom_block(const jd_bblock *b1, 
+                                       const jd_bblock *b2)
 {
     if (b1 == NULL || b2 == NULL)
         return NULL;

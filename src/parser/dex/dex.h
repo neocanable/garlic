@@ -12,23 +12,16 @@ typedef uint8_t uleb128;
 
 #define NO_INDEX 0xffffffff
 
-/*
- * 160-bit SHA-1 digest.
- */
 enum { kSHA1DigestLen = 20,
     kSHA1DigestOutputLen = kSHA1DigestLen*2 +1 };
 
-/* general constants */
 enum {
-    kDexEndianConstant = 0x12345678,    /* the endianness indicator */
-    kDexNoIndex = 0xffffffff,           /* not a valid index value */
+    kDexEndianConstant = 0x12345678,
+    kDexNoIndex = 0xffffffff,
 };
 
-/*
- * Enumeration of all the primitive types.
- */
 enum PrimitiveType {
-    PRIM_NOT        = 0, /* value is a reference type, not a primitive type */
+    PRIM_NOT        = 0,
     PRIM_VOID       = 1,
     PRIM_BOOLEAN    = 2,
     PRIM_BYTE       = 3,
@@ -40,32 +33,26 @@ enum PrimitiveType {
     PRIM_DOUBLE     = 9,
 };
 
-/*
- * access flags and masks; the "standard" ones are all <= 0x4000
- *
- * Note: There are related declarations in vm/oo/Object.h in the ClassFlags
- * enum.
- */
 enum {
-    ACC_PUBLIC       = 0x00000001,       // class, field, m, ic
-    ACC_PRIVATE      = 0x00000002,       // field, m, ic
-    ACC_PROTECTED    = 0x00000004,       // field, m, ic
-    ACC_STATIC       = 0x00000008,       // field, m, ic
-    ACC_FINAL        = 0x00000010,       // class, field, m, ic
-    ACC_SYNCHRONIZED = 0x00000020,       // m (only allowed on natives)
-    ACC_SUPER        = 0x00000020,       // class (not used in Dalvik)
-    ACC_VOLATILE     = 0x00000040,       // field
-    ACC_BRIDGE       = 0x00000040,       // m (1.5)
-    ACC_TRANSIENT    = 0x00000080,       // field
-    ACC_VARARGS      = 0x00000080,       // m (1.5)
-    ACC_NATIVE       = 0x00000100,       // m
-    ACC_INTERFACE    = 0x00000200,       // class, ic
-    ACC_ABSTRACT     = 0x00000400,       // class, m, ic
-    ACC_STRICT       = 0x00000800,       // m
-    ACC_SYNTHETIC    = 0x00001000,       // field, m, ic
-    ACC_ANNOTATION   = 0x00002000,       // class, ic (1.5)
-    ACC_ENUM         = 0x00004000,       // class, field, ic (1.5)
-    ACC_CONSTRUCTOR  = 0x00010000,       // m (Dalvik only)
+    ACC_PUBLIC       = 0x00000001,
+    ACC_PRIVATE      = 0x00000002,
+    ACC_PROTECTED    = 0x00000004,
+    ACC_STATIC       = 0x00000008,
+    ACC_FINAL        = 0x00000010,
+    ACC_SYNCHRONIZED = 0x00000020,
+    ACC_SUPER        = 0x00000020,
+    ACC_VOLATILE     = 0x00000040,
+    ACC_BRIDGE       = 0x00000040,
+    ACC_TRANSIENT    = 0x00000080,
+    ACC_VARARGS      = 0x00000080,
+    ACC_NATIVE       = 0x00000100,
+    ACC_INTERFACE    = 0x00000200,
+    ACC_ABSTRACT     = 0x00000400,
+    ACC_STRICT       = 0x00000800,
+    ACC_SYNTHETIC    = 0x00001000,
+    ACC_ANNOTATION   = 0x00002000,
+    ACC_ENUM         = 0x00004000,
+    ACC_CONSTRUCTOR  = 0x00010000,
     ACC_DECLARED_SYNCHRONIZED =
     0x00020000,       // m (Dalvik only)
     ACC_CLASS_MASK =
@@ -103,9 +90,8 @@ typedef enum jd_dex_access_flags {
     ACC_DEX_DECLARED_SYNCHRONIZED   = 0x20000,
 } jd_dex_access_flags;
 
-/* annotation constants */
 enum {
-    kDexVisibilityBuild         = 0x00,     /* annotation visibility */
+    kDexVisibilityBuild         = 0x00,
     kDexVisibilityRuntime       = 0x01,
     kDexVisibilitySystem        = 0x02,
 
@@ -128,7 +114,7 @@ enum {
     kDexAnnotationNull          = 0x1e,
     kDexAnnotationBoolean       = 0x1f,
 
-    kDexAnnotationValueTypeMask = 0x1f,     /* low 5 bits */
+    kDexAnnotationValueTypeMask = 0x1f,
     kDexAnnotationValueArgShift = 5,
 };
 
@@ -156,51 +142,48 @@ enum {
     kDexTypeAnnotationsDirectoryItem = 0x2006,
 };
 
-/* auxillary data section chunk codes */
 enum {
-    kDexChunkClassLookup            = 0x434c4b50,   /* CLKP */
-    kDexChunkRegisterMaps           = 0x524d4150,   /* RMAP */
-    kDexChunkEnd                    = 0x41454e44,   /* AEND */
+    kDexChunkClassLookup            = 0x434c4b50,
+    kDexChunkRegisterMaps           = 0x524d4150,
+    kDexChunkEnd                    = 0x41454e44,
 };
 
 typedef enum dex_instruction_format {
-    kFmt00x = 0,    // unknown format (also used for "breakpoint" opcode)
-    kFmt10x,        // op
-    kFmt12x,        // op vA, vB
-    kFmt11n,        // op vA, #+B
-    kFmt11x,        // op vAA
-    kFmt10t,        // op +AA
-    kFmt20bc,       // [opt] op AA, thing@BBBB
-    kFmt20t,        // op +AAAA
-    kFmt22x,        // op vAA, vBBBB
-    kFmt21t,        // op vAA, +BBBB
-    kFmt21s,        // op vAA, #+BBBB
-    kFmt21h,        // op vAA, #+BBBB00000[00000000]
-    kFmt21c,        // op vAA, thing@BBBB
-    kFmt23x,        // op vAA, vBB, vCC
-    kFmt22b,        // op vAA, vBB, #+CC
-    kFmt22t,        // op vA, vB, +CCCC
-    kFmt22s,        // op vA, vB, #+CCCC
-    kFmt22c,        // op vA, vB, thing@CCCC
-    kFmt22cs,       // [opt] op vA, vB, field goto_offset CCCC
-    kFmt30t,        // op +AAAAAAAA
-    kFmt32x,        // op vAAAA, vBBBB
-    kFmt31i,        // op vAA, #+BBBBBBBB
-    kFmt31t,        // op vAA, +BBBBBBBB
-    kFmt31c,        // op vAA, string@BBBBBBBB
-    kFmt35c,        // op {vC,vD,vE,vF,vG}, thing@BBBB
-    kFmt35ms,       // [opt] invoke-virtual+super
-    kFmt3rc,        // op {vCCCC .. v(CCCC+AA-1)}, thing@BBBB
-    kFmt3rms,       // [opt] invoke-virtual+super/range
-    kFmt51l,        // op vAA, #+BBBBBBBBBBBBBBBB
-    kFmt35mi,       // [opt] inline invoke
-    kFmt3rmi,       // [opt] inline invoke/range
-    kFmt45cc,       // op {vC, vD, vE, vF, vG}, meth@BBBB, proto@HHHH
-    kFmt4rcc,       // op {VCCCC .. v(CCCC+AA-1)}, meth@BBBB, proto@HHHH
+    kFmt00x = 0,
+    kFmt10x,
+    kFmt12x,
+    kFmt11n,
+    kFmt11x,
+    kFmt10t,
+    kFmt20bc,
+    kFmt20t,
+    kFmt22x,
+    kFmt21t,
+    kFmt21s,
+    kFmt21h,
+    kFmt21c,
+    kFmt23x,
+    kFmt22b,
+    kFmt22t,
+    kFmt22s,
+    kFmt22c,
+    kFmt22cs,
+    kFmt30t,
+    kFmt32x,
+    kFmt31i,
+    kFmt31t,
+    kFmt31c,
+    kFmt35c,
+    kFmt35ms,
+    kFmt3rc,
+    kFmt3rms,
+    kFmt51l,
+    kFmt35mi,
+    kFmt3rmi,
+    kFmt45cc,
+    kFmt4rcc,
 } dex_instruction_format;
 
-
-/* debug info opcodes and constants */
 enum {
     DBG_END_SEQUENCE         = 0x00,
     DBG_ADVANCE_PC           = 0x01,
@@ -217,15 +200,12 @@ enum {
     DBG_LINE_RANGE           = 15,
 };
 
-/*
- * Direct-mapped "header_item" struct.
- */
 typedef struct dex_header {
-    u1  magic[8];           /* includes version number */
-    u4  checksum;           /* adler32 checksum */
-    u1  signature[kSHA1DigestLen]; /* SHA-1 hash */
-    u4  file_size;           /* length of entire file */
-    u4  header_size;         /* goto_offset to start of next section */
+    u1  magic[8];
+    u4  checksum;
+    u1  signature[kSHA1DigestLen];
+    u4  file_size;
+    u4  header_size;
     u4  endian_tag;
     u4  link_size;
     u4  link_off;
@@ -246,59 +226,37 @@ typedef struct dex_header {
     u4  data_off;
 } dex_header;
 
-/*
- * Direct-mapped "map_item".
- */
 typedef struct {
-    u2 type;              /* type code (see kDexType* above) */
+    u2 type;
     u2 unused;
-    u4 size;              /* count of items of the indicated type */
-    u4 offset;            /* file goto_offset to the start of data */
+    u4 size;
+    u4 offset;
 } dex_map_item;
 
-/*
- * Direct-mapped "map_list".
- */
 typedef struct {
-    u4  size;               /* #of entries in list */
-    dex_map_item *list;     /* entries */
+    u4  size;
+    dex_map_item *list;
 } dex_map_list;
 
-/*
- * Direct-mapped "string_id_item".
- */
 typedef struct {
-    u4 string_data_off;      /* file goto_offset to string_data_item */
+    u4 string_data_off;
 } dex_string_id;
 
-/*
- * Direct-mapped "type_id_item".
- */
 typedef struct {
-    u4  descriptor_idx; /* index into stringIds list for type desc */
+    u4  descriptor_idx;
 } dex_type_id;
 
-/*
- * Direct-mapped "field_id_item".
- */
 typedef struct {
-    u2  class_idx;           /* index into typeIds list for defining class */
-    u2  type_idx;            /* index into typeIds for field type */
-    u4  name_idx;            /* index into stringIds for field cname */
+    u2  class_idx;
+    u2  type_idx;
+    u4  name_idx;
 } dex_field_id;
 
-/*
- * Direct-mapped "method_id_item".
- */
 typedef struct {
-    u2  class_idx;           /* index into typeIds list for defining class */
-    u2  proto_idx;           /* index into protoIds for m prototype */
-    u4  name_idx;            /* index into stringIds for m cname */
+    u2  class_idx;
+    u2  proto_idx;
+    u4  name_idx;
 } dex_method_id;
-
-/*
- * Direct-mapped "proto_id_item".
- */
 
 typedef struct dex_type_list dex_type_list;
 typedef struct dex_annotations_directory_item dex_annotations_directory_item;
@@ -313,9 +271,9 @@ typedef struct {
 } jd_dex_opcode;
 
 typedef struct dex_proto_id {
-    u4  shorty_idx;          /* index into stringIds for shorty desc */
-    u4  return_type_idx;      /* index into typeIds list for return type */
-    u4  parameters_off;      /* file goto_offset to type_list for parameter types */
+    u4  shorty_idx;
+    u4  return_type_idx;
+    u4  parameters_off;
 
     dex_type_list *type_list;
 } dex_proto_id;
@@ -399,18 +357,15 @@ typedef struct {
     encoded_method *virtual_methods;
 } dex_class_data_item;
 
-/*
- * Direct-mapped "class_def_item".
- */
 typedef struct {
-    u4  class_idx;           /* index into typeIds for this class */
+    u4  class_idx;
     u4  access_flags;
-    u4  superclass_idx;      /* index into typeIds for superclass */
-    u4  interfaces_off;      /* file goto_offset to DexTypeList */
-    u4  source_file_idx;      /* index into stringIds for source file cname */
-    u4  annotations_off;     /* file goto_offset to annotations_directory_item */
-    u4  class_data_off;       /* file goto_offset to class_data_item */
-    u4  static_values_off;    /* file goto_offset to DexEncodedArray */
+    u4  superclass_idx;
+    u4  interfaces_off;
+    u4  source_file_idx;
+    u4  annotations_off;
+    u4  class_data_off;
+    u4  static_values_off;
 
     dex_type_list *interfaces;
     dex_annotations_directory_item *annotations;
@@ -424,16 +379,10 @@ typedef struct {
     list_object *anonymous_classes;
 } dex_class_def;
 
-/*
- * Direct-mapped "call_site_id_item"
- */
 typedef struct {
-    u4  callSiteOff;        /* file goto_offset to DexEncodedArray */
+    u4  callSiteOff;
 } dex_call_site_id;
 
-/*
- * Enumeration of m handle type codes.
- */
 enum method_handle_type {
     STATIC_PUT = 0x00,
     STATIC_GET = 0x01,
@@ -446,29 +395,20 @@ enum method_handle_type {
     INVOKE_INTERFACE = 0x08
 };
 
-/*
- * Direct-mapped "method_handle_item"
- */
 typedef struct {
-    u2 method_handle_type;    /* type of m handle */
-    u2 reserved1;           /* reserved for future use */
-    u2 field_or_method_idx;    /* index of associated field or m */
-    u2 reserved2;           /* reserved for future use */
+    u2 method_handle_type;
+    u2 reserved1;
+    u2 field_or_method_idx;
+    u2 reserved2;
 } dex_method_handle_item;
 
-/*
- * Direct-mapped "type_item".
- */
 typedef struct {
-    u2  type_idx;            /* index into typeIds */
+    u2  type_idx;
 } dex_type_item;
 
-/*
- * Direct-mapped "type_list".
- */
 struct dex_type_list {
-    u4  size;                     /* #of entries in list */
-    dex_type_item *list;    /* entries */
+    u4  size;
+    dex_type_item *list;
 };
 
 typedef struct encoded_type_addr_pair {
@@ -494,8 +434,6 @@ typedef struct dex_try_item {
     u4 start_addr;
     u2 insn_count;
     u2 handler_off;
-
-//    encoded_catch_handler_list *handler_list;
 } dex_try_item;
 
 typedef struct dex_try_item dex_try;
@@ -518,20 +456,13 @@ typedef struct {
     dex_dbg_item *items;
 } dex_debug_info_item;
 
-/*
- * Direct-mapped "code_item".
- *
- * The "catches" table is used when throwing an exception,
- * "debugInfo" is used when displaying an exception stack trace or
- * debugging. An goto_offset of zero indicates that there are no entries.
- */
 struct dex_code_item {
     u2  registers_size;
     u2  ins_size;
     u2  outs_size;
     u2  tries_size;
-    u4  debug_info_off;       /* file goto_offset to debug info stream */
-    u4  insns_size;          /* size of the insns array, in u2 units */
+    u4  debug_info_off;
+    u4  insns_size;
     u2  *insns;
 
     u2 padding;
@@ -541,9 +472,6 @@ struct dex_code_item {
     dex_debug_info_item *debug_info;
 };
 
-/*
- * Link table.  Currently undefined.
- */
 typedef struct {
     u1  bleargh;
 } dex_link;
@@ -570,9 +498,6 @@ typedef struct parameter_annotation {
 
 typedef struct parameter_annotation param_ano;
 
-/*
- * Direct-mapped "annotations_directory_item".
- */
 struct dex_annotations_directory_item {
     u4  class_annotations_off;
     u4  fields_size;
@@ -587,14 +512,8 @@ struct dex_annotations_directory_item {
 
 typedef dex_annotations_directory_item dex_ano_dict_item;
 
-
-/*
- * Direct-mapped "encoded_array".
- *
- * NOTE: this structure is byte-aligned.
- */
 struct DexEncodedArray {
-    u1  *array;                   /* data in encoded_array format */
+    u1  *array;
 };
 
 typedef struct {
@@ -636,7 +555,6 @@ typedef struct jd_meta_dex {
     hashmap *synthetic_classes_map;
     hashmap *lambda_method_map;
     mem_pool *pool;
-
     string source_dir;
 } jd_meta_dex;
 

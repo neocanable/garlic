@@ -7,15 +7,15 @@
 #include "decompiler/expression_writter.h"
 #include "common/file_tools.h"
 #include "libs/threadpool/threadpool.h"
+#include "output_tools.h"
 
 void jar_status(jd_jar *jar)
 {
     pthread_mutex_lock(jar->threadpool->lock);
     jar->done++;
     fflush(stdout);
-    printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\bProgress : %d (%d)",
-           jar->done,
-           jar->added);
+    backspace(25);
+    printf("Progress : %d (%d)", jar->done, jar->added);
     fflush(stdout);
     pthread_mutex_unlock(jar->threadpool->lock);
 }
@@ -23,8 +23,8 @@ void jar_status(jd_jar *jar)
 void jar_main_thread_status(jd_jar *jar)
 {
     fflush(stdout);
-    printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\bProgress : %d",
-           jar->done);
+    backspace(25);
+    printf("Progress : %d", jar->done);
     fflush(stdout);
 }
 

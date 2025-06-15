@@ -118,7 +118,6 @@ bool dex_class_is_inner_class(jd_meta_dex *meta, dex_class_def *cf) {
         annotation_item *item = &set_item->entries[i];
         u4 type_idx = item->encoded_annotation->type_idx;
         string type_name = dex_str_of_type_id(meta, type_idx);
-        // printf("annotation type: %s\n", type);
         if (STR_EQL(type_name, "Ldalvik/annotation/InnerClass;")) {
             result = true;
             break;
@@ -144,7 +143,6 @@ int dex_class_is_anonymous_class(jd_meta_dex *meta, dex_class_def *cf) {
         annotation_item *item = &set_item->entries[i];
         u4 type_idx = item->encoded_annotation->type_idx;
         string type_name = dex_str_of_type_id(meta, type_idx);
-        // printf("annotation type: %s\n", type);
         if (STR_EQL(type_name, "Ldalvik/annotation/EnclosingClass;")) {
             result = true;
             break;

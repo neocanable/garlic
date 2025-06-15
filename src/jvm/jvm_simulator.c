@@ -329,10 +329,10 @@ static void jvm_fill_watch_successors(jd_method *m, jd_ins *ins)
             if (target_block->type == JD_BB_EXCEPTION /* &&
                 ins_is_try_end(m, block_end_ins)*/) {
                 jd_eblock *eblock = target_block->ub->eblock;
-                jd_bblock *handler_block = block_start_offset(m,
-                                                              eblock->handler_start_offset);
-                ladd_obj(m->ins_watch_successors,
-                         handler_block->ub->nblock->start_ins);
+                uint32_t hstart_off = eblock->handler_start_offset;
+                jd_bblock *handler_block = block_start_offset(m, hstart_off);
+                jd_ins *hstart = handler_block->ub->nblock->start_ins;
+                ladd_obj(m->ins_watch_successors, hstart);
             }
         }
     }

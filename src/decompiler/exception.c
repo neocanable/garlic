@@ -954,7 +954,8 @@ static void remove_share_handler_finally(jd_method *m)
                 continue;
             if (finally->try_start >= other->handler_start &&
                 ((finally->handler_start >= other->try_start &&
-                  finally->handler_start <= other->try_end) || (finally->handler_start <= other->try_start))) {
+                  finally->handler_start <= other->try_end) || 
+                 (finally->handler_start <= other->try_start))) {
                 crossed = true;
                 break;
             }
@@ -981,7 +982,8 @@ static void remove_share_hanlder_catch(jd_method *m)
                 continue;
             if (catch_block->try_start >= other->handler_start &&
                 ((catch_block->handler_start >= other->try_start &&
-                  catch_block->handler_start <= other->try_end) || (catch_block->handler_start <= other->try_start))) {
+                  catch_block->handler_start <= other->try_end) || 
+                 (catch_block->handler_start <= other->try_start))) {
                 crossed = true;
                 break;
             }

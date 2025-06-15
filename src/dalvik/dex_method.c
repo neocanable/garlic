@@ -118,7 +118,7 @@ static void init_dex_packed_switch_jump(jd_dex_ins *ins)
     for (int i = 0; i < size; ++i) {
         int offset = packed_ins->param[5 + i * 2] << 16 |
                      packed_ins->param[4 + i * 2];
-        jd_dex_ins *target_ins = ins_of_offset(ins->method, ins->offset + offset);
+        jd_dex_ins *target_ins = ins_of_offset(m, ins->offset+offset);
         ladd_obj(ins->targets, target_ins);
         ladd_obj(ins->jumps, target_ins);
         DEBUG_PRINT("key: %d, goto_offset: %d\n",

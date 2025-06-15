@@ -367,154 +367,158 @@ list_object* dex_parameter_annotation(jd_method *m, int index)
     }
     return NULL;
 }
-//
-//void print_all_class_annotations(jd_meta_dex *meta)
-//{
-//    dex_header *header = meta->header;
-//    for (int i = 0; i < header->class_defs_size; ++i) {
-//        dex_class_def *class_def = &meta->class_defs[i];
-//        print_dex_class_annotations(meta, class_def);
-//    }
-//}
-//
-//static void print_dex_class_field_annotation(jd_meta_dex *meta,
-//                                             string cname,
-//                                             dex_ano_dict_item *dict)
-//{
-//    if (dict->fields_size == 0)
-//        return;
-//
-//    DEBUG_PRINT("%s annotations field: %d"
-//                "    m: %d "
-//                "    parameters: %d\n",
-//                cname,
-//                dict->fields_size,
-//                dict->methods_size,
-//                dict->parameters_size);
-//
-//    for (int i = 0; i < dict->fields_size; ++i) {
-//        field_annotation *fa = &dict->field_annotations[i];
-//        string field_name = dex_str_of_field_name(meta, fa->field_idx);
-//
-//        annotation_set_item *item = fa->annotation;
-//        if (item == NULL)
-//            continue;
-//
-//        for (int j = 0; j < item->size; ++j) {
-//            annotation_off_item *off_item = &item->entries[j];
-//            annotation_item *aitem = off_item->annotation_item;
-//
-//            if (aitem->visibility == kDexVisibilitySystem)
-//                continue;
-//
-//            encoded_annotation *ea = aitem->encoded_annotation;
-//            string ano_str = encoded_annotation_to_s(meta, ea);
-//            printf("[field]: %s %s\n", field_name, ano_str);
-//        }
-//    }
-//}
-//
-//static void print_dex_class_method_annotation(jd_meta_dex *meta,
-//                                              string cname,
-//                                              dex_ano_dict_item *dict)
-//{
-//
-//    for (int i = 0; i < dict->methods_size; ++i) {
-//        method_annotation *ma = &dict->method_annotations[i];
-//        string method_name = dex_str_of_method_id(meta, ma->method_idx);
-//        annotation_set_item *item = ma->annotation;
-//        if (item == NULL)
-//            continue;
-//
-//        for (int j = 0; j < item->size; ++j) {
-//            annotation_off_item *off_item = &item->entries[j];
-//            annotation_item *aitem = off_item->annotation_item;
-//            if (aitem->visibility == kDexVisibilitySystem)
-//                continue;
-//
-//            encoded_annotation *ea = aitem->encoded_annotation;
-//            string ano_str = encoded_annotation_to_s(meta, ea);
-//            printf("[m encoded_annotation]: %s %s\n",
-//                   method_name, ano_str);
-//        }
-//    }
-//}
-//
-//static void print_dex_class_parameter_annotation(jd_meta_dex *meta,
-//                                                 string cname,
-//                                                 dex_ano_dict_item *dict)
-//{
-//    for (int i = 0; i < dict->parameters_size; ++i) {
-//        parameter_annotation *pa = &dict->parameter_annotations[i];
-//        dex_method_id *method_id = &meta->method_ids[pa->method_idx];
-//        dex_proto_id *proto = &meta->proto_ids[method_id->proto_idx];
-//        dex_type_list *type_list = proto->type_list;
-//        string method_name = dex_str_of_method_id(meta, pa->method_idx);
-//
-//        printf("%s(", method_name);
-//        for (int j = 0; j < type_list->size; ++j) {
-//            dex_type_item *ti = &type_list->list[j];
-//            string desc = dex_str_of_type_id(meta, ti->type_idx);
-//            if (j == type_list->size - 1)
-//                printf("%s", desc);
-//            else
-//                printf("%s,", desc);
-//        }
-//        printf(")\n");
-//        annotation_set_ref_list *list = pa->annotation;
-//        if (list == NULL)
-//            continue;
-//
-//        for (int j = 0; j < list->size; ++j) {
-//            annotation_set_ref_item *item = &list->list[j];
-//            annotation_set_item *aitem = item->annotation;
-//            if (item->annotation == NULL)
-//                continue;
-//            for (int k = 0; k < aitem->size; ++k) {
-//                annotation_off_item *offitem = &aitem->entries[k];
-//                annotation_item *anno_item = offitem->annotation_item;
-//                if (anno_item->visibility == kDexVisibilitySystem)
-//                    continue;
-//                encoded_annotation *ea = anno_item->encoded_annotation;
-//                string ano_str = encoded_annotation_to_s(meta, ea);
-//                printf("\t[parameter encoded_annotation]: %d %s %s\n",
-//                        j, method_name, ano_str);
-//            }
-//        }
-//    }
-//}
-//
-//static void print_dex_class_self_annotation(jd_meta_dex *meta,
-//                                            string cname,
-//                                            dex_ano_dict_item *dict)
-//{
-//    if (dict->class_annotation == NULL)
-//        return;
-//
-//    for (int i = 0; i < dict->class_annotation->size; ++i) {
-//        annotation_off_item *item = &dict->class_annotation->entries[i];
-//        annotation_item *aitem = item->annotation_item;
-//        if (aitem->visibility == kDexVisibilitySystem)
-//            continue;
-//        encoded_annotation *ea = aitem->encoded_annotation;
-//        string ano_str = encoded_annotation_to_s(meta, ea);
-//        printf("[class encoded_annotation]: %s %s\n", cname, ano_str);
-//    }
-//}
-//
-//void print_dex_class_annotations(jd_meta_dex *meta, dex_class_def *cdf)
-//{
-//    string cname = dex_str_of_type_id(meta, cdf->class_idx);
-//    dex_ano_dict_item *dict = cdf->annotations;
-//
-//    if (dict == NULL)
-//        return;
-//
-//    print_dex_class_field_annotation(meta, cname, dict);
-//
-//    print_dex_class_method_annotation(meta, cname, dict);
-//
-//    print_dex_class_parameter_annotation(meta, cname, dict);
-//
-//    print_dex_class_self_annotation(meta, cname, dict);
-//}
+
+#if DEBUG
+
+void print_all_class_annotations(jd_meta_dex *meta)
+{
+    dex_header *header = meta->header;
+    for (int i = 0; i < header->class_defs_size; ++i) {
+        dex_class_def *class_def = &meta->class_defs[i];
+        print_dex_class_annotations(meta, class_def);
+    }
+}
+
+static void print_dex_class_field_annotation(jd_meta_dex *meta,
+                                             string cname,
+                                             dex_ano_dict_item *dict)
+{
+    if (dict->fields_size == 0)
+        return;
+
+    DEBUG_PRINT("%s annotations field: %d"
+                "    m: %d "
+                "    parameters: %d\n",
+                cname,
+                dict->fields_size,
+                dict->methods_size,
+                dict->parameters_size);
+
+    for (int i = 0; i < dict->fields_size; ++i) {
+        field_annotation *fa = &dict->field_annotations[i];
+        string field_name = dex_str_of_field_name(meta, fa->field_idx);
+
+        annotation_set_item *item = fa->annotation;
+        if (item == NULL)
+            continue;
+
+        for (int j = 0; j < item->size; ++j) {
+            annotation_off_item *off_item = &item->entries[j];
+            annotation_item *aitem = off_item->annotation_item;
+
+            if (aitem->visibility == kDexVisibilitySystem)
+                continue;
+
+            encoded_annotation *ea = aitem->encoded_annotation;
+            string ano_str = encoded_annotation_to_s(meta, ea);
+            printf("[field]: %s %s\n", field_name, ano_str);
+        }
+    }
+}
+
+static void print_dex_class_method_annotation(jd_meta_dex *meta,
+                                              string cname,
+                                              dex_ano_dict_item *dict)
+{
+
+    for (int i = 0; i < dict->methods_size; ++i) {
+        method_annotation *ma = &dict->method_annotations[i];
+        string method_name = dex_str_of_method_id(meta, ma->method_idx);
+        annotation_set_item *item = ma->annotation;
+        if (item == NULL)
+            continue;
+
+        for (int j = 0; j < item->size; ++j) {
+            annotation_off_item *off_item = &item->entries[j];
+            annotation_item *aitem = off_item->annotation_item;
+            if (aitem->visibility == kDexVisibilitySystem)
+                continue;
+
+            encoded_annotation *ea = aitem->encoded_annotation;
+            string ano_str = encoded_annotation_to_s(meta, ea);
+            printf("[m encoded_annotation]: %s %s\n",
+                   method_name, ano_str);
+        }
+    }
+}
+
+static void print_dex_class_parameter_annotation(jd_meta_dex *meta,
+                                                 string cname,
+                                                 dex_ano_dict_item *dict)
+{
+    for (int i = 0; i < dict->parameters_size; ++i) {
+        parameter_annotation *pa = &dict->parameter_annotations[i];
+        dex_method_id *method_id = &meta->method_ids[pa->method_idx];
+        dex_proto_id *proto = &meta->proto_ids[method_id->proto_idx];
+        dex_type_list *type_list = proto->type_list;
+        string method_name = dex_str_of_method_id(meta, pa->method_idx);
+
+        printf("%s(", method_name);
+        for (int j = 0; j < type_list->size; ++j) {
+            dex_type_item *ti = &type_list->list[j];
+            string desc = dex_str_of_type_id(meta, ti->type_idx);
+            if (j == type_list->size - 1)
+                printf("%s", desc);
+            else
+                printf("%s,", desc);
+        }
+        printf(")\n");
+        annotation_set_ref_list *list = pa->annotation;
+        if (list == NULL)
+            continue;
+
+        for (int j = 0; j < list->size; ++j) {
+            annotation_set_ref_item *item = &list->list[j];
+            annotation_set_item *aitem = item->annotation;
+            if (item->annotation == NULL)
+                continue;
+            for (int k = 0; k < aitem->size; ++k) {
+                annotation_off_item *offitem = &aitem->entries[k];
+                annotation_item *anno_item = offitem->annotation_item;
+                if (anno_item->visibility == kDexVisibilitySystem)
+                    continue;
+                encoded_annotation *ea = anno_item->encoded_annotation;
+                string ano_str = encoded_annotation_to_s(meta, ea);
+                printf("\t[parameter encoded_annotation]: %d %s %s\n",
+                        j, method_name, ano_str);
+            }
+        }
+    }
+}
+
+static void print_dex_class_self_annotation(jd_meta_dex *meta,
+                                            string cname,
+                                            dex_ano_dict_item *dict)
+{
+    if (dict->class_annotation == NULL)
+        return;
+
+    for (int i = 0; i < dict->class_annotation->size; ++i) {
+        annotation_off_item *item = &dict->class_annotation->entries[i];
+        annotation_item *aitem = item->annotation_item;
+        if (aitem->visibility == kDexVisibilitySystem)
+            continue;
+        encoded_annotation *ea = aitem->encoded_annotation;
+        string ano_str = encoded_annotation_to_s(meta, ea);
+        printf("[class encoded_annotation]: %s %s\n", cname, ano_str);
+    }
+}
+
+void print_dex_class_annotations(jd_meta_dex *meta, dex_class_def *cdf)
+{
+    string cname = dex_str_of_type_id(meta, cdf->class_idx);
+    dex_ano_dict_item *dict = cdf->annotations;
+
+    if (dict == NULL)
+        return;
+
+    print_dex_class_field_annotation(meta, cname, dict);
+
+    print_dex_class_method_annotation(meta, cname, dict);
+
+    print_dex_class_parameter_annotation(meta, cname, dict);
+
+    print_dex_class_self_annotation(meta, cname, dict);
+}
+
+#endif
