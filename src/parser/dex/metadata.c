@@ -680,7 +680,7 @@ static void parse_dex_code_debug_item(jd_meta_dex *dex, dex_code_item *code)
             }
             case DBG_START_LOCAL_EXTENDED: {
                 s4 reg = read_unsigned_leb128(dex);
-                u4 name_idx = read_unsigned_leb128(dex);
+                u4 name_idx = read_unsigned_leb128(dex) - 1;
                 u4 type_idx = read_unsigned_leb128(dex) - 1;
                 u4 sig_idx = read_unsigned_leb128(dex) -1;
 
