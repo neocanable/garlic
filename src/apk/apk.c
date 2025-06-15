@@ -88,6 +88,7 @@ static void apk_task_start(jd_apk *apk)
             apk->added++;
         }
     }
+    zip_close(zip);
 }
 
 static void apk_release(jd_apk *apk)
@@ -95,7 +96,6 @@ static void apk_release(jd_apk *apk)
     if (apk->threadpool)
         threadpool_destroy(apk->threadpool, 1);
 
-    zip_close(apk->zip);
     mem_pool_free(apk->pool);
     mem_free_pool();
 }
