@@ -20,12 +20,11 @@ static inline string descriptor_item_class_name(string arr_cname)
 {
     char c = '[';
     int index = 0;
-    char *ptr = strchr(arr_cname, c);
+    char *ptr = strrchr(arr_cname, c);
     if (ptr == NULL)
         return arr_cname;
 
     index = ptr - arr_cname;
-//    printf("index: %d\n", index);
 
     if (memcmp(arr_cname, g_str_int, index) == 0) {
         return (string)g_str_int;

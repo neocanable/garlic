@@ -173,10 +173,6 @@ static void dex_encoded_field_to_field(jd_dex *dex,
         field->defination = str_create("static %s %s",
                                        field->type,
                                        field->name);
-
-    DEBUG_PRINT("cname: %s, def: %s\n",
-                field->name,
-                field->defination);
 }
 
 void dex_fields(jsource_file *jf)

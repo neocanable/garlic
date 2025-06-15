@@ -133,14 +133,19 @@ static int dex_string_byte_size(jd_meta_dex *dex, uint32_t utf16_size)
 {
     int real, cnt;
     for (real = 0, cnt = 0; cnt < utf16_size; ++real, ++cnt) {
-        unsigned char c = dex->bin->buffer[real];
+        unsigned char c = dex->bin->buffer[real + dex->bin->cur_off];
         if (c > 0 && c < 127) {
         }
-        else if (c >= 0xE2) {
+        else if (c >= 0xE0) {
             real += 2;
         }
         else if (c >= 0xC2) {
             real += 1;
+        }
+        else if (c == 0xC0) {
+            unsigned char nc = dex->bin->buffer[real+1 + dex->bin->cur_off];
+            if (nc == 0x80)
+                real += 1;
         }
     }
     return real;
@@ -168,7 +173,9 @@ static void parse_dex_string_ids(jd_meta_dex *dex)
 
         int size = read_unsigned_leb128(dex);
         item->utf16_size = size;
+
         int real = dex_string_byte_size(dex, size);
+
         item->data = x_alloc_in(dex->pool, real+1);
         memset(item->data, 0, real+1);
         if (real > 0)
