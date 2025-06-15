@@ -65,7 +65,9 @@ void cfg_remove_exception_block(jd_method *m);
 
 void cfg_unlink_blocks(jd_bblock *source, jd_bblock *target);
 
-jd_bblock* make_goto_basic_block(jd_method *m, jd_support_type type, uint32_t offset);
+jd_bblock* make_goto_basic_block(jd_method *m,
+                                 jd_support_type type,
+                                 uint32_t offset);
 
 jd_bblock* make_dalvik_goto_block(jd_method *m, uint32_t offset);
 

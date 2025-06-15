@@ -19,15 +19,15 @@
 #include "file_tools.h"
 #include "dex_annotation.h"
 #include "dex_dump.h"
+#include "output_tools.h"
 
 void dex_status(jd_dex *dex)
 {
     pthread_mutex_lock(dex->threadpool->lock);
     dex->done++;
     fflush(stdout);
-    printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\bProgress : %d (%d)",
-           dex->done,
-           dex->added);
+    backspace(25);
+    printf("Progress : %d (%d)", dex->done, dex->added);
     fflush(stdout);
     pthread_mutex_unlock(dex->threadpool->lock);
 }
@@ -35,8 +35,8 @@ void dex_status(jd_dex *dex)
 void dex_main_thread_status(jd_dex *dex)
 {
     fflush(stdout);
-    printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\bProgress : %d",
-           dex->done);
+    backspace(25);
+    printf("Progress : %d", dex->done);
     fflush(stdout);
 }
 
@@ -157,7 +157,9 @@ static void dex_inner_class_list(jsource_file *jf)
     }
 }
 
-jsource_file* dex_class_inside(jd_dex *dex, dex_class_def *cf, jsource_file *parent)
+jsource_file* dex_class_inside(jd_dex *dex,
+                               dex_class_def *cf,
+                               jsource_file *parent)
 {
     dex_class_data_item *class_data = cf->class_data;
     jsource_file *jf = make_obj(jsource_file);
@@ -220,7 +222,9 @@ jsource_file* dex_class_inside(jd_dex *dex, dex_class_def *cf, jsource_file *par
     return jf;
 }
 
-jsource_file* dex_inner_class(jd_dex *dex, jsource_file *parent, dex_class_def *cf)
+jsource_file* dex_inner_class(jd_dex *dex,
+                              jsource_file *parent,
+                              dex_class_def *cf)
 {
     jsource_file *inner = dex_class_inside(dex, cf, parent);
     if (!inner->is_anonymous) {
@@ -265,30 +269,32 @@ static void dex_inner_and_anonymous_class(jd_dex *dex)
             string cname = dex_str_of_type_id(meta, cf->class_idx);
             char *last_dollar = strrchr(cname, '$');
             int index = last_dollar - cname;
-            string parent_name = x_alloc(index+2);
-            memcpy(parent_name, cname, index);
-            parent_name[index] = ';';
-            parent_name[index+1] = '\0';
-            dex_class_def *parent_cf = hget_s2o(meta->class_name_map, parent_name);
+            string pname = x_alloc(index + 2);
+            memcpy(pname, cname, index);
+            pname[index] = ';';
+            pname[index + 1] = '\0';
+            dex_class_def *parent_cf = hget_s2o(meta->class_name_map, pname);
             if (parent_cf != NULL) {
                 ladd_obj(parent_cf->anonymous_classes, cf);
             }
 
-            DEBUG_PRINT("[anonymous] class: %s parent: %s %p\n", cname, parent_name, parent_cf);
+            DEBUG_PRINT("[anonymous] class: %s parent: %s %p\n",
+                        cname, pname, parent_cf);
         }
         else if (cf->is_inner) {
             string cname = dex_str_of_type_id(meta, cf->class_idx);
             char *last_dollar = strrchr(cname, '$');
             int index = last_dollar - cname;
-            string parent_name = x_alloc(index+2);
-            memcpy(parent_name, cname, index);
-            parent_name[index] = ';';
-            parent_name[index+1] = '\0';
-            dex_class_def *parent_cf = hget_s2o(meta->class_name_map, parent_name);
+            string pname = x_alloc(index + 2);
+            memcpy(pname, cname, index);
+            pname[index] = ';';
+            pname[index + 1] = '\0';
+            dex_class_def *parent_cf = hget_s2o(meta->class_name_map, pname);
             if (parent_cf != NULL)
                 ladd_obj(parent_cf->inner_classes, cf);
 
-            DEBUG_PRINT("[inner] class: %s parent: %s %p\n", cname, parent_name, parent_cf);
+            DEBUG_PRINT("[inner] class: %s parent: %s %p\n",
+                        cname, pname, parent_cf);
         }
     }
 }

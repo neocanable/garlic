@@ -26,9 +26,13 @@ void dex_file_dump(string path);
 
 void dex_analyse(jd_meta_dex *meta);
 
-jsource_file* dex_class_inside(jd_dex *dex, dex_class_def *cf, jsource_file *parent);
+jsource_file* dex_class_inside(jd_dex *dex, 
+                               dex_class_def *cf, 
+                               jsource_file *parent);
 
-jsource_file* dex_inner_class(jd_dex *dex, jsource_file *parent, dex_class_def *cf);
+jsource_file* dex_inner_class(jd_dex *dex, 
+                              jsource_file *parent, 
+                              dex_class_def *cf);
 
 jd_method *dex_method(jsource_file *jf, encoded_method *em);
 

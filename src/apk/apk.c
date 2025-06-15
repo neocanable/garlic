@@ -5,15 +5,15 @@
 #include "dalvik/dex_structure.h"
 #include "dalvik/dex_class.h"
 #include "decompiler/expression_writter.h"
+#include "common/output_tools.h"
 
 void apk_status(jd_apk *apk)
 {
     pthread_mutex_lock(apk->threadpool->lock);
     apk->done++;
     fflush(stdout);
-    printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\bProgress : %d (%d)",
-           apk->done,
-           apk->added);
+    backspace(25);
+    printf("Progress : %d (%d)", apk->done, apk->added);
     fflush(stdout);
     pthread_mutex_unlock(apk->threadpool->lock);
 }
@@ -58,10 +58,9 @@ static void apk_task_start(jd_apk *apk)
         zip_entry_openbyindex(zip, i);
         string path_in_zip = (string)zip_entry_name(zip);
         if (!str_end_with(path_in_zip, ".dex")) {
-            zip_entry_close(zip); // only deal with .class files
+            zip_entry_close(zip); // only deal with .dex files
             continue;
         }
-        // printf("path in apk: %s\n", path_in_zip);
 
         char *buf = NULL;
         size_t buf_size;

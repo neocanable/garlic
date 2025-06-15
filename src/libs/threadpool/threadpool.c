@@ -52,7 +52,11 @@ threadpool_t* threadpool_create_in(mem_pool *mem_pool, int cnt, int flags)
     }
 
     for(i = 0; i < cnt; i++) {
-        if(pthread_create(&pool->threads[i], NULL, threadpool_thread, pool) != 0) {
+        int _result = pthread_create(&pool->threads[i],
+                                     NULL,
+                                     threadpool_thread,
+                                     pool);
+        if(_result != 0) {
             pthread_mutex_unlock(pool->lock);
             threadpool_destroy(pool, 0);
             return NULL;
@@ -95,9 +99,9 @@ int threadpool_add(threadpool_t *pool,
 
     do {
         if(pool->count == pool->queue_size) {
-            pool->queue = x_realloc(pool->queue,
-                                    sizeof(threadpool_task_t) * pool->queue_size,
-                                    pool->queue_size * 2 * sizeof(threadpool_task_t));
+            size_t old = sizeof(threadpool_task_t) * pool->queue_size;
+            size_t _new = pool->queue_size * 2 * sizeof(threadpool_task_t);
+            pool->queue = x_realloc(pool->queue,old,_new);
         }
 
         if(pool->shutdown) {
@@ -187,7 +191,8 @@ int threadpool_free(threadpool_t *pool)
 
 void thread_local_data_init(threadpool_t *pool, pthread_t tid) {
     pthread_once(&tls_init_once, create_tls_key);
-    thread_local_data *tls = x_alloc_in(pool->mem_pool, sizeof(thread_local_data));
+    mem_pool *mpool = pool->mem_pool;
+    thread_local_data *tls = x_alloc_in(mpool, sizeof(thread_local_data));
     if (!tls) {
         perror("Failed to allocate thread local storage");
         exit(EXIT_FAILURE);
