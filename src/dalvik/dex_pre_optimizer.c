@@ -64,7 +64,10 @@ static void modify_handler_start_to_goto_target(jd_method *m,
     // move-exception v0
     // move v1, v2
     // [12] bla bla
-    jd_bblock *prev_block = target_ins->prev->block;
+    jd_dex_ins *target_prev_ins = target_ins->prev;
+    if (target_prev_ins == NULL)
+        return;
+    jd_bblock *prev_block = target_prev_ins->block;
     jd_nblock *prev_nblock = prev_block->ub->nblock;
     jd_dex_ins *prev_start_ins = prev_nblock->start_ins;
     if (!dex_ins_is_move_exception(prev_start_ins))
