@@ -456,6 +456,10 @@ static void dex_cmp_expression(jd_exp *exp, jd_dex_ins *ins)
     compare->operator = dex_ins_operator(ins);
     jd_exp *left_cmp = &compare->list->args[0];
     jd_exp *right_cmp = &compare->list->args[1];
+    left_cmp->ins = ins;
+    right_cmp->ins = ins;
+    left_cmp->block = ins->block;
+    right_cmp->block = ins->block;
 
     u8 slot_a = dex_ins_parameter(ins, 1);
     u8 slot_b = dex_ins_parameter(ins, 2);

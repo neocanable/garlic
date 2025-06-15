@@ -940,6 +940,68 @@ static void remove_crossed_finally_handler(jd_method *m)
     }
 }
 
+static void remove_share_handler_finally(jd_method *m)
+{
+    // 某些finally在计算过程中，变成try块是某一个catch块的try块
+    // handler块对应着一个finally块，删除这样的exception
+    for (int i = 0; i < m->closed_exceptions->size; ++i) {
+        jd_exc *finally = lget_obj(m->closed_exceptions, i);
+        if (finally->catch_type_index > 0)
+            continue;
+        bool crossed = false;
+        for (int j = 0; j < m->closed_exceptions->size; ++j)
+        {
+            jd_exc *other = lget_obj(m->closed_exceptions, j);
+            if (other == finally)
+                continue;
+            if (finally->try_start >= other->handler_start &&
+                ((finally->handler_start >= other->try_start &&
+                  finally->handler_start <= other->try_end) || (finally->handler_start <= other->try_start))) {
+                crossed = true;
+                break;
+            }
+        }
+
+        if (crossed) {
+            // 这种情况是finally块和其他的catch块有交叉
+            // 那么就删除这个finally块
+            ldel_obj(m->closed_exceptions, finally);
+            i--;
+        }
+    }
+}
+
+static void remove_share_hanlder_catch(jd_method *m)
+{
+    // 某些catch在计算过程中，变成try块是某一个catch块的try块
+    // handler块对应着一个finally块，删除这样的exception
+    for (int i = 0; i < m->closed_exceptions->size; ++i) {
+        jd_exc *catch_block = lget_obj(m->closed_exceptions, i);
+        if (catch_block->catch_type_index == 0)
+            continue;
+        bool crossed = false;
+        for (int j = 0; j < m->closed_exceptions->size; ++j)
+        {
+            jd_exc *other = lget_obj(m->closed_exceptions, j);
+            if (other == catch_block)
+                continue;
+            if (catch_block->try_start >= other->handler_start &&
+                ((catch_block->handler_start >= other->try_start &&
+                  catch_block->handler_start <= other->try_end) || (catch_block->handler_start <= other->try_start))) {
+                crossed = true;
+                break;
+            }
+        }
+
+        if (crossed) {
+            // 这种情况是catch块和其他的catch块有交叉
+            // 那么就删除这个catch块
+            ldel_obj(m->closed_exceptions, catch_block);
+            i--;
+        }
+    }
+}
+
 static void remove_empty_catch_body_exception(jd_method *m)
 {
     /**
@@ -1105,6 +1167,12 @@ void cleanup_full_exception_table(jd_method *m)
     DEBUG_EXCEPTION_PRINT("\n2 ----------->\n");
     print_full_exception_table(m);
     expand_exception_with_jump(m);
+
+    DEBUG_EXCEPTION_PRINT("\n2.1 ----------->\n");
+    print_full_exception_table(m);
+    remove_share_handler_finally(m);
+    remove_share_hanlder_catch(m);
+
 
     DEBUG_EXCEPTION_PRINT("\n3 ----------->\n");
     print_full_exception_table(m);

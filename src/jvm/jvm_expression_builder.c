@@ -370,6 +370,8 @@ static void build_if_boolean_exp(jd_exp *condition, jd_ins *ins, jd_val *val0)
         build_stack_var_exp(single, val0);
         s->operator = JD_OP_LOGICAL_NOT;
         condition->data = s;
+        condition->ins = ins;
+        condition->block = ins->block;
     }
     else {
         condition->type = JD_EXPRESSION_SINGLE_LIST;
@@ -378,6 +380,8 @@ static void build_if_boolean_exp(jd_exp *condition, jd_ins *ins, jd_val *val0)
         jd_exp *single = &s->list->args[0];
         build_stack_var_exp(single, val0);
         condition->data = s;
+        condition->ins = ins;
+        condition->block = ins->block;
     }
 }
 

@@ -26,7 +26,9 @@ jd_exp_lambda* dex_lambda(jsource_file *jf, jd_exp_invoke *invoke)
     jd_exp *last_invoke = NULL;
     jd_dex_ins *method_last_ins = lget_obj_last(not_synthetic->instructions);
     if (dex_ins_is_return_void(method_last_ins)) {
-        size_t index = not_synthetic->expressions->size - 2;
+        int index = not_synthetic->expressions->size - 2;
+        if (index <= 0)
+            return NULL;
         last_invoke = lget_obj(not_synthetic->expressions, index);
     }
     else if (dex_ins_is_return_object(method_last_ins) ||
@@ -34,6 +36,8 @@ jd_exp_lambda* dex_lambda(jsource_file *jf, jd_exp_invoke *invoke)
             dex_ins_is_return_wide(method_last_ins)) {
         jd_exp *exp = method_last_ins->expression;
         jd_exp_return *ret = exp->data;
+        if (ret == NULL)
+            return NULL;
         last_invoke = &ret->list->args[0];
     }
     if (last_invoke == NULL || !exp_is_invoke(last_invoke))
@@ -42,9 +46,6 @@ jd_exp_lambda* dex_lambda(jsource_file *jf, jd_exp_invoke *invoke)
 
     jd_exp_invoke *last_exp_invoke = last_invoke->data;
 
-    DEBUG_PRINT("last invoke: %s\n", last_exp_invoke->method_name);
-    DEBUG_PRINT("current invoke<-------------------------->: %s\n",
-                invoke->method_name);
 
     // split invoke
     // if last_invoke is invoke_virtual, invoke_interface, invoke_direct

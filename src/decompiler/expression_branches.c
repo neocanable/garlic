@@ -748,7 +748,7 @@ static bool identify_if_branches(jd_method *m, jd_node *node, jd_bblock *block)
 //    }
 
     jd_node *true_node = true_block->node;
-    jd_node *false_node = false_block->node;
+//    jd_node *false_node = false_block->node;
 
     if (true_block == false_block)
         return false;

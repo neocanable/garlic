@@ -10,7 +10,6 @@ jd_var* stack_define_var(jd_method *m, jd_val *val, int slot)
     var->ins = val->ins;
     var->idx = m->stack_variables->size;
     var->cname = val->data->cname;
-
     var->name = str_create("v_%d", var->idx);
     val->stack_var = var;
     var->def_val = val;

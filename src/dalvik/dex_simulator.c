@@ -183,21 +183,59 @@ static void dex_fill_watch_successors(jd_method *m, jd_dex_ins *ins)
     }
 }
 
+// TODO: need refactor
+void merge_all_try_start_block(jd_method *m, jd_ins *ins)
+{
+    jd_mix_exception *result = NULL;
+    for (int i = 0; i < m->mix_exceptions->size; ++i) {
+        jd_mix_exception *e = lget_obj(m->mix_exceptions, i);
+        if (!is_list_empty(e->catches)) {
+            for (int j = 0; j < e->catches->size; ++j) {
+                jd_range *range = lget_obj(e->catches, j);
+                if (range->start_offset != ins->offset)
+                    continue;
+
+
+                jd_ins *start_ins = get_ins(m, e->try->start_idx);
+                if (start_ins->stack_in == NULL) continue;
+
+                if (ins->stack_in == NULL) {
+                    dex_exception_stack(m, ins, start_ins->stack_in);
+                } else {
+                    for (int k = 0; k < start_ins->stack_in->local_vars_count; ++k) {
+                        jd_val *val = start_ins->stack_in->local_vars[k];
+                        if (val == NULL) continue;
+                        ins->stack_in->local_vars[k] = val;
+                    }
+                }
+
+
+            }
+        }
+        if (e->finally != NULL && e->finally->start_offset == ins->offset) {
+            jd_ins *start_ins = get_ins(m, e->try->start_idx);
+            if (start_ins->stack_in == NULL) continue;
+
+            if (ins->stack_in == NULL) {
+                dex_exception_stack(m, ins, start_ins->stack_in);
+            } else {
+                for (int k = 0; k < start_ins->stack_in->local_vars_count; ++k) {
+                    jd_val *val = start_ins->stack_in->local_vars[k];
+                    if (val == NULL) continue;
+                    ins->stack_in->local_vars[k] = val;
+                }
+            }
+        }
+    }
+}
+
 static void dex_fill_visit_queue(jd_method *m, jd_dex_ins *ins)
 {
     for (int i = 0; i < m->ins_watch_successors->size; ++i) {
         jd_dex_ins *suc_ins = lget_obj(m->ins_watch_successors, i);
         int is_handler_start = ins_is_handler_start(m, suc_ins);
-        if (is_handler_start &&
-            block_can_execute(m, ins, suc_ins)) {
-            if (suc_ins->stack_in != NULL) {
-                merge_local_variables_for_exception_block(ins, suc_ins);
-            }
-            else {
-                suc_ins->stack_in = dex_exception_stack(m, suc_ins,
-                                                        ins->stack_out);
-                queue_add_object(m->ins_visit_queue, suc_ins);
-            }
+        if (is_handler_start && block_can_execute(m, ins, suc_ins)) {
+            merge_all_try_start_block(m, suc_ins);
         }
         else if (suc_ins->stack_in == NULL && !is_handler_start) {
             suc_ins->stack_in = stack_clone(ins->stack_out);
@@ -218,19 +256,12 @@ static void dex_ins_cb(jd_method *m, jd_dex_ins *ins)
 
 static void dex_process_instruction_action(jd_method *m, ins_action_cb cb)
 {
-    DEBUG_SSA_PRINT("[stack simulator]: %s \n", m->name);
     int times = 0;
     jd_dex_ins *ins = NULL;
     while ((ins = queue_pop_object(m->ins_visit_queue)) != NULL) {
         times ++;
         cb(m, ins);
     }
-
-    DEBUG_SSA_PRINT("[stack simulator]: %s process => %d, "
-                      "instruction: %d\n\n",
-                    m->name,
-                    times,
-                    m->ins_size);
 }
 
 void dex_simulator(jd_method *m)
@@ -240,7 +271,6 @@ void dex_simulator(jd_method *m)
     m->ins_watch_successors = linit_object();
     m->ins_visit_queue = queue_init_object();
     m->stack_variables = linit_object();
-    // m->offset2varidx_map = hashmap_init((hcmp_fn) i2i_cmp, 0);
     m->offset2var_map = hashmap_init((hcmp_fn)i2obj_cmp, 0);
     m->slot_counter_map = hashmap_init((hcmp_fn) i2i_cmp, 0);
     m->class_counter_map = hashmap_init((hcmp_fn) s2i_cmp, 0);
