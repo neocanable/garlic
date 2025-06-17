@@ -25,7 +25,6 @@ static jd_mix_exception* find_mix_exception(jd_method *m, jd_exc *ex)
 
 static void nop_instructions(jd_ins *from, jd_ins *to)
 {
-    /* 从from到to nop掉 */
     if (from == NULL || to == NULL)
         return;
 
@@ -52,7 +51,6 @@ static void reverse_compare_instruction(jd_method *m, jd_mix_exception *ex)
     jd_ins *try_start = get_ins(m, try->start_idx);
     jd_ins *try_end = get_ins(m, try->end_idx);
 
-    // 这里千万不能合并, finally最后以athrow和aload结尾
     if (jvm_ins_is_athrow(finally_end)) finally_end = finally_end->prev;
     if (jvm_ins_is_load(finally_end)) finally_end = finally_end->prev;
 

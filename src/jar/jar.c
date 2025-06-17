@@ -40,14 +40,13 @@ static string jar_cname_from_path(jd_jar *jar, string path)
     strncpy(output, start, len);
     output[len] = '\0';
 
-    // 4. 处理 Dalvik 格式的修饰符（'L' 开头和 ';' 结尾）
     if (output[0] == 'L') {
-        memmove(output, output + 1, len); // 移除开头的 'L'
+        memmove(output, output + 1, len);
         len--;
         output[len] = '\0';
     }
     if (len > 0 && output[len - 1] == ';') {
-        output[len - 1] = '\0'; // 移除结尾的 ';'
+        output[len - 1] = '\0';
     }
     return output;
 }
@@ -231,8 +230,6 @@ jsource_file* jar_entry_anonymous_analyse(jd_jar *jar,
                                         jd_jar_entry *entry,
                                         jsource_file *parent)
 {
-
-//    if (entry->jf == NULL) {
         jclass_file *jc = parse_class_content_from_jar_entry(entry);
         jsource_file *jf = jc->jfile;
         jf->jar = jar;
@@ -246,13 +243,6 @@ jsource_file* jar_entry_anonymous_analyse(jd_jar *jar,
 
         tire_merge(jf->imports, parent->imports);
         return jc->jfile;
-//    }
-//    else {
-//        jsource_file *_jf = entry->jf;
-//        _jf->parent = parent;
-//        _jf->source = parent->source;
-//        return _jf;
-//    }
 }
 
 jsource_file* jar_entry_analyse(jd_jar *jar,

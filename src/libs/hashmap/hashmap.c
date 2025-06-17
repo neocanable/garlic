@@ -136,7 +136,6 @@ static void rehash(struct hashmap *map, unsigned int newsize)
 			e = next;
 		}
 	}
-	//	free(oldtable);
 }
 
 static inline struct hashmap_entry **find_entry_ptr(const struct hashmap *map,

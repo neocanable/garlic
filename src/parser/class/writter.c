@@ -57,7 +57,6 @@ void print_code_section(jclass_file* jclass, jattr_code *code_attr)
     for (int j = 0; j < be32toh(code_attr->code_length); )
     {
         u1 opcode = code_attr->code[j];
-//        fprintf(stdout, "the code is: %02x\n", opcode);
         int param_length = get_opcode_param_length(jclass, opcode);
         switch (opcode) {
             case 0x00: {

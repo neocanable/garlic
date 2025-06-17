@@ -88,7 +88,6 @@ static void build_load_expression(jd_exp *exp, jd_ins *ins)
     right->type = JD_EXPRESSION_LOCAL_VARIABLE;
     right->ins = ins;
     right->data = val;
-    // val->stack_var->use_count++;
 }
 
 static void build_store_expression(jd_exp *exp, jd_ins *ins)
@@ -272,8 +271,6 @@ static void build_anonymous_expression(jd_ins *ins, jd_exp_invoke *invoke)
     if (!class_has_flag(inner_jc, CLASS_ACC_SYNTHETIC)) {
         return;
     }
-
-    // printf("anonymous class: %s\n", inner_jf->fname);
 
     jd_exp_anonymous *anonymous_exp = make_obj(jd_exp_anonymous);
     anonymous_exp->list = invoke->list;
@@ -676,8 +673,6 @@ static void build_return_expression(jd_exp *exp, jd_ins *ins)
 static void build_last_void_return(jd_exp *exp, jd_ins *ins)
 {
     jd_method *m = ins->method;
-//    uint32_t index = m->ins_size - 1;
-//    jd_ins *last_ins = &m->instructions[index];
     jd_ins *last_ins = lget_obj_last(m->instructions);
     if (last_ins == ins && jvm_ins_is_voidreturn(ins))
         exp_mark_nopped(exp);
@@ -704,7 +699,6 @@ static void build_get_static_expression(jd_exp *exp, jd_ins *ins)
 
     jd_exp_get_static *get_static = make_obj(jd_exp_get_static);
     jd_val *val = ins->stack_out->vals[0];
-//    get_static->cname = val->data->cname;
     get_static->class_name = val->data->cname;
 
     u2 index = be16toh(ins->param[0] << 8 | ins->param[1]);
@@ -725,7 +719,6 @@ static void build_put_static_expression(jd_exp *exp, jd_ins *ins)
     jcp_info *info = pool_item(ins->method->meta, index);
 
     jd_exp_put_static *put_static = make_obj(jd_exp_put_static);
-//    jd_var *var = &ins->stack_action->popped[0];
     string full_name = get_field_class(jc, info);
     put_static->class_name = class_simple_name(full_name);
     put_static->name = get_field_name(jc, info);
@@ -1015,15 +1008,6 @@ static void build_pop_expression(jd_exp *exp, jd_ins *ins)
         if (prev_exp)
             exp_mark_nopped(prev_exp);
     }
-
-//    if (jvm_ins_is_load(val->ins)) {
-//        // fix some bug: pop a load
-//        jd_exp *prev_exp = val->ins->expression;
-//        if (prev_exp)
-//            exp_mark_nopped(prev_exp);
-//
-//        val->stack_var->def_count --;
-//    }
 }
 
 static void build_stack_var_copy(jd_method *m, jd_exp *exp, jd_ins *ins)
@@ -1068,7 +1052,6 @@ static void build_lambda_expression(jd_exp *exp, jd_lambda *lda, jd_method *tm)
         lambda_expression = assignment->right;
     }
     else {
-        // (exp_is_invoke(exp))
         invoke = exp->data;
         lambda_expression = exp;
     }
@@ -1437,122 +1420,9 @@ void instruction_to_expression(jd_method *m)
         expression->block = ins->block;
         ladd_obj(m->expressions, expression);
 
-//        build_stack_var_copy(m, expression, ins);
-
         if (exp_is_invokedynamic(expression)) {
             follow_lambda(m, expression);
             identify_string_concat_expression(m, expression);
         }
     }
 }
-
-
-#if false
-static void build_dup_expression_v1(jd_exp *exp, jd_ins *ins)
-{
-    exp->type = JD_EXPRESSION_EMPTY;
-    exp->ins = ins;
-
-    switch (ins->code) {
-        case INS_DUP:
-        case INS_DUP_X1:
-        case INS_DUP_X2: {
-            jd_val *item0 = ins->stack_in->vals[0];
-            jd_var *var0 = item0->stack_var;
-            var0->dupped_count ++;
-            var0->def_count ++;
-            break;
-        }
-        case INS_DUP2: {
-            jd_val *item0 = ins->stack_in->vals[0];
-            if (jd_stack_val_is_compute_category2(item0)) {
-                jd_var *var0 = item0->stack_var;
-                var0->dupped_count ++;
-                var0->def_count ++;
-            }
-            else {
-                jd_var *var0 = item0->stack_var;
-                jd_val *item1 = ins->stack_in->vals[1];
-                jd_var *var1 = item1->stack_var;
-                var0->dupped_count ++;
-                var1->dupped_count ++;
-
-                var0->def_count ++;
-                var1->def_count ++;
-            }
-            break;
-        }
-        case INS_DUP2_X1: {
-            jd_val *item0 = ins->stack_in->vals[0];
-            jd_val *item1 = ins->stack_in->vals[1];
-            jd_var *var0 = item0->stack_var;
-            jd_var *var1 = item1->stack_var;
-            if (jd_stack_val_is_compute_category2(item0) &&
-                jd_stack_val_is_compute_category1(item1)) {
-                // ..., value2, value1 →
-                // ..., value1, value2, value1
-                var0->dupped_count ++;
-                var0->def_count ++;
-            }
-            else {
-                // ..., value3, value2, value1 →
-                // ..., value2, value1, value3, value2, value1
-                var0->dupped_count ++;
-                var1->dupped_count ++;
-
-                var0->def_count ++;
-                var1->def_count ++;
-            }
-            break;
-        }
-        case INS_DUP2_X2: {
-            jd_val *item0 = ins->stack_in->vals[0];
-            jd_val *item1 = ins->stack_in->vals[1];
-            jd_var *var0 = item0->stack_var;
-            jd_var *var1 = item1->stack_var;
-
-            if (jd_stack_val_is_compute_category2(item0) &&
-                jd_stack_val_is_compute_category2(item1)) {
-                // ..., value2, value1 →
-                //..., value1, value2, value1
-                var0->dupped_count ++;
-                var0->def_count ++;
-                break;
-            }
-            jd_val *item2 = ins->stack_in->vals[2];
-
-            if (jd_stack_val_is_compute_category2(item0) &&
-                jd_stack_val_is_compute_category1(item1) &&
-                jd_stack_val_is_compute_category1(item2)) {
-                // ..., value3, value2, value1 →
-                // ..., value1, value3, value2, value1
-                var0->dupped_count ++;
-                var0->def_count ++;
-                break;
-            }
-
-            if (jd_stack_val_is_compute_category1(item0) &&
-                jd_stack_val_is_compute_category1(item1) &&
-                jd_stack_val_is_compute_category2(item2)) {
-                // ..., value3, value2, value1 →
-                // ..., value2, value1, value3, value2, value1
-                var0->dupped_count ++;
-                var1->dupped_count ++;
-
-                var0->def_count ++;
-                var1->def_count ++;
-                break;
-            }
-
-            // ..., value4, value3, value2, value1 →
-            // ..., value2, value1, value4, value3, value2, value1
-            var0->dupped_count ++;
-            var1->dupped_count ++;
-
-            var0->def_count ++;
-            var1->def_count ++;
-        }
-    }
-
-}
-#endif

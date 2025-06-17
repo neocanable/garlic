@@ -645,7 +645,6 @@ static void parse_dex_code_debug_item(jd_meta_dex *dex, dex_code_item *code)
         itor++;
     }
 
-//#if 0
     dbg_opcode = 0;
     u4 address = 0;
     u4 line = 0;
@@ -723,7 +722,6 @@ static void parse_dex_code_debug_item(jd_meta_dex *dex, dex_code_item *code)
             }
         }
     }
-//#endif
 }
 
 static void parse_dex_code_item(jd_meta_dex *dex, encoded_method *em)

@@ -307,34 +307,6 @@ jd_node* loop_to_node(jd_method *m, jd_node *parent, jd_loop *loop)
 
 static void find_loop_content(jd_loop *loop, jd_node *node, jd_bblock *block)
 {
-//    queue_object *queue = queue_init_object();
-//    for (int i = 0; i < block->in->size; ++i) {
-//        jd_edge *edge = lget_obj(block->in, i);
-//        jd_bblock *source = edge->source_block;
-//        if (lcontains_obj(block->dominates, source))
-//            queue_push_object(queue, source);
-//    }
-//
-//    while (queue->size > 0) {
-//        jd_bblock *added = queue_pop_object(queue);
-//        if (basic_block_is_normal_live(added) &&
-//            lcontains_obj(block->dominates, added) &&
-//            !lcontains_obj(loop->blocks, added)) {
-//            ladd_obj_no_dup(loop->blocks, added);
-//            for (int i = 0; i < added->in->size; ++i) {
-//                jd_edge *edge = lget_obj(block->in, i);
-//                jd_bblock *source = edge->source_block;
-//                if (lcontains_obj(block->dominates, source))
-//                    queue_push_object(queue, source);
-//            }
-//        }
-//    }
-//    ladd_obj_no_dup(loop->blocks, block);
-//    for (int i = 0; i < loop->blocks->size; ++i) {
-//        jd_bblock *b = lget_obj(loop->blocks, i);
-//        printf("[loop content]: blk: %d\n", b->block_id);
-//    }
-
     if (block->visited)
         return;
     else
@@ -367,8 +339,8 @@ static void loop_content_with_exit_block(jd_method *m,
             jd_exp *source_end_exp = get_exp(m, source_nblock->end_idx);
             jd_exp *exit_start_exp = get_exp(m, exit_nblock->start_idx);
             jd_ins *source_end_ins = source_end_exp->ins;
-            // 如果source的end_ins是switch
-            // 并且switch的default target是loop的header
+            // if source's end instruction is swith
+            // then switch's default target is loop's header
             if (source_end_ins != NULL &&
                 source_end_ins->fn->is_switch(source_end_ins) &&
                 switch_contains_offset(source_nblock->end_ins,
@@ -488,37 +460,6 @@ static void loop_content_with_preheader(jd_method *m,
                 ladd_obj_no_dup(loop->blocks, exit_block);
         }
     }
-
-
-
-//    jd_bblock *header = loop_first_block(loop);
-//    jd_bblock *last = loop_last_block(loop);
-//    jd_bblock *preheader = block_by_id(m, header->block_id - 1);
-//    while (preheader != NULL) {
-//        if (!basic_block_is_normal_live(preheader))
-//            break;
-//        jd_nblock *prenblock = preheader->ub->nblock;
-//        jd_exp *exp = get_exp(m, prenblock->end_idx);
-//
-//        if (!exp_is_if(exp) || exp_is_nopped(exp)) {
-//            preheader = block_by_id(m, preheader->block_id-1);
-//            continue;
-//        }
-//        jd_exp_if *exp_if = exp->data;
-//        uint32_t offset = exp_if->offset;
-//        jd_exp *target_exp = exp_of_offset(m, offset);
-//        if (target_exp->idx > last->ub->nblock->end_idx) {
-//            compute_dominates_block(m, preheader);
-//            for (int k = 0; k < preheader->dominates->size; ++k) {
-//                jd_bblock *c = lget_obj(preheader->dominates, k);
-//                if (!basic_block_is_normal_live(c))
-//                    continue;
-//                if (c->ub->nblock->start_idx > last->ub->nblock->end_idx)
-//                    ladd_obj_no_dup(loop->blocks, c);
-//            }
-//        }
-//        break;
-//    }
 }
 
 static void identify_loops_recursive(jd_method *m,

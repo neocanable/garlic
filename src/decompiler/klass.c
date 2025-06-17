@@ -108,23 +108,6 @@ string class_path_to_short(string class_name)
     strncpy(simple_name, start, len);
     simple_name[len] = '\0';
     return simple_name;
-
-//    printf("full class name: %s\n", class_name);
-//    size_t len = strlen(class_name);
-//    size_t start_index = len - 1;
-//    if (class_name[start_index] == ';')
-//        len --;
-//
-//    char c = class_name[start_index];
-//    while (c != '/' && c > 0) {
-//        start_index--;
-//        c = class_name[start_index];
-//    }
-//    size_t simple_len = len - (start_index + 1);
-//    string simple_name = x_alloc(simple_len + 1);
-//    memcpy(simple_name, class_name + start_index + 1, simple_len);
-//    simple_name[simple_len] = '\0';
-//    return simple_name;
 }
 
 void cut_generic_type_from_class_name(string class_name)

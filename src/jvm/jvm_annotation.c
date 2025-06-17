@@ -105,7 +105,6 @@ static string element_pair_to_s(jclass_file *jc, annotation *ano, anno_evp *p)
 string annotation_to_s(jclass_file *jc, annotation *ano)
 {
     string type_index_str = pool_str(jc, ano->type_index);
-//    import_class(jc->jfile, class_full_name(type_index_str));
     class_import(jc->jfile, class_full_name(type_index_str));
     string type_name = descriptor_to_annotation_name(type_index_str);
     if (be16toh(ano->num_element_value_pairs) == 0)

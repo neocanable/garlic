@@ -144,7 +144,6 @@ static void jvm_run_array_load_local_variable(jd_ins *ins)
          return;
     jd_stack *stack_in  = ins->stack_in;
     jd_stack *stack_out = ins->stack_out;
-    // 找到array对应的local variable
     jd_val *push_val = stack_out->vals[0];
     jd_val *popped_array_var = stack_in->vals[1];
 
@@ -195,8 +194,6 @@ static void jvm_run_stable_instruction_action(jd_ins *ins)
     int tmp_pushed = 0;
 
     if (ins->pushed_cnt > 0) {
-        // 除了几个动态的instruction外
-        // 其余的instruction push到栈上的都是0或者1
         for (int i = 0; i < ins->pushed_cnt; ++i) {
             jd_val *val = stack_create_empty_val();
             val->ins = ins;

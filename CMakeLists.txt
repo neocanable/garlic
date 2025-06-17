@@ -15,8 +15,8 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif ()
 
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os")
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -flto")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -flto")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-strict-aliasing")
 
 if (UNIX)
@@ -91,8 +91,8 @@ if (WIN32)
 endif ()
 
 if (UNIX)
-#    add_custom_command(
-#            TARGET garlic POST_BUILD
-#            COMMAND strip $<TARGET_FILE:garlic>
-#    )
+    add_custom_command(
+            TARGET garlic POST_BUILD
+            COMMAND strip $<TARGET_FILE:garlic>
+    )
 endif ()

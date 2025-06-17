@@ -734,19 +734,6 @@ static bool identify_if_branches(jd_method *m, jd_node *node, jd_bblock *block)
     jd_bblock *true_block = jump_exp->block;
     jd_bblock *false_block = next_exp->block;
 
-//    jd_bblock *true_block = NULL;
-//    jd_bblock *false_block = NULL;
-//    for (int i = 0; i < block->out->size; ++i) {
-//        jd_edge *edge = lget_obj(block->out, i);
-//        jd_bblock *target = edge->target_block;
-//        if (!basic_block_is_normal_live(target)) continue;
-//
-//        if (target->ub->nblock->start_offset == if_exp->offset)
-//            true_block = target;
-//        else
-//            false_block = target;
-//    }
-
     jd_node *true_node = true_block->node;
 //    jd_node *false_node = false_block->node;
 
