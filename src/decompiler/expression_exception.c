@@ -31,3 +31,29 @@ void optimize_exception_block(jd_method *m)
         i --;
     }
 }
+
+void identify_empty_exception_blocks(jd_method *m)
+{
+    for (int i = 0; i < m->nodes->size; ++i) {
+        jd_node *node = lget_obj(m->nodes, i);
+        if (!node_is_exception(node))
+            continue;
+
+        bool has_expression = false;
+        for (int j = 0; j < node->children->size; ++j) {
+            jd_node *child = lget_obj(node->children, j);
+            for (int k = child->start_idx; k <= child->end_idx; ++k) {
+                jd_exp *e = get_exp(m, k);
+                if (!exp_is_nopped(e)) {
+                    has_expression = true;
+                }
+            }
+            if (has_expression) break;
+        }
+
+        if (!has_expression) {
+            ldel_obj(m->nodes, node);
+            i--;
+        }
+    }
+}
