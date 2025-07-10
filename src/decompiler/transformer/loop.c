@@ -20,7 +20,7 @@ void exp_break_to_stream(FILE *stream, jd_node *node, jd_exp *expression)
     if (DEBUG_INS_AND_NODE_INFO)
         fprintf(stream, "break; // %u", exp_goto->goto_offset);
     else
-        fprintf(stream, "break;");
+        fprintf(stream, "break");
 }
 
 string exp_continue_to_s(jd_exp *expression)
@@ -31,7 +31,7 @@ string exp_continue_to_s(jd_exp *expression)
         return str;
     }
     else {
-        return str_create("continue;");
+        return str_create("continue");
     }
 }
 
@@ -41,7 +41,7 @@ void exp_continue_to_stream(FILE *stream, jd_node *node, jd_exp *expression)
     if (DEBUG_INS_AND_NODE_INFO)
         fprintf(stream, "continue; // %u", exp_goto->goto_offset);
     else
-        fprintf(stream, "continue;");
+        fprintf(stream, "continue");
 }
 
 static string exp_loop_to_s(jd_exp *expression, string loop_name)
