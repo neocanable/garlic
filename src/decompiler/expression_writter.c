@@ -473,8 +473,17 @@ static void write_notice(jsource_file *jf)
 static void write_import(jsource_file *jf)
 {
     FILE *stream = file_output(jf);
-    if (jf->pname != NULL)
-        fprintf(stream, "package %s;\n\n", jf->pname);
+    if (jf->pname != NULL) {
+        fprintf(stream, "package ");
+        for (int i = 0; i < strlen(jf->pname); ++i) {
+            unsigned char c = jf->pname[i];
+            if (c == '/')
+                fprintf(stream, ".");
+            else
+                fprintf(stream, "%c", c);
+        }
+        fprintf(stream, ";\n\n");
+    }
 
     trie_leaf_to_stream(jf->imports, stream);
     fprintf(stream, "\n");
