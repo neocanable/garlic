@@ -3,6 +3,8 @@
 
 English | [Chinese](https://github.com/neocanable/garlic/blob/main/README.CN.md)
 
+The world's fastest apk (android)/java open source decompiler
+
 Android/Java decompiler written in C
 
 Tool for produces java source code from class/jar/dex/apk file
