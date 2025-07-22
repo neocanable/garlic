@@ -17,9 +17,11 @@
 
 ### 编译
 
-**编译环境**:  cmake版本: >=**3.26**
+##### 1. 在Linux/macOS上编译
 
-**没有其它依赖**
+​	**编译环境**:  cmake版本: >=**3.26**
+
+​	**没有其它依赖**
 
 ```sh
 git clone https://github.com/neocanable/garlic.git
@@ -29,23 +31,29 @@ cmake --build build
 ./build/garlic
 ```
 
+##### 2. 在windows上编译
+
+​	请查看在[windows编译方法](https://github.com/neocanable/garlic/blob/main/docs/build-garlic-on-windows.md)
+
+
+
 ### 使用方法
 
 * 反编译apk
   ```sh
   garlic /path/to/android.apk
-
+  
   garlic /path/to/android.apk -o /path/to/save # -o 选项是源码输出的目录
-
+  
   garlic /path/to/android.apk -t 5             # -t 选项是线程数量, 默认是4
   ```
 
 * 反编译dex
   ```sh
   garlic /path/to/classes.dex
-
+  
   garlic /path/to/classes.dex -o /path/to/save # -o 选项是源码输出的目录
-
+  
   garlic /path/to/classes.dex -t 5             # -t 选项是线程数量, 默认是4
   ```
 
@@ -60,7 +68,7 @@ cmake --build build
 * 反编译 jar 文件
     ```sh
     garlic /path/to/file.jar
-
+    
     garlic /path/to/file.jar -o /path/to/save # -o 选项是源码输出的目录
     
     garlic /path/to/file.jar -t 4             # -t 选项是线程数量, 默认是4
@@ -70,7 +78,7 @@ cmake --build build
 
 
 * javap 
-    
+  
     像javap，比javap快一些，关闭了LineNumber和StackMapTable属性输出。
     ```sh
     garlic /path/to/jvm.class -p
@@ -79,7 +87,7 @@ cmake --build build
 * dexdump
     ```sh
     garlic /path/to/dalvik.dex -p 
-
+    
     ```
 
 ### 速度

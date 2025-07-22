@@ -20,9 +20,11 @@ Tool for produces java source code from class/jar/dex/apk file
 
 ### Build
 
-**requirements**: cmake >= **3.26**
+##### 1. Build on linux/macOS 
 
-**No other dependencies**
+​	**requirements**: cmake >= **3.26**
+
+​	**No other dependencies**
 
 ```sh
 git clone https://github.com/neocanable/garlic.git
@@ -32,23 +34,31 @@ cmake --build build
 ./build/garlic
 ```
 
+
+
+##### 2. Build on Windows
+
+please check the [windows build document](https://github.com/neocanable/garlic/blob/main/docs/build-garlic-on-windows.md)
+
+
+
 ### Usage
 
 * decompile apk
   ```sh
   garlic /path/to/android.apk
-
+  
   garlic /path/to/android.apk -o /path/to/save # -o option is source code output path
-
+  
   garlic /path/to/android.apk -t 5             # -t option is thread count, default is 4
   ```
 
 * decompile .dex file
   ```sh
   garlic /path/to/classes.dex
-
+  
   garlic /path/to/classes.dex -o /path/to/save # -o option is source code output path
-
+  
   garlic /path/to/classes.dex -t 5             # -t option is thread count, default is 4
   ```
 
@@ -63,7 +73,7 @@ cmake --build build
 * decompile jar file
     ```sh
     garlic /path/to/file.jar
-
+    
     garlic /path/to/file.jar -o /path/to/save # -o option is source code output path
     
     garlic /path/to/file.jar -t 5             # -t option is thread count, default is 4
@@ -73,7 +83,7 @@ cmake --build build
 
 
 * javap 
-    
+  
     like javap, more faster, disabled LineNumber and StackMapTable attributes
     ```sh
     garlic /path/to/jvm.class -p
@@ -82,7 +92,7 @@ cmake --build build
 * dexdump
     ```sh
     garlic /path/to/dalvik.dex -p           
-
+    
     ```
 
 
