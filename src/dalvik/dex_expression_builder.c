@@ -835,7 +835,9 @@ static void dex_invoke_expression(jd_exp *exp, jd_dex_ins *ins)
         dex_class_def *cf = hget_u4obj(meta->synthetic_classes_map,
                                        method_id->class_idx);
 
-        if (cf != NULL && !is_nested_inner_class(cf, jf)) {
+        if (cf != NULL &&
+            !is_nested_inner_class(cf, jf) &&
+            dex_class_is_anonymous_class(meta, cf)) {
             jsource_file *_inner = dex_class_inside(dex, cf, jf);
             _inner->parent = ins->method->jfile;
             _inner->source = _inner->parent->source;
@@ -950,7 +952,7 @@ static void dex_invoke_range_expression(jd_exp *exp, jd_dex_ins *ins)
         dex_class_def *cf = hget_u4obj(meta->synthetic_classes_map,
                                        method_id->class_idx);
         jd_dex *dex = ins->method->meta;
-        if (cf != NULL) {
+        if (cf != NULL && dex_class_is_anonymous_class(meta, cf)) {
             jsource_file *_inner = dex_class_inside(dex, cf, jf);
             lambda_exp = dex_lambda(_inner, invoke);
             if (lambda_exp != NULL)
