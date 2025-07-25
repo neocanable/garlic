@@ -1,0 +1,13 @@
+# macos: brew install i686-unknown-linux-gnu
+
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSTEM_PROCESSOR x86_64)
+
+set(CMAKE_C_COMPILER i686-linux-gnu-gcc)
+
+set(STRIP_COMMAND i686-linux-gnu-strip)
+set(PLATFORM_NAME linux-i686)
+
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
