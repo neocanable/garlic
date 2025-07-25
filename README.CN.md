@@ -15,6 +15,13 @@
 * 反编译jar文件
 * 反编译war文件
 
+### 安装
+
+* macos/linux
+``` shell
+brew install neocanable/decompiler/garlic
+```
+
 ### 编译
 
 ##### 1. 在Linux/macOS上编译
