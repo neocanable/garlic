@@ -17,6 +17,13 @@ Tool for produces java source code from class/jar/dex/apk file
 * decompile jar file
 * decompile war file
 
+### Install
+
+* macos/linux
+``` shell
+brew install neocanable/decompiler/garlic
+```
+
 
 ### Build
 
@@ -24,7 +31,6 @@ Tool for produces java source code from class/jar/dex/apk file
 
 ​	**requirements**: cmake >= **3.26**
 
-​	**No other dependencies**
 
 ```sh
 git clone https://github.com/neocanable/garlic.git
