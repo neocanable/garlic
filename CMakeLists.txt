@@ -80,22 +80,45 @@ set(JAVA_DEC
         ${THREADPOOL}
 )
 
+if (DEFINED PLATFORM_NAME)
+add_executable(garlic-${PLATFORM_NAME} 
+        ${JAVA_DEC}
+        src/garlic.c
+)
+else()
 add_executable(garlic 
         ${JAVA_DEC}
         src/garlic.c
 )
+endif()
+
 
 if (UNIX)
-    target_link_libraries(garlic pthread)
+    if(DEFINED PLATFORM_NAME)
+        target_link_libraries(garlic-${PLATFORM_NAME} pthread)
+    else()
+        target_link_libraries(garlic pthread)
+    endif()
 endif ()
 
 if (WIN32)
-    target_link_libraries(garlic ws2_32)
+    if (DEFINED PLATFORM_NAME)
+        target_link_libraries(garlic-${PLATFORM_NAME} ws2_32)
+    else()
+         target_link_libraries(garlic ws2_32)   
+    endif()
 endif ()
 
-if (UNIX)
-    add_custom_command(
-            TARGET garlic POST_BUILD
-            COMMAND strip $<TARGET_FILE:garlic>
-    )
+if (DEFINED STRIP_COMMAND)
+    if (DEFINED PLATFORM_NAME)
+        add_custom_command(
+                TARGET garlic-${PLATFORM_NAME} POST_BUILD
+                COMMAND ${STRIP_COMMAND} $<TARGET_FILE:garlic-${PLATFORM_NAME}>
+        )
+    else()
+        add_custom_command(
+                TARGET garlic POST_BUILD
+                COMMAND ${STRIP_COMMAND} $<TARGET_FILE:garlic>
+        )
+    endif()
 endif ()
