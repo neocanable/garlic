@@ -10,24 +10,9 @@ static void need_insert_initializer(jd_method *m,
                                     jd_exp *local_variable_exp,
                                     jd_node *node)
 {
-    // 这里需要处理局部变量初始化的问题
-    // stack_var = local_variable = 20
-    // 在inline stack_var的时候，需要知道local_variable是否已经初始化了
-    // 如果local_variable没有初始化，需要标记将local_variable初始化
-
-    // synchronized的会单独定义一个局部变量
-    // 这个局部变量源代码不可见
     jd_exp *next = get_exp(m, saved_exp->idx + 1);
     if (next != NULL && exp_is_monitor_enter(next))
         return;
-
-    // TODO:
-//    if (exp_is_local_variable(local_variable_exp)) {
-//        jd_val *local_variable = local_variable_exp->data;
-//        if (local_variable->state == JD_LOCAL_VAR_DEF ||
-//            local_variable->state == JD_LOCAL_VAR_REDEF)
-//            add_local_variable(m, local_variable, node);
-//    }
 }
 
 static bool identify_assignment_chain_of_basic_block(jd_method *m,
@@ -51,13 +36,6 @@ static bool identify_assignment_chain_of_basic_block(jd_method *m,
                     def_var->use_count,
                     def_var->store_count,
                     def_var->use_count - def_var->store_count);
-
-//        if (stack_var_can_inline(def_var) &&
-//            def_var->use_count - def_var->store_count != 1) {
-//            // 如果一个stack_var可以被inline
-//            // 那么这个stack_var就不需被做成赋值链
-//            continue;
-//        }
 
         if (stack_var_can_inline(def_var)) {
             continue;

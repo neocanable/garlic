@@ -85,7 +85,6 @@ void identify_boolean_in_if(jd_method *m)
             jd_exp_const *const_exp = right->data;
             if (const_exp->val->data->primitive == NULL)
                 continue;
-            // TODO: NEo 需要检查是否是boolean类型的,需要make_logic_not
 
         }
     }

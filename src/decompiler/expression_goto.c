@@ -130,7 +130,6 @@ static void optimize_goto_in_case(jd_method *m, jd_node *node, jd_node *target)
 
 static void optimize_goto_in_loop(jd_method *m, jd_node *node, jd_node *target)
 {
-    // 如果树上有loop, 首先检查target_node和loop的关系
     // 1. target_node->idx > loop->end_idx break;
     // 2. target_node->idx == loop->last_idx && loop_last is go_back
     //  continue
@@ -242,21 +241,11 @@ static bool optimize_goto_core(jd_method *m, jd_node *node)
         optimize_goto_in_case(m, node, target);
     }
     else if (target->start_idx < exp->idx) {
-        // 如果goto跳转到的目标在goto之前
-        // 跳转到到地方没有case/loop
-        // 那么goto不应该被删除, goto跳转到到是一个label
     }
     else if ((parent_next != NULL &&
             (node_is_ancestor_of(parent_next, target) ||
              parent_next == target)) ||
              parent_next == NULL) {
-        // 1. 需要判断start_idx是否相等, 不同的node可能有相同的start_idx
-        // 2. parent_next是空, 那么是当前节点是最后一个节点
-        // 3. 如果没有try/catch/finally, 且goto的目标在parent_next之后
-        // goto可以删除掉
-
-        // TODO: NEo 这里不应该用node_is_ancestor_of, 应该确定target
-        // 是parent_next到第一个子节点(递归形式的)或者就是parent_next
         DEBUG_GOTO_OPTIMIZE_PRINT("[goto optimized]: %s %d\n",
                                   m->name,
                                   exp->ins->offset);

@@ -58,7 +58,6 @@ static void modify_handler_start_to_goto_target(jd_method *m,
     u4 offset = dex_goto_offset(end_ins);
     jd_dex_ins *target_ins = dex_ins_of_offset(m, offset);
 
-    // 这里是catch共享基本块的情况
     // move-exception v0
     // goto 12
     // move-exception v0
@@ -127,10 +126,6 @@ static void optimize_goto_to_return(jd_method *m)
 
 void optimize_move_exception_goto(jd_method *m)
 {
-    // d8和dx都有这项优化
-    // 在某个基本块前面插入另外一个exception的基本块
-    // 插入的基本块只有两条move-exception和goto
-    // goto的target是真正的exception handler
     for (int i = 0; i < m->basic_blocks->size; ++i) {
         jd_bblock *b = lget_obj(m->basic_blocks, i);
         if (b->type != JD_BB_NORMAL)
@@ -193,7 +188,6 @@ static void optimize_share_suffix_v2(jd_method *m)
                 cfg_unlink_blocks(sb, b);
                 create_link_edge(sb, out_block);
 
-                // TODO: 如果nb->end_idx是一个return, 那么需要将goto_ins nop掉
                 for (int k = nb->start_idx; k <= nb->end_idx ; ++k) {
                     jd_dex_ins *ins = get_dex_ins(m, k);
                     if (dex_ins_is_goto_jump(ins) && ins == nb->end_ins)

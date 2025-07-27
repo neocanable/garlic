@@ -6,29 +6,22 @@
 
 #include "libs/str/str.h"
 
-// 检查字符是否是合法的 Java 标识符首字符
 static bool is_java_identifier_start(char c)
 {
     return (isalpha(c) || c == '_' || c == '$');
 }
 
-// 检查字符是否是合法的 Java 标识符后续字符
 static bool is_java_identifier_part(char c)
 {
     return (isalnum(c) || c == '_' || c == '$');
 }
 
-// 检查字符串是否是合法的 Java 标识符
 static bool is_valid_java_identifier(const char *str,
                                      int start_pos,
                                      int end_pos)
 {
     if (start_pos >= end_pos) return false;
-
-    // 检查首字符
     if (!is_java_identifier_start(str[start_pos])) return false;
-
-    // 检查后续字符
     for (int i = start_pos + 1; i < end_pos; i++) {
         if (!is_java_identifier_part(str[i])) return false;
     }
@@ -46,10 +39,7 @@ bool is_inner_class(string class_name)
     int dollar_idx = dollar_pos - class_name;
     int len = strlen(class_name);
 
-    // $ 不能在开头或结尾
     if (dollar_idx == 0 || dollar_idx == len - 1) return 0;
-
-    // 检查 $ 前后的子串是否合法
     int valid_outer = is_valid_java_identifier(class_name, 0, dollar_idx);
     int valid_inner = is_valid_java_identifier(class_name, dollar_idx+1, len);
 

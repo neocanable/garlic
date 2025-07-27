@@ -129,7 +129,6 @@ static bool identify_initialize_of_store(jd_method *m, jd_exp *exp, int i)
         invoke_exp->data = initialize;
         invoke_exp->type = JD_EXPRESSION_INITIALIZE;
 
-        // alloc 和 invoke_direct 是原子性的
         jd_val *val = left->data;
         jd_var *var = val->stack_var;
         if (var != NULL)

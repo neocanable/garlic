@@ -102,8 +102,6 @@ int32_t jvm_switch_default_offset(jd_ins *ins)
 
 void jvm_rename_goto2return(jd_method *m)
 {
-    // TODO: 需要把这个函数在分析完成后就调用, 在这个函数中
-    // TODO: 在build m instruction graph之前调用
     for (int i = 0; i < m->instructions->size; ++i) {
         jd_ins *ins = lget_obj(m->instructions, i);
         if (jvm_ins_is_goto(ins) || jvm_ins_is_goto_w(ins)) {

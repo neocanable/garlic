@@ -36,17 +36,9 @@ int identify_synchronized(jd_method *m)
         if (exp == NULL || !exp_is_monitor_enter(exp))
             continue;
 
-        /**
-         * synchronized的finally逻辑
-         * 1. 创建一个throwable的异常, store到一个局部变量中
-         * 2. 释放对象上的锁
-         * 3. 抛出异常
-         **/
         jd_node *finally = child_of_type(node, JD_NODE_FINALLY);
         if (finally == NULL)
             continue;
-
-        // exp_mark_nopped(exp);
 
         jd_node *try = child_of_type(node, JD_NODE_TRY);
         ldel_obj(node->children, finally);
@@ -57,7 +49,6 @@ int identify_synchronized(jd_method *m)
         int index = lfind_object(parent->children, node);
         ladd_obj_at(parent->children, try, index);
         ldel_obj(parent->children, node);
-        // node->parent = NULL;
         try->parent = parent;
         try->type = JD_NODE_SYNCHRONIZED;
         ldel_obj(m->nodes, node);

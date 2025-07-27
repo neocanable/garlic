@@ -670,9 +670,6 @@ static inline void build_dex_ins_staticop_act(jd_dex_ins *ins)
 
 static inline void build_dex_ins_invoke_act(jd_dex_ins *ins)
 {
-    // TODO: 这里需要根据方法的参数类型来校正jd_val的class name
-    //       invoke和invoke-range都需要校正
-
     jd_dex *dex = ins->method->meta;
     jd_meta_dex *meta = dex->meta;
     u1 param_size = dex_ins_parameter(ins, 0);

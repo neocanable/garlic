@@ -985,10 +985,6 @@ static void remove_empty_catch_body_exception(jd_method *m)
 
 static void remove_useless_finally_exception(jd_method *m)
 {
-    /** 
-     * 这种情况是try里面只有一条指令
-     * 那么就是一个空的try block,这种情况下,就删除这个block 
-     **/
     for (int i = 0; i < m->closed_exceptions->size; ++i) {
         jd_exc *e = lget_obj(m->closed_exceptions, i);
         if (e->catch_type_index != 0) 
@@ -1004,9 +1000,6 @@ static void remove_useless_finally_exception(jd_method *m)
 
 void pullin_block_jump_into_exception_try_block(jd_method *m)
 {
-    // there are some m generate by obf tools or dex2jar..
-    // exception's try block have some predecessors which not in exception
-
     for (int i = 0; i < m->mix_exceptions->size; ++i) {
         jd_mix_exception *exception = lget_obj(m->mix_exceptions, i);
         uint32_t start = exception->try->start_offset;
@@ -1034,11 +1027,8 @@ void pullin_block_jump_into_exception_try_block(jd_method *m)
                     continue;
                 jd_nblock *tnb = target->ub->nblock;
                 if (tnb->start_offset > start && tnb->end_offset < end) {
-                    // jump into exception
-
                     if (block->in->size == 1 &&
                         jvm_ins_is_goto(block->ub->nblock->end_ins)) {
-                        // 这种情况是一个goto指令跳转到异常块的开始
                         jd_edge *in_edge = lget_obj(block->in, 0);
                         jd_bblock *in_block = in_edge->source_block;
                         if (basic_block_is_normal_live(in_block))
@@ -1087,10 +1077,6 @@ void pullin_block_jump_into_exception_try_block(jd_method *m)
 
 static void expand_exception_with_jump(jd_method *m)
 {
-    /**
-     * 这里的作用是如果一个跳转到try块里的指令，但是不是跳转到try块的开始
-     * 那么就把这个try块扩展到这个指令的位置
-     **/
     for (int i = 0; i < m->closed_exceptions->size; ++i) {
         jd_exc *exc = lget_obj(m->closed_exceptions, i);
         jd_ins *start = get_ins(m, exc->try_start_idx);
@@ -1270,7 +1256,6 @@ jd_exc* closest_exception_of(jd_method *m, uint32_t offset)
         jd_exc *exception = lget_obj(m->cfg_exceptions, i);
         if (offset >= exception->try_start &&
             offset <= exception->try_end) {
-            // instruction->offset在赋值过来的时候，已经-1了, 所以要用等于
             if (current == NULL) {
                 current = exception;
                 continue;
@@ -1281,8 +1266,6 @@ jd_exc* closest_exception_of(jd_method *m, uint32_t offset)
                 exception->end_pc < current->end_pc)
                 current = exception;
 
-            // 在第二轮时候，try_end和handler的范围都会有重新修改,
-            // 所以closest exception需要判定try_end的范围
             if (exception->try_start >= current->try_start &&
                 exception->try_end <= current->try_end)
                 current = exception;

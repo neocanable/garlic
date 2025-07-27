@@ -7,19 +7,6 @@
 
 #include <time.h>
 
-
-/**
- * 这里极其蹩脚
- * try: 18 -> 32
- *	catch: 35 -> 77
- *	catch: 276 -> 495
- *
- * 这样的exception是混淆后的，控制流已经被打乱了
- * 解决方法就是try就是一个exception的开始，一个exception不能有其他的child
- * 只允许有try, catch, finally, 但是try/catch/finally里面可以有exception
- * exception 类型的block是一种特殊的block
- **/
-
 static int quick_sort_partition(jd_node *node, int low, int high)
 {
     jd_node *b = lget_obj(node->children, node->children->size - 1);
@@ -82,8 +69,6 @@ jd_node* parent_next_node(jd_node *node)
 
 static void reorder_nodes(jd_method *m, jd_node *node)
 {
-    // 每个parent下面的block按照start_offset排序
-    // 确定每个block的next和prev
     if (node == NULL)
         node = lget_obj(m->nodes, 0);
 
@@ -215,7 +200,6 @@ bool node_is_ancestor_sibling_of(jd_node *node, jd_node *other)
 
 bool node_contains_expression(jd_node *node, jd_exp *expression)
 {
-    // 这里确定block必须是连续的, block的type不能是exception
     return node->start_idx <= expression->idx &&
            node->end_idx >= expression->idx;
 }
@@ -302,8 +286,6 @@ static void create_basic_block_node(jd_method *m)
         jd_nblock *nb = b->ub->nblock;
         jd_node *node = make_obj(jd_node);
         node->type = JD_NODE_BASIC_BLOCK;
-        // basic block存的是instruction的idx
-//        node->start_idx = nb->start_idx;
         jd_ins *start_ins = get_ins(m, nb->start_idx);
         jd_ins *end_ins = get_ins(m, nb->end_idx);
         jd_exp *start_exp = start_ins->expression;
@@ -403,7 +385,6 @@ static void create_exception_node(jd_method *m)
 
 static void fill_basic_blocks_to_exception(jd_method *m, jd_node *node)
 {
-    // 后序遍历exception tree，将创建的basic block类型的node添加到exception node下面
     if (node == NULL)
         node = lget_obj_first(m->nodes); // root node
 

@@ -117,8 +117,6 @@ static void jvm_run_load_local_variable(jd_ins *ins)
         jvm_variable_name(ins->method, ins, push0, slot);
     }
     else {
-
-        // TODO: 这里需要注意
         stack_out->vals[0] = local_var;
         if (local_var->ins == NULL)
             local_var->ins = ins;
@@ -360,7 +358,7 @@ static void jvm_ins_cb(jd_method *m, jd_ins *ins)
 {
     jvm_fill_watch_successors(m, ins);
 
-    jvm_run_instruction_action(ins); // 拿到ins的stack_out
+    jvm_run_instruction_action(ins);
 
     jvm_fill_visit_queue(m, ins);
 }
@@ -410,9 +408,6 @@ static void jvm_method_enter_stack(jd_method *m)
         m->parameters[i] = val;
         stack->local_vars[slot] = val;
         slot ++;
-        // double和long的数据类型占据两个slot
-        // 实现的时候，local variable和operand stack的slot
-        // 都是一个slot对应一个变量
     }
 }
 
@@ -473,8 +468,6 @@ static int merge_intersection_stack(jd_ins *ins,
                                     jd_ins *suc_ins)
 {
     int changed = 0;
-    // 这里是分支汇聚时候，创建一个新的stack，
-    // 然后用新的stack和in进行对比，如果不一样，就把in放入队列
 
     if (prev->depth > 0) {
         merged->vals = make_obj_arr(jd_val*, prev->depth);

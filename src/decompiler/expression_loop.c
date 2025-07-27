@@ -406,9 +406,6 @@ static void loop_content_with_exit_blocks(jd_method *m,
         }
     }
     else {
-        // 如果不是以switch结尾的，也没有condition，就是while(true)
-        // 这种情况下，就应该将header的所有dominates都拉进来
-
         if (lcontains_obj(loop->header->dominates, exit_block)) {
             ladd_obj_no_dup(loop->blocks, exit_block);
         }
@@ -454,8 +451,6 @@ static void loop_content_with_preheader(jd_method *m,
             }
         }
         else {
-            // 如果不是以switch结尾的，也没有condition，就是while(true)
-            // 这种情况下，就应该将header的所有dominates都拉进来
             if (lcontains_obj(loop->header->dominates, exit_block))
                 ladd_obj_no_dup(loop->blocks, exit_block);
         }

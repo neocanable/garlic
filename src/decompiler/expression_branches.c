@@ -94,13 +94,6 @@ static bool if_exp_is_copy_if_true_block(jd_exp *exp)
 
 static bool node_is_continue_or_break(jd_method *m, jd_exp *exp, jd_node *t)
 {
-    // 这里的意思是判断一个if expression是否是一个循环的continue或者break
-    // dalvik中有if (condition) 中，if的target直接是break或者continue
-    // jvm中大部分编译出来的if是if (condition) goto name
-    // loop {
-    //     if (condition) break;
-    //     if (condition) continue;
-    // }
     bool is_loop = false;
     jd_node *loop_node = NULL;
     for (int i = 0; i < m->loops->size; ++i) {
@@ -205,9 +198,6 @@ static int switch_max_idx(jd_switch *sw)
 
 static void remove_single_true_node(jd_method *m)
 {
-    /**
-     * 这里先不用这个函数, if_branch里面只有一个true的情况, 一般是if-else结构
-     **/
     for (int i = 0; i < m->nodes->size; ++i) {
         jd_node *node = lget_obj(m->nodes, i);
         if (node_is_not_if(node) && node_is_not_else_if(node))
@@ -241,7 +231,6 @@ static void remove_single_false_node(jd_method *m)
         if (node_is_not_if(node) && node_is_not_else_if(node))
             continue;
         jd_node *if_false_node = child_of_type(node, JD_NODE_IF_FALSE);
-        // if_false 块在处理完成后，应该只剩下if expression和if_false两个
         if (if_false_node == NULL || node_valid_children_count(node) != 2)
             continue;
         size_t index = lfind_object(node->children, if_false_node);
@@ -301,12 +290,6 @@ void remove_empty_if_else_of_method(jd_method *m)
 
 void identify_else_if_of_method(jd_method *m)
 {
-    /**
-     * 识别else if 结构
-     * 方法：如果if_true_block的起始语句就是一个if语句
-     * 那么就是一个else if结构
-     **/
-
     for (int i = 0; i < m->nodes->size; ++i) {
         jd_node *node = lget_obj(m->nodes, i);
         if (node_is_not_if(node) && node_is_not_else_if(node))
@@ -382,8 +365,6 @@ static jd_node* basic_blocks_to_node(list_object *blocks)
     int32_t min_start_idx   = -1;
     int32_t max_end_idx     = -1;
     for (int i = 0; i < blocks->size; ++i) {
-        // TODO: 这里是有错误的
-        // 如果exception的try和catch是不相连的，就会出现bug
         jd_bblock *basic_block = lget_obj(blocks, i);
         jd_node *n = basic_block->node;
         if (max_end_idx == -1 || max_end_idx < n->end_idx)
@@ -450,14 +431,6 @@ static jd_node* if_branch_to_node(jd_method *m,
     int max_exp_idx = 0;
     jd_node *if_true_node = NULL;
     jd_node *if_false_node = NULL;
-
-    /**
-     * 这里的逻辑应该是这样的：
-     *      找到if表达式的第一个basic block
-     *      1. 如果if语句是第一个有效的expression，那么可以直接处理
-     *      2. 如果if语句不是第一个有效的expression，那么需要将前面所有的expression移动到parent里
-     *          并且将除if语句外的expression都创建一个node
-     **/
 
     jd_bblock *block = branch->start_block;
     jd_nblock *nb = block->ub->nblock;
