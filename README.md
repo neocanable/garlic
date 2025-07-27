@@ -133,12 +133,8 @@ Progress : 192538 (192538)
 [Done]
 ```
 
-```sh
-$ hyperfine "garlic ~/wechat/wechat.apk"
-Benchmark 1: garlic ~/wechat/wechat_apk
-  Time (mean ± σ):     11.502 s ±  0.105 s    [User: 31.803 s, System: 10.588 s]
-  Range (min … max):   11.373 s … 11.774 s    10 runs
-```
+![decompile tiktok](https://github.com/neocanable/garlic/blob/main/shell/images/garlic-show.gif)
+
 
 ### Customization
 
