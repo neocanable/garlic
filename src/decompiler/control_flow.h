@@ -28,7 +28,6 @@ jd_bblock* block_closest_finally(jd_method *m, jd_bblock *e);
 
 jd_bblock* block_closest_handler(jd_method *m, jd_bblock *block);
 
-// find basic block contains the **goto_offset**, include expcetion block
 jd_bblock* block_by_offset(jd_method *m, uint32_t offset);
 
 jd_bblock* block_exception_exit(jd_method *m);

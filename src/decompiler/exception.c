@@ -194,13 +194,6 @@ static void copy_exceptions_to_closed(jd_method *m, jd_eblock *eblock)
 
 void identify_exception_handler_block_end(jd_method *m)
 {
-    /**
-     * 这里的作用是找到所有的exception block的end_offset和end_idx, 方法如下:
-     * 1. 根据exception block的handler_offset找到对应的normal block
-     * 2. 找到对应的normal block后, 找到所有这个nblock 支配的nblock
-     * 3. 找到所有支配的normal block后, 排序, 并且删除不连续的block
-     * 4. 最后一个normal block就是这个exception block的end goto_offset
-     **/
     m->closed_exceptions = linit_object();
     for (int i = 0; i < m->basic_blocks->size; ++i) {
         jd_bblock *block = lget_obj(m->basic_blocks, i);
@@ -344,12 +337,6 @@ static void merge_exception_split_by_branch_without_finally(jd_method *m)
             if (cur_last != branch_prev && cur_last != split_branch)
                 continue;
 
-            // 这种情况下，就是try block被分开了
-            // 但是实际上是同一个try block
-            // 那么就把这个try block合并起来
-//                cur->try_end = next->try_end;
-//                cur->try_end_idx = next->try_end_idx;
-//                cur->end_pc = next->end_pc;
             cur->try_end = MAX(cur->try_end, next->try_end);
             cur->try_end_idx = MAX(cur->try_end_idx, next->try_end_idx);
             cur->try_start = MIN(cur->try_start, next->try_start);
@@ -415,8 +402,6 @@ static void merge_exception_split_by_branch_with_finally(jd_method *m)
 
         if (cur_end_ins->next == other_start_ins->prev)
             continue;
-        // 这里是确保cur的try_end不要超过cur的handler_start
-        // 如果超过了，就是错误的
 
         if (other->try_end < cur->handler_start /*&&
                 !finally_in_try_handler(m, cur, other)*/) {
@@ -431,7 +416,6 @@ static void merge_exception_split_by_branch_with_finally(jd_method *m)
             cur->start_pc = MIN(cur->start_pc, other->start_pc);
 
         }
-        /** NOTICE: here do not compare catch type index **/
         int index = lfind_object(m->closed_exceptions,other);
         if (index >= 0) {
             lremove_object(m->closed_exceptions, index);
@@ -463,17 +447,6 @@ static jd_exc* near_finally_catch(jd_method *m, jd_exc *finally)
 
 static void narrow_finally_block_near_catch_exception(jd_method *m)
 {
-    /**
-     * TODO:
-     * 这里是一个折中的方案，分块以后，finally会跟catch有交叉的部分
-     * 如果判定catch的数量或者可以直接将finally的try_end_offset设置到
-     * 最后一个catch的handler_end_offset
-     **/
-
-    /** 
-     * 最后一个finally的try_end_offset应该是他
-     * 挨着的catch的handler_start_offset的上一个位置 
-     **/
     if (m->closed_exceptions->size == 0)
         return;
     for (int i = 0; i < m->closed_exceptions->size; ++i) {
@@ -641,15 +614,6 @@ static jd_exc* smallest_try_of_range(jd_method *m, jd_range *r)
 
 static void fix_same_try_end_offset(jd_method *m)
 {
-    /**
-     * dalvik的异常和jvm的异常是不一样的
-     * dalvik的异常会跳转并且try块和catch块可以不连续
-     */
-
-     /**
-     * 这里是确保相同的try block的end offset是一样的
-     * 取值就是取第一个exception的handler block的前一个instruction的offset 
-     **/
     if (m->closed_exceptions->size == 0)
         return;
     for (int i = 0; i < m->closed_exceptions->size; ++i) {

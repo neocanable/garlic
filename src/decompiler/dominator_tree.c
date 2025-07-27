@@ -41,7 +41,6 @@ bool dominates(const jd_bblock *check, const jd_bblock *other)
 
 void dominance_frontier(jd_method *m)
 {
-    // 计算所有的block的dominance frontier
     basic_block_clear_visited_flag(m);
 
     for (int i = 0; i < m->basic_blocks->size; ++i) {
@@ -152,12 +151,10 @@ static bool compute_dominator_cb(jd_bblock *block)
 
 static void dominate_blocks_v2(jd_method *m)
 {
-    // 计算所有节点的dominates_blocks, 这里太耗时了
     for (int i = 0; i < m->basic_blocks->size; ++i) {
         jd_bblock *block = lget_obj(m->basic_blocks, i);
         for (int j = 0; j < m->basic_blocks->size; ++j) {
             jd_bblock *other = lget_obj(m->basic_blocks, j);
-            // self dominates self
             if (other->block_id == block->block_id) {
                 ladd_obj(block->dominates, other);
                 continue;
@@ -193,7 +190,6 @@ void dominate_blocks(jd_method *m, jd_bblock *block)
 
 void dominator_tree(jd_method *m)
 {
-    // compute dominator tree
     jd_bblock *enter_block = block_enter(m);
     enter_block->idom = enter_block;
     int changed = 1;
@@ -211,7 +207,6 @@ void dominator_tree(jd_method *m)
     }
 
     enter_block->idom = NULL;
-    // 计算所有的block的dominator children
     for (int i = 0; i < m->basic_blocks->size; ++i) {
         jd_bblock *block = lget_obj(m->basic_blocks, i);
         if (!basic_block_is_live(block))
@@ -242,11 +237,6 @@ void clear_dominator_data(jd_method *m)
 
 void clear_dominator_tree(jd_method *m)
 {
-    /**
-     * 清理掉dominator tree的数据
-     * 现有的dominator tree是为了计算exception的边界
-     * 处理完成后，就删除掉这些数据
-     **/
     for (int i = 0; i < m->basic_blocks->size; ++i) {
         jd_bblock *block = lget_obj(m->basic_blocks, i);
         lclear_object(block->dom_children);

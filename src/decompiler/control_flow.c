@@ -346,8 +346,6 @@ jd_bblock* dup_basic_block(jd_method *m, jd_bblock *src)
 
     ladd_obj(m->basic_blocks, block);
 
-    // 如果basic block是以goto结尾的，需要把goto指令dup一次
-
     DEBUG_PRINT("[dup-basic-block] %zu %d -> %d\n",
            block->block_id, nb->start_offset, nb->end_offset);
 
@@ -355,12 +353,10 @@ jd_bblock* dup_basic_block(jd_method *m, jd_bblock *src)
 }
 
 
-// 这里为了printf
 string list_block_id_join(list_object *list, string delimiter)
 {
     if (list->size == 0)
         return NULL;
-    // 计算所需的字符串长度（数字位数 + 逗号 + 结尾的空字符）
     size_t total_length = list->size * 12 + (list->size - 1) + 1;
     char *result = x_alloc(total_length);
 
@@ -597,14 +593,12 @@ static void cfg_create_normal_blocks(jd_method *m)
                     break;
                 }
 
-                // 如果instruction是跳转，或者有跳转到instruction
                 if (fn->is_block_end(ins) || fn->is_block_start(next_ins)) {
                     i = j;
                     break;
                 }
             }
             else {
-                // next_instruction是空，当前的instruction就是最后一条指令了
                 i = j;
                 break;
             }
@@ -660,9 +654,6 @@ static void cfg_create_exception_blocks(jd_method *m)
 
         eblock->handler_end_offset = exception->handler_end;
         eblock->handler_end_idx = exception->handler_end_idx;
-        // 现在还不知道handler的end_offset和end_idx
-        // TODO: 判断cfg拿到的是full table还是 half table
-        // 从而需要对exception的handler_end_offset赋值
 
         ladd_obj(m->basic_blocks, bblock);
         block_id++;
@@ -673,7 +664,6 @@ static void cfg_link_normal_block(jd_method *m)
 {
     jd_bblock *enter_block = block_by_id(m, JD_BB_ENTER_ID);
     jd_ins *start_ins = get_ins(m, 0);
-//    jd_bblock *start_normal_block = block_by_ins(m, start_ins);
     jd_bblock *start_normal_block = start_ins->block;
     jd_ins *method_end_ins = lget_obj_last(m->instructions);
     create_link_edge(enter_block, start_normal_block);
@@ -693,15 +683,12 @@ static void cfg_link_normal_block(jd_method *m)
             continue;
         }
         if (fn->is_athrow(end_ins)) {
-            // TODO: how to deal with finally block's athrow?
             continue;
         }
 
         for (int j = 0; j < end_ins->targets->size; ++j) {
             jd_ins *target_ins = lget_obj(end_ins->targets, j);
             jd_bblock *target = block_by_offset(m, target_ins->offset);
-            // target block must exist
-            // otherwise the instruction is not valid
             assert(target != NULL);
             create_link_edge(block, target);
         }
@@ -710,7 +697,6 @@ static void cfg_link_normal_block(jd_method *m)
 
 static void cfg_link_exception_block(jd_method *m)
 {
-    /** 连接normal block和exception block **/
     for (int i = 0; i < m->basic_blocks->size; ++i) {
         jd_bblock *block = lget_obj(m->basic_blocks, i);
         if (block->type != JD_BB_NORMAL)
@@ -719,13 +705,7 @@ static void cfg_link_exception_block(jd_method *m)
         jd_nblock *nblock = block->ub->nblock;
         jd_ins *start_ins = nblock->start_ins;
         jd_ins *end_ins = nblock->end_ins;
-//        if (start_ins == end_ins &&
-//                (jvm_ins_is_return(start_ins) ||
-//                jvm_ins_is_unconditional_jump(start_ins)))
-//            continue;
 
-        // 找到离自己最近的exception block
-        // TODO: 如果没有exception，那么就连接到exception_exit_block
         jd_bblock *_eblock = NULL;
         for (int j = 0; j < m->basic_blocks->size; ++j) {
             jd_bblock *other_block = lget_obj(m->basic_blocks, j);
@@ -745,11 +725,6 @@ static void cfg_link_exception_block(jd_method *m)
                     other_eblock->try_end_offset < _eb->try_end_offset)
                     _eblock = other_block;
             }
-
-//            if (start_ins->goto_offset >= other_eblock->try_start_offset &&
-//                    start_ins->goto_offset <= other_eblock->try_end_offset) {
-//
-//            }
         }
 
         if (_eblock != NULL) {
@@ -763,12 +738,9 @@ static void cfg_link_exception_block(jd_method *m)
                     _oeb->try_end_offset == _eb->try_end_offset)
                     create_link_edge(block, other);
             }
-            // 找到离closest_exception_block最近的finally
             jd_bblock *closest_fb = block_closest_finally(m, _eblock);
             jd_bblock *closest_hb = block_closest_handler(m, block);
             if (closest_fb != NULL && closest_hb == NULL)
-                // 只有在try块里面的要去连接finally
-                // 在handler块里面的不用去连接finally
                 create_link_edge(block, closest_fb);
         }
         else
@@ -776,8 +748,6 @@ static void cfg_link_exception_block(jd_method *m)
             jd_bblock *closest_hb = block_closest_handler(m, block);
             jd_bblock *closest_fb = block_closest_finally(m, block);
             if (closest_fb != NULL && closest_hb != NULL) {
-                // 需要判断closest_handler_block和closest_finally_block的
-                // try_start是不是相等
                 jd_eblock *_feb = closest_fb->ub->eblock;
                 jd_eblock *_heb = closest_hb->ub->eblock;
                 if (_feb->try_start_offset == _heb->try_start_offset)
@@ -785,9 +755,6 @@ static void cfg_link_exception_block(jd_method *m)
             }
         }
 
-        // 如果normal block的最后一个instruction是athrow
-        // 并且没有exception block包含这个athrow
-        // 那么就连接到exception_exit_block
         jd_ins_fn *fn = end_ins->fn;
         if (fn->is_athrow(end_ins) && _eblock == NULL) {
             jd_bblock *exception_exit_block = block_exception_exit(m);
@@ -796,10 +763,6 @@ static void cfg_link_exception_block(jd_method *m)
 
     }
 
-    /**
-     * 1. exception block到父exception block的连接
-     * 2. exception block到catch和finally部分的连接
-     **/
     for (int i = 0; i < m->basic_blocks->size; ++i) {
         jd_bblock *block = lget_obj(m->basic_blocks, i);
         if (block->type != JD_BB_EXCEPTION)
@@ -811,8 +774,6 @@ static void cfg_link_exception_block(jd_method *m)
             parent_block->block_id != block->block_id)
             create_link_edge(block, parent_block);
 
-        // 如果这个exception是个catch，那个就需要找到和他一样的try块的finally
-        // 从exception跳到finally
         jd_bblock *_finally_block = block_closest_finally(m, block);
         if (_finally_block != NULL &&
             _finally_block->block_id != block->block_id)
