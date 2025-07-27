@@ -58,7 +58,7 @@ static void apk_task_start(jd_apk *apk)
         zip_entry_openbyindex(zip, i);
         string path_in_zip = (string)zip_entry_name(zip);
         if (!str_end_with(path_in_zip, ".dex")) {
-            zip_entry_close(zip); // only deal with .dex files
+            zip_entry_close(zip);
             continue;
         }
 

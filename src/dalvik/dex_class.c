@@ -15,12 +15,9 @@ bool dex_class_is_synthetic(jd_meta_dex *meta, dex_class_def *def) {
     if (data == NULL) {
         return false;
     }
-    // the class cname generate by dx is "$Lambda$" or "ambda$"
-    // but new d8 called it "ambda$"
-    // so just check the synthetic and final flag
 
     string name = dex_str_of_type_id(meta, def->class_idx);
-    return /*str_contains(cname, "$Lambda$") && */
+    return 
            (def->access_flags & ACC_DEX_SYNTHETIC) != 0 &&
            (def->access_flags & ACC_DEX_FINAL) != 0;
 }

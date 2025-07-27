@@ -61,19 +61,16 @@ bool is_anonymous_class(string class_name)
 {
     bool result = false;
 
-    // 找到最后一个 $ 的位置
     char *last_dollar = strrchr(class_name, '$');
     if (last_dollar == NULL)
         return result;
     int dollar_idx = last_dollar - class_name;
     int len = strlen(class_name);
 
-    // $ 后必须全部是数字
     for (int i = dollar_idx + 1; i < len; i++) {
         if (!isdigit(class_name[i])) return false;
     }
 
-    // 匿名类至少有一个数字（如 Outer$1）
     result = (len - dollar_idx > 1);
     return result;
 }
@@ -92,10 +89,6 @@ static string class_type_array_name(string class_name, int depth)
 
 string class_path_to_short(string class_name)
 {
-    // not primitive and array
-    // [Ljava/lang/String => String[]
-    // Ljava/lang/String;[] => String[]
-    // Ljava/lang/String; => String
     const char *last_slash = strrchr(class_name, '/');
     const char *start = (last_slash == NULL) ? class_name : last_slash + 1;
 
@@ -462,7 +455,6 @@ void class_create_blocks(jsource_file *jf)
         if (method_is_empty(m) /*|| method_is_synthetic(m)*/)
             continue;
         if (method_is_unsupport(m)) {
-            // TODO: lower than 50's class file print instructions
             class_build_unsupport_method(m);
         }
         jd_node *method_root_block = lget_obj(m->nodes, 0);

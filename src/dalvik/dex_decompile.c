@@ -115,16 +115,12 @@ static void dex_methods(jsource_file *jf)
 
     for (int i = 0; i < data->direct_methods_size; ++i) {
         encoded_method *em = &data->direct_methods[i];
-//        if (access_flags_contains(em->access_flags, ACC_DEX_SYNTHETIC))
-//            continue;
         jd_method *m = dex_method(jf, em);
         ladd_obj(jf->methods, m);
     }
 
     for (int i = 0; i < data->virtual_methods_size; ++i) {
         encoded_method *em = &data->virtual_methods[i];
-//        if (access_flags_contains(em->access_flags, ACC_DEX_SYNTHETIC))
-//            continue;
         jd_method *m = dex_method(jf, em);
         ladd_obj(jf->methods, m);
     }

@@ -150,7 +150,7 @@ static inline char* get_last_word_lower(const char* class_name) {
 
 static inline int number_digits(int num)
 {
-    if (num == 0) return 1; // Special case for zero
+    if (num == 0) return 1;
     return floor(log10(abs(num))) + 1;
 }
 
