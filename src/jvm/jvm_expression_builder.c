@@ -236,8 +236,9 @@ static void build_anonymous_expression(jd_ins *ins, jd_exp_invoke *invoke)
     string fname = get_class_name(jc, methodref_info);
     invoke->class_name = class_simple_name(fname);
 
-    if (!str_start_with(fname, jf->fname) || STR_EQL(fname, jf->fname))
-        return; // 不是内部类
+    if (!str_start_with(fname, jf->fname) || 
+            STR_EQL(fname, jf->fname))
+        return; 
 
     jd_jar_entry *inner_entry = NULL;
     bool is_inner = false;

@@ -314,11 +314,6 @@ static void merge_exception_split_by_branch_without_finally(jd_method *m)
     for (int i = 0; i < m->closed_exceptions->size - 1; ++i) {
         jd_exc *cur = lget_obj(m->closed_exceptions, i);
         jd_exc *next = lget_obj(m->closed_exceptions, i + 1);
-        /**
-         * 在这里有几种情况
-         * 1. try block被分开了，但是实际上是同一个Exception
-         * 2. try block被分开了，但是不是同一种情况
-         **/
         if (cur->handler_start == next->handler_start &&
             cur->handler_end == next->handler_end) {
             jd_ins *cur_last = get_ins(m, cur->try_end_idx);
@@ -658,8 +653,6 @@ static jd_exc* find_next_sibling(jd_method *m, jd_range *r, uint32_t offset)
 
 static void make_sure_same_try_handler_consequent(jd_method *m)
 {
-    // 在jvm里编译时连续的，但是dalvik和其它一些编译器不是连续的
-    /** 这里是确保相同的try block的handler一直到finally是连续的 **/
     for (int i = 0; i < m->closed_exceptions->size; ++i) {
         jd_exc *exception = lget_obj(m->closed_exceptions, i);
         if (exception->catch_type_index > 0)
@@ -693,8 +686,6 @@ static void make_sure_same_try_handler_consequent(jd_method *m)
 
 static void remove_duplicate_finally_for_catch_block(jd_method *m)
 {
-    /** 同样的finally块在java的编译过程中，会产生对每一个catch块的finally
-        只留下一个finally块，其他的finally块都删除掉 **/
     for (int i = 0; i < m->closed_exceptions->size; ++i) {
         jd_exc *finally = lget_obj(m->closed_exceptions, i);
         if (finally->catch_type_index > 0)
@@ -733,21 +724,6 @@ static void remove_duplicate_finally_for_catch_block(jd_method *m)
 
 static void remove_duplicate_finally_for_try_block(jd_method *m)
 {
-    /**
-     * finally在编译过程中，会对try块做一份copy, 这里就是删除掉这些copy的try块
-     * Exception table:
-         from    to  target type
-             0     4    11   Class java/lang/ExceptionInInitializerError
-             0     4    23   Class java/util/ServiceConfigurationError
-             0     4    35   Class java/lang/StackOverflowError
-             0     4    47   Class java/lang/Exception
-             0     4    59   any
-            11    16    59   any
-            23    28    59   any
-            35    40    59   any
-            47    52    59   any
-     **/
-
     for (int i = 0; i < m->closed_exceptions->size; ++i) {
         jd_exc *finally = lget_obj(m->closed_exceptions, i);
         if (finally->catch_type_index > 0)
@@ -781,8 +757,6 @@ static void remove_duplicate_finally_for_try_block(jd_method *m)
 
 static jd_exc* find_first_handler(jd_method *m, jd_exc *e)
 {
-    /** 同一个try, 对应着多个catch块, 这里找到最靠前的那个catch块, 
-     * 也就是handler_start_offset最小的那个 **/
     jd_exc *result = NULL;
     for (int i = 0; i < m->closed_exceptions->size; ++i) {
         jd_exc *other = lget_obj(m->closed_exceptions, i);
@@ -801,10 +775,6 @@ static jd_exc* find_first_handler(jd_method *m, jd_exc *e)
 
 static void fix_same_try_edge(jd_method *m)
 {
-    /** 
-     * 这里是确保相同的try block每个try_end_offset结束后
-     * 必须先进入到最小的那个catch的块里 
-     **/
     for (int i = 0; i < m->closed_exceptions->size; ++i) {
         jd_exc *exception = lget_obj(m->closed_exceptions, i);
         jd_exc *smallest = find_first_handler(m, exception);
@@ -820,8 +790,6 @@ static void fix_same_try_edge(jd_method *m)
             exception_try_end_next != NULL ) {
             // somthing is wrong
             jd_range new_range = init_exception_range(-1, -1);
-            // 如果两个块之间只有一个instruction,那么是可以把try block向后推的
-            // 否则无法确认try和第一个catch之间是什么
             if (smallest_handler_start_prev != exception_try_end_next) 
                 continue;
 
@@ -854,8 +822,6 @@ static void fix_same_try_edge(jd_method *m)
 
 static void remove_crossed_finally_handler(jd_method *m)
 {
-    // 某些finally在计算过程中，变成try块是某一个catch块的try块
-    // handler块对应着一个finally块，删除这样的exception
     for (int i = 0; i < m->closed_exceptions->size; ++i) {
         jd_exc *finally = lget_obj(m->closed_exceptions, i);
         if (finally->catch_type_index > 0)
@@ -962,14 +928,6 @@ static void remove_share_hanlder_catch(jd_method *m)
 
 static void remove_empty_catch_body_exception(jd_method *m)
 {
-    /**
-     *  try {
-     *      // do something
-     *  } catch(Exception e) {
-     *      // empty block
-     *  }
-     *  TODO: 这样的catch block里面只有一个astore的instruction，是不是要NOP掉？
-     **/
     if (m->closed_exceptions->size == 0)
         return;
     for (int i = 0; i < m->closed_exceptions->size; ++i) {

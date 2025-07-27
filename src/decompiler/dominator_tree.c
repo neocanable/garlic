@@ -110,7 +110,6 @@ static const jd_bblock* same_dom_block(const jd_bblock *b1,
     if (b1->block_id == b2->block_id)
         return b1;
 
-    // 递归的情况下，需要交叉比较
     if (block_in_list(b1, b2->idom))
         return b1;
 

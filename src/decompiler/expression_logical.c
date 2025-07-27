@@ -63,7 +63,6 @@ bool identify_logical_operations(jd_method *m)
                 continue;
 
             jd_exp *exp = get_exp(m, child->end_idx);
-            // assert生成的if表达式不合并
             if (!exp_is_if(exp) ||
                 exp_is_nopped(exp) ||
                 if_expression_is_assert(exp))
@@ -90,7 +89,6 @@ bool identify_logical_operations(jd_method *m)
                 jd_nblock *nnext = next->ub->nblock;
                 jd_ins *next_end_ins = get_ins(m, nnext->end_idx);
                 jd_exp *next_exp = next_end_ins->expression;
-//                jd_exp *next_exp = get_exp(m, nnext->end_idx);
                 if (!exp_is_if(next_exp))
                     continue;
                 jd_exp_if *next_if_exp = next_exp->data;
@@ -136,7 +134,6 @@ bool identify_logical_operations(jd_method *m)
                            sizeof(jd_exp));
                 }
 
-                // TODO: 这里需要unlink_blocks(basic_block, target)
                        compute_dominates_block(m, basic_block);
                        compute_dominates_block(m, next_block);
                 cfg_unlink_blocks(basic_block, other);
@@ -359,7 +356,6 @@ bool identify_logical_with_assignment(jd_method *m)
 
             jd_exp *exp = get_exp(m, child->end_idx);
             jd_ins *ins = exp->ins;
-            // assert生成的if表达式不合并
             if (!exp_is_if(exp) ||
                 exp_is_nopped(exp) ||
                 if_expression_is_assert(exp))

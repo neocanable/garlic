@@ -36,7 +36,6 @@ jd_node* parent_next_node(jd_node *node);
 
 static inline bool node_contains_block(jd_node *node, jd_bblock *block)
 {
-    // 这里永远不会出现JD_BLOCK_EXCEPTION
     jd_nblock *_nblock = block->ub->nblock;
     return node->start_idx <= _nblock->start_idx &&
            node->end_idx >= _nblock->end_idx;

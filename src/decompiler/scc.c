@@ -47,7 +47,6 @@ static void strong_connect(
 }
 
 
-// 主入口函数
 list_object* compute_scc(jd_method *m) {
     list_object *blocks = m->basic_blocks;
     jd_tarjan_state *state = make_obj_arr(jd_tarjan_state, blocks->size);

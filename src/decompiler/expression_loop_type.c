@@ -136,7 +136,6 @@ static void loop_to_for_structure(jd_method *m, jd_loop *loop)
     jd_exp *condition_exp = loop_condition_exp(m, loop);
     if (condition_exp == NULL)
         return;
-    // 在condition_exp里面找对应的store/getfield/getstatic
 
     list_object *exps = get_expression_for_loop(condition_exp);
     if (exps->size == 0)

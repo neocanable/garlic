@@ -103,7 +103,6 @@ static void jvm_run_load_local_variable(jd_ins *ins)
     jd_val *local_var = find_local_variable(stack_out, slot);
 
     if (local_var == NULL) {
-        // TODO: 这里需要处理
         DEBUG_PRINT("[%s %d]load local var: %d not found\n",
                ins->name,
                ins->offset,
@@ -214,7 +213,6 @@ static void jvm_run_stable_instruction_action(jd_ins *ins)
     }
 
     stack_clone_local_variables(stack_out, stack_in);
-    // 存储局部变量
     jvm_int_type_analyze(ins);
     jvm_run_store_local_variable(ins);
     jvm_run_load_local_variable(ins);
@@ -262,8 +260,6 @@ static void jvm_run_instruction_action(jd_ins *ins)
 
 static jd_stack* jvm_exception_stack(jd_method *m, jd_ins *ins, jd_stack *src)
 {
-    // exception的handler块，入栈只有一个exception的reference_ref
-    // 找到ins对应的exception的class_name
     jd_bblock *block = block_handler_equals_ins(m, ins);
     jd_eblock *eblock = block->ub->eblock;
     string class_name = NULL;

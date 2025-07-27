@@ -987,7 +987,6 @@ struct jd_method {
 
     hashmap         *stack_phi_node_copies;
 
-    // void 类型的变量, 表示两种形式
     // java jclass_file
     // dalvik jd_dex
 

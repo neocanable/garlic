@@ -518,7 +518,6 @@ void sform_local_variable_phi_node_dfs_copies(jd_method *m, jd_bblock *b)
     for (int i = 0; i < m->local_phi_list->size; ++i) {
         jd_local_phi_node *phi = lget_obj(m->local_phi_list, i);
 
-        // 这里的phi节点对于循环导出变量十分有用
         // if (phi->params->size < 2)
         //    continue;
         if (phi->block_id != b->block_id)
@@ -602,8 +601,6 @@ static void sform_stack_variable_insert_phi(jd_method *m)
         jd_stack *stack_out = end_ins->stack_out;
         if (stack_out == NULL || stack_out->depth == 0)
             continue;
-        // 这个basic block需要在其的df前插入一个phi节点
-        // phi节点的数量根据stack_out->depth的数量决定
         for (int j = 0; j < stack_out->depth; ++j) {
             jd_val *val = stack_out->vals[j];
 

@@ -157,12 +157,6 @@ static void reverse_compare_instruction(jd_method *m, jd_mix_exception *ex)
 
 static void inline_finally_block(jd_method *m)
 {
-    // 对exception进行排序，把最外层的exception放最前面
-    // 确定finally的try块的节点和handler块的节点
-    // 找到与try块相对应的catch块
-    // 用finally块的每个instruction和try块和catch块的进行对比
-    // 如果try块或者catch块的instruction和finally块的instruction相同
-    // 那么就可以nop掉try块和catch块里面的finally code
     buble_sort_cfg_exception(m, (list_cmp_fn) handler_contains_cmp);
     buble_sort_cfg_exception(m, (list_cmp_fn) try_contains_cmp);
 

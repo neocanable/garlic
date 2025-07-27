@@ -900,7 +900,6 @@ static void dex_invoke_range_expression(jd_exp *exp, jd_dex_ins *ins)
     }
     param_size = real_param_size;
 
-    // 这里的param_size是不准的, double和long类型的需要处理
     invoke->list = make_exp_list(param_size);
     jd_exp *list_args = invoke->list->args;
 

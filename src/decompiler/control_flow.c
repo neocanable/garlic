@@ -293,14 +293,12 @@ jd_bblock* block_parent_exception(jd_method *m, jd_bblock *block)
             continue;
 
         jd_eblock *eblock2 = basic_block->ub->eblock;
-        // 有可能是finally自己处理自己的情况
         if (eblock->handler_start_offset >= eblock2->try_start_offset &&
                 eblock->handler_start_offset <= eblock2->try_end_offset) {
             if (parent_block == NULL) {
                 parent_block = basic_block;
                 continue;
             }
-            // 判断当前的parent_block是否能更收缩
             jd_eblock *_pe = parent_block->ub->eblock;
             if (eblock2->try_start_offset > _pe->try_start_offset)
                 parent_block = basic_block;
@@ -558,7 +556,6 @@ void cfg_remove_exception_block(jd_method *m)
         for (int j = 0; j < b->out->size; ++j) {
             jd_edge *edge = lget_obj(b->out, j);
             if (edge->target_block->type == JD_BB_EXCEPTION) {
-//                cfg_unlink_edge(edge);
                 cfg_unlink_blocks(b, edge->target_block);
                 j--;
             }
@@ -634,7 +631,6 @@ static void cfg_create_exception_blocks(jd_method *m)
         jd_ins *ex_end_ins = get_ins(m,
                                      exception->try_end_idx);
         jd_ins *last_ins = lget_obj_last(m->instructions);
-        // 判断是不是最后一个instruction
         if (last_ins->idx == exception->try_end_idx)
             ex_end_ins = last_ins;
 

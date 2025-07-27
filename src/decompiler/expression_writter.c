@@ -494,7 +494,6 @@ static void write_class_annotation(jsource_file *jf)
     FILE *stream = file_output(jf);
     for (int i = 0; i < jf->annotations->size; ++i) {
         jd_annotation *ano = lget_obj(jf->annotations, i);
-        // annotation里面有不可见字符
         for (int j = 0; j < strlen(ano->str); ++j) {
             unsigned char c = ano->str[j];
             if (iscntrl(c)) {

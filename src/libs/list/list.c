@@ -221,7 +221,6 @@ string lint_join(list_int *list, string delimiter)
 {
     if (list->size == 0)
         return NULL;
-    // 计算所需的字符串长度（数字位数 + 逗号 + 结尾的空字符）
     size_t total_length = list->size * 12 + (list->size - 1) + 1;
     char* result = x_alloc(total_length);
 
