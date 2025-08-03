@@ -96,6 +96,20 @@ cmake --build build
     garlic /path/to/dalvik.dex -p 
     
     ```
+* 搜索字符串
+  ```
+  garlic ~/demo/demo.apk -f "windowInfo" # search "windowInfo" in demo.apk
+  ```
+
+  ```
+  garlic ~/demo/demo.jar -f "[W|w]indow" # search regex [W|w]indow in demo.jar
+  ```
+
+  ```
+  garlic ~/demo/demo.dex -f "info" # search contains string in demo.dex
+  ```
+
+    
 
 ### 速度
 
