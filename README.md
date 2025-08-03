@@ -101,6 +101,19 @@ please check the [windows build document](https://github.com/neocanable/garlic/b
     
     ```
 
+* search string
+  ```
+  garlic ~/demo/demo.apk -f "windowInfo" # search "windowInfo" in demo.apk
+  ```
+
+  ```
+  garlic ~/demo/demo.jar -f "[W|w]indow" # search regex [W|w]indow in demo.jar
+  ```
+
+  ```
+  garlic ~/demo/demo.dex -f "info" # search contains string in demo.dex
+  ```
+
 
 ### Debug
 
