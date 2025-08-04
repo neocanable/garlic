@@ -111,7 +111,7 @@ please check the [windows build document](https://github.com/neocanable/garlic/b
   ```
 
   ```
-  garlic ~/demo/demo.dex -f "info" # search contains string in demo.dex
+  garlic ~/demo/demo.dex -f "info" # search contains string "info" in demo.dex
   ```
 
 
