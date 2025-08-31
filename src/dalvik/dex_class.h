@@ -6,6 +6,8 @@
 
 void dex_filed_access_flag(jd_field *field, str_list *list);
 
+void dex_class_access_flag_with_flags(u4 flags, str_list *list);
+
 void dex_class_access_flag(jsource_file *jf, str_list *list);
 
 bool dex_class_is_inner_class(jd_meta_dex *meta, dex_class_def *cf);

@@ -22,6 +22,17 @@ bool dex_class_is_synthetic(jd_meta_dex *meta, dex_class_def *def) {
            (def->access_flags & ACC_DEX_FINAL) != 0;
 }
 
+void dex_field_access_flag_with_flags(u4 flags, str_list *list)
+{
+    CONCAT_ACCESS_FLAG(flags, ACC_DEX_PUBLIC, list, "public ")
+    CONCAT_ACCESS_FLAG(flags, ACC_DEX_PRIVATE, list, "private ")
+    CONCAT_ACCESS_FLAG(flags, ACC_DEX_PROTECTED, list, "protected ")
+    CONCAT_ACCESS_FLAG(flags, ACC_DEX_STATIC, list, "static ")
+    CONCAT_ACCESS_FLAG(flags, ACC_DEX_FINAL, list, "final ")
+    CONCAT_ACCESS_FLAG(flags, ACC_DEX_VOLATILE, list, "volatile ")
+    CONCAT_ACCESS_FLAG(flags, ACC_DEX_SYNTHETIC, list, "synthetic ")
+}
+
 void dex_filed_access_flag(jd_field *field, str_list *list)
 {
     if (field_has_flag(field, ACC_DEX_FINAL))
@@ -38,6 +49,21 @@ void dex_filed_access_flag(jd_field *field, str_list *list)
         str_concat(list, "volatile ");
     if (field_has_flag(field, ACC_DEX_SYNTHETIC))
         str_concat(list, "synthetic ");
+}
+
+void dex_class_access_flag_with_flags(u4 flags, str_list *list)
+{
+    CONCAT_ACCESS_FLAG(flags, ACC_DEX_PUBLIC, list, "public ")
+    CONCAT_ACCESS_FLAG(flags, ACC_DEX_FINAL, list, "final ")
+    if (!access_flags_contains(flags, ACC_DEX_INTERFACE))
+        CONCAT_ACCESS_FLAG(flags, ACC_DEX_ABSTRACT, list, "abstract ")
+    CONCAT_ACCESS_FLAG(flags, ACC_DEX_SYNTHETIC, list, "synthetic ")
+    if (access_flags_contains(flags, ACC_DEX_INTERFACE))
+        str_concat(list, "interface ");
+    else if (access_flags_contains(flags, ACC_DEX_ENUM))
+        str_concat(list, "enum ");
+    else
+        str_concat(list, "class ");
 }
 
 void dex_class_access_flag(jsource_file *jf, str_list *list)
