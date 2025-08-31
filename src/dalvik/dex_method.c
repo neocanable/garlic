@@ -5,56 +5,24 @@
 #include "parser/dex/metadata.h"
 #include "dex_annotation.h"
 
+void dex_method_access_flag_with_flags(u4 flags, str_list *list)
+{
+    CONCAT_ACCESS_FLAG(flags, ACC_DEX_PUBLIC, list, "public ")
+    CONCAT_ACCESS_FLAG(flags, ACC_DEX_PRIVATE, list, "private ")
+    CONCAT_ACCESS_FLAG(flags, ACC_DEX_PROTECTED, list, "protected ")
+    CONCAT_ACCESS_FLAG(flags, ACC_DEX_STATIC, list, "static ")
+    CONCAT_ACCESS_FLAG(flags, ACC_DEX_FINAL, list, "final ")
+    CONCAT_ACCESS_FLAG(flags, ACC_DEX_NATIVE, list, "native ")
+    CONCAT_ACCESS_FLAG(flags, ACC_DEX_ABSTRACT, list, "abstract ")
+    CONCAT_ACCESS_FLAG(flags, ACC_DEX_SYNTHETIC, list, "/* synthetic */")
+}
+
 void dex_method_access_flags(jd_method *m, str_list *list)
 {
-    if (method_has_flag(m, ACC_DEX_FINAL))
-        str_concat(list, ("final"));
+    dex_method_access_flag_with_flags(m->access_flags, list);
 
-    if (method_has_flag(m, ACC_DEX_PUBLIC)) {
-        if (list->len > 0)
-            str_concat(list, (" "));
-        str_concat(list, ("public"));
-    }
-
-    if (method_has_flag(m, ACC_DEX_PRIVATE)) {
-        if (list->len > 0)
-            str_concat(list, (" "));
-        str_concat(list, ("private"));
-    }
-
-    if (method_has_flag(m, ACC_DEX_PROTECTED)) {
-        if (list->len > 0)
-            str_concat(list, (" "));
-        str_concat(list, ("protected"));
-    }
-
-
-    if (method_has_flag(m, ACC_DEX_STATIC)) {
-        if (list->len > 0)
-            str_concat(list, (" "));
-        str_concat(list, ("static"));
-    }
-
-    if (method_has_flag(m, ACC_DEX_NATIVE)) {
-        if (list->len > 0)
-            str_concat(list, (" "));
-        str_concat(list, ("native"));
-    }
-
-    if (method_has_flag(m, ACC_DEX_ABSTRACT)) {
-        if (list->len > 0)
-            str_concat(list, (" "));
-        str_concat(list, ("abstract"));
-    }
-
-    if (method_has_flag(m, ACC_DEX_SYNTHETIC)) {
-        if (list->len > 0)
-            str_concat(list, (" "));
-        str_concat(list, ("/* synthetic */"));
-    }
-
-//    if (list->count > 0 && !method_is_init(m))
-//        str_concat(list, (" "));
+    if (list->count > 0 && !method_is_init(m))
+        str_concat(list, (" "));
 
     if (!method_is_init(m))
         if (list->count > 0)

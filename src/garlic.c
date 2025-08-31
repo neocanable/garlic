@@ -119,6 +119,7 @@ static void opt_usage(const char *progname) {
     fprintf(stderr, "    -p: like javap or dexdump, print class info\n");
     fprintf(stderr, "    -o: output path for jar/dex/war files\n");
     fprintf(stderr, "    -t: number of threads to use (default is 4)\n");
+    fprintf(stderr, "    -s: apk/dex to smali\n");
 }
 
 static jd_opt* parse_opt(int argc, char **argv) {
@@ -140,7 +141,7 @@ static jd_opt* parse_opt(int argc, char **argv) {
     opt->path = path;
     opt->ft = ft;
 
-    while ((oc = getopt(argc, argv, "po:t:h")) != -1) {
+    while ((oc = getopt(argc, argv, "spo:t:h")) != -1) {
         switch (oc) {
             case 'p': { // like javap
                 opt->option = 1;
