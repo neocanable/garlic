@@ -144,7 +144,7 @@ static void dex_class_source_save_dir(jd_dex *dex, jsource_file *jf)
     jf->source = stream;
 }
 
-static FILE* dex_class_smali_save_dir(jd_dex *dex, dex_class_def *cf)
+FILE* dex_class_smali_save_dir(jd_dex *dex, dex_class_def *cf)
 {
     jd_meta_dex *meta = dex->meta;
     string desc = dex_str_of_type_id(dex->meta, cf->class_idx);

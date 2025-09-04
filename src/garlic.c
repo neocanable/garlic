@@ -272,7 +272,18 @@ static void run_for_apk(jd_opt *opt)
     printf("File     : %s\n", opt->path);
     printf("Save to  : %s\n", opt->out);
     printf("Thread   : %d\n", opt->thread_num);
-    apk_file_analyse(opt->path, opt->out, opt->thread_num);
+    if (opt->option == JD_FILE_OPTION_SMALI) {
+        apk_decompile_analyse(opt->path,
+                              opt->out,
+                              opt->thread_num,
+                              JD_DEX_TASK_SMALI);
+    } else {
+        apk_decompile_analyse(opt->path,
+                              opt->out,
+                              opt->thread_num,
+                              JD_DEX_TASK_DECOMPILE);
+    }
+
     printf("\n[Done]\n");
 }
 

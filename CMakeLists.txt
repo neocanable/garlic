@@ -14,11 +14,11 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,--gc-sections")
 endif ()
 
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
 
 if(NOT WIN32)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-ignored-optimization-argument")
-#    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -flto")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -flto")
 endif ()
 
 
@@ -95,8 +95,8 @@ if (WIN32)
 endif ()
 
 if (UNIX)
-#   add_custom_command(
-#           TARGET garlic POST_BUILD
-#           COMMAND strip $<TARGET_FILE:garlic>
-#   )
+   add_custom_command(
+           TARGET garlic POST_BUILD
+           COMMAND strip $<TARGET_FILE:garlic>
+   )
 endif()

@@ -1,18 +1,19 @@
 #include <errno.h>
-#include "apk/apk.h"
+//#include "apk/apk.h"
 #include "parser/dex/metadata.h"
 #include "dalvik/dex_decompile.h"
 #include "dalvik/dex_structure.h"
 #include "dalvik/dex_class.h"
 #include "decompiler/expression_writter.h"
 #include "common/output_tools.h"
+#include "dex_smali.h"
 
 void apk_status(jd_apk *apk)
 {
     pthread_mutex_lock(apk->threadpool->lock);
     apk->done++;
     fflush(stdout);
-    backspace(25);
+    backspace(30);
     printf("Progress : %d (%d)", apk->done, apk->added);
     fflush(stdout);
     pthread_mutex_unlock(apk->threadpool->lock);
@@ -28,7 +29,7 @@ void apk_entry_thread_task(jd_meta_dex *meta)
     mem_pool_free(tls->pool);
 }
 
-void apk_thread_task(jd_dex_task *task)
+void apk_decompile_thread_task(jd_dex_task *task)
 {
     thread_local_data *tls = get_thread_local_data();
     tls->pool = mem_create_pool();
@@ -48,7 +49,28 @@ void apk_thread_task(jd_dex_task *task)
     apk_status(apk);
 }
 
-static void apk_task_start(jd_apk *apk)
+void apk_smali_thread_task(jd_dex_task *task)
+{
+    thread_local_data *tls = get_thread_local_data();
+    tls->pool = mem_create_pool();
+
+    jd_dex *dex = task->dex;
+    jd_apk *apk = task->apk;
+    dex_class_def *cf = task->cf;
+
+    FILE *stream = dex_class_smali_save_dir(dex, cf);
+
+    dex_class_def_to_smali(dex->meta, cf, stream);
+
+    if (stream != NULL)
+        fclose(stream);
+
+    mem_pool_free(tls->pool);
+
+    apk_status(apk);
+}
+
+static void apk_decompile_task_start(jd_apk *apk)
 {
     struct zip_t *zip = zip_open(apk->path, 0, 'r');
     apk->zip = zip;
@@ -75,15 +97,29 @@ static void apk_task_start(jd_apk *apk)
 
         for (int j = 0; j < meta->header->class_defs_size; ++j) {
             dex_class_def *cf = &meta->class_defs[j];
-            if (dex_class_is_inner_class(dex->meta, cf) ||
-                dex_class_is_anonymous_class(dex->meta, cf))
-                continue;
+            if (apk->type == JD_DEX_TASK_DECOMPILE) {
+                if (dex_class_is_inner_class(dex->meta, cf) ||
+                    dex_class_is_anonymous_class(dex->meta, cf))
+                    continue;
+            }
 
             jd_dex_task *t = make_obj(jd_dex_task);
             t->dex = dex;
             t->cf = cf;
             t->apk = apk;
-            threadpool_add(apk->threadpool, &apk_thread_task, t, 0);
+            t->type = apk->type;
+            if (t->type == JD_DEX_TASK_SMALI) {
+                threadpool_add(apk->threadpool,
+                               &apk_smali_thread_task,
+                               t,
+                               0);
+            }
+            else {
+                threadpool_add(apk->threadpool,
+                               &apk_decompile_thread_task,
+                               t,
+                               0);
+            }
             apk->added++;
         }
     }
@@ -99,7 +135,10 @@ static void apk_release(jd_apk *apk)
     mem_free_pool();
 }
 
-void apk_file_analyse(string path, string save_dir, int thread_num)
+void apk_decompile_analyse(string path,
+                           string save_dir,
+                           int thread_num,
+                           jd_dex_task_type type)
 {
     mem_init_pool();
 
@@ -109,6 +148,7 @@ void apk_file_analyse(string path, string save_dir, int thread_num)
     apk->path = path;
     apk->save_dir = save_dir;
     apk->thread_num = thread_num;
+    apk->type = type;
 
     if (thread_num > 1) {
         apk->threadpool = threadpool_create_in(apk->pool, thread_num, 0);
@@ -116,7 +156,7 @@ void apk_file_analyse(string path, string save_dir, int thread_num)
         apk->threadpool = NULL;
     }
 
-    apk_task_start(apk);
+    apk_decompile_task_start(apk);
 
     apk_release(apk);
 }

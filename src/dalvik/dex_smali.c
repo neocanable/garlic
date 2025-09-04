@@ -54,9 +54,6 @@ static void smali_instruction_header(encoded_method *m,
                                        int i,
                                        FILE *stream)
 {
-    dex_code_item *code = m->code;
-    int len = dex_opcode_len(opcode);
-
     if (opcode == DEX_INS_MOVE ||
         opcode == DEX_INS_MOVE_FROM16 ||
         opcode == DEX_INS_MOVE_16 ||
@@ -133,69 +130,6 @@ static void smali_write_method(jd_meta_dex *dex,
                 }
                 break;
             }
-//            case DEX_INS_MOVE: { // move
-//                // move vA, vB, 12x, B|A|op
-//                u1 v_a = *item >> 12;
-//                u1 v_b = (*item >> 8) & 0x0F;
-//                printf("v%d, v%d\n", v_a, v_b);
-//                break;
-//            }
-//            case DEX_INS_MOVE_FROM16: { // move/from16
-//                // move/from16 vAA, vBBBB
-//                u1 v_a = (*item >> 8);
-//                u2 v_b = code->insns[i+1];
-//                printf("v%d, v%d\n", v_a, v_b);
-//                break;
-//            }
-//            case DEX_INS_MOVE_16: { // move/16
-//                // move/16 vAAAA, vBBBB
-//                u2 v_a = code->insns[i+1];
-//                u2 v_b = code->insns[i+2];
-//                printf("v%d v%d\n", v_a, v_b);
-//                break;
-//            }
-//            case DEX_INS_MOVE_WIDE: { // move-wide
-//                // move-wide vA, vB
-//                u1 v_a = (*item >> 8) & 0x0F;
-//                u1 v_b = *item >> 12;
-//                printf("v%d, v%d\n", v_a, v_b);
-//                break;
-//            }
-//            case DEX_INS_MOVE_WIDE_FROM16: { // move-wide/from16
-//                // move-wide/from16 vAA, vBBBB
-//                u1 v_a = (*item >> 8);
-//                u2 v_b = code->insns[i + 1];
-//                printf("v%d, v%d\n", v_a, v_b);
-//                break;
-//            }
-//            case DEX_INS_MOVE_WIDE_16: { // move-wide/16
-//                // move-wide/16 vAAAA, vBBBB
-//                u2 v_a = code->insns[i + 1];
-//                u2 v_b = code->insns[i+2];
-//                printf("v%d %d\n", v_a, v_b);
-//                break;
-//            }
-//            case DEX_INS_MOVE_OBJECT: { // move-object
-//                // move-object vA, vB, 12x, B|A|op
-//                u1 v_a = *item >> 12;
-//                u1 v_b = (*item >> 8) & 0x0F;
-//                printf("v%d %d\n", v_a, v_b);
-//                break;
-//            }
-//            case DEX_INS_MOVE_OBJECT_FROM16: { // move-object/from16
-//                // move-object/from16 vAA, vBBBB
-//                u1 v_a = (*item >> 8);
-//                u2 v_b = code->insns[i+1];
-//                printf("v%d v%d\n", v_a, v_b);
-//                break;
-//            }
-//            case DEX_INS_MOVE_OBJECT_16: { // move-object/16
-//                // move-object/16 vAAAA, vBBBB
-//                u2 v_a = code->insns[i+1];
-//                u2 v_b = code->insns[i+2];
-//                printf("v%d %d\n", v_a, v_b);
-//                break;
-//            }
             case DEX_INS_MOVE_RESULT: // move-result
             case DEX_INS_MOVE_RESULT_WIDE: // move-result-wide
             case DEX_INS_MOVE_RESULT_OBJECT: // move-result-object
@@ -400,7 +334,7 @@ static void smali_write_method(jd_meta_dex *dex,
                         break;
                     }
                     case 3: {
-                        printf(_smali_stream(stream),
+                        fprintf(_smali_stream(stream),
                                "{v%d, v%d, v%d} type@%02x\n",
                                v_c,
                                v_d,
