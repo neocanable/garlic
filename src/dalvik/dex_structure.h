@@ -77,4 +77,30 @@ struct jd_dex_class {
     dex_class_def *class_def;
 };
 
+typedef enum {
+    JD_DEX_TASK_DECOMPILE = 0,
+    JD_DEX_TASK_SMALI,
+    JD_DEX_TASK_ALL,
+} jd_dex_task_type;
+
+typedef struct jd_apk {
+    string              path;
+    string              save_dir;
+    int                 thread_num;
+    struct zip_t        *zip;
+    size_t              entries_size;
+    mem_pool            *pool;
+    threadpool_t        *threadpool;
+    jd_dex_task_type    type;
+    int                 added;
+    int                 done;
+} jd_apk;
+
+typedef struct {
+    jd_dex *dex;
+    jd_apk *apk;
+    dex_class_def *cf;
+    jd_dex_task_type type;
+} jd_dex_task;
+
 #endif //GARLIC_DEX_STRUCTURE_H

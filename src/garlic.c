@@ -5,6 +5,7 @@
 #include "jar/jar.h"
 #include "apk/apk.h"
 #include "dalvik/dex_decompile.h"
+#include "dex_smali.h"
 #include <unistd.h>
 
 #define JAVA_CLASS_MAGIC 0xCAFEBABE
@@ -18,6 +19,13 @@ typedef enum {
     JD_FILE_TYPE_DEX,
     JD_FILE_TYPE_APK,
 } jd_file_type_t;
+
+typedef enum {
+    JD_FILE_OPTION_NONE = 0,
+    JD_FILE_OPTION_DUMP, // like javap or dexdump
+    JD_FILE_OPTION_SEARCH, // search for a string in the file
+    JD_FILE_OPTION_SMALI, // dex/apk to smali
+} jd_file_option_t;
 
 typedef struct jd_opt {
     char *path;
@@ -119,6 +127,7 @@ static void opt_usage(const char *progname) {
     fprintf(stderr, "    -p: like javap or dexdump, print class info\n");
     fprintf(stderr, "    -o: output path for jar/dex/war files\n");
     fprintf(stderr, "    -t: number of threads to use (default is 4)\n");
+    fprintf(stderr, "    -s: apk/dex to smali\n");
 }
 
 static jd_opt* parse_opt(int argc, char **argv) {
@@ -140,10 +149,10 @@ static jd_opt* parse_opt(int argc, char **argv) {
     opt->path = path;
     opt->ft = ft;
 
-    while ((oc = getopt(argc, argv, "po:t:h")) != -1) {
+    while ((oc = getopt(argc, argv, "spo:t:h")) != -1) {
         switch (oc) {
             case 'p': { // like javap
-                opt->option = 1;
+                opt->option = JD_FILE_OPTION_DUMP;
                 break;
             }
             case 'o': {
@@ -151,6 +160,10 @@ static jd_opt* parse_opt(int argc, char **argv) {
                 opt->out = malloc(strlen(optarg) + 1);
                 strcpy(opt->out, optarg);
                 opt->out[strlen(opt->out)] = '\0';
+                break;
+            }
+            case 's': {
+                opt->option = JD_FILE_OPTION_SMALI;
                 break;
             }
             case 't': {
@@ -196,7 +209,7 @@ static void free_opt(jd_opt *opt) {
 static void run_for_jvm_class(jd_opt *opt) {
     mem_init_pool();
     jclass_file *jc = parse_class_file(opt->path);
-    if (opt->option == 1) {
+    if (opt->option == JD_FILE_OPTION_DUMP) {
         print_java_class_file_info(jc);
     }
     else {
@@ -218,9 +231,23 @@ static void run_for_jvm_jar(jd_opt *opt) {
 
 static void run_for_dex(jd_opt *opt)
 {
-    if (opt->option == 1) {
+    if (opt->option == JD_FILE_OPTION_DUMP) {
         printf("[Garlic] DEX file info\n");
         dex_file_dump(opt->path);
+    }
+    else if (opt->option == JD_FILE_OPTION_SMALI) {
+        prepare_opt_output(opt);
+        prepare_opt_threads(opt);
+        printf("[Garlic] DEX file analysis\n");
+        printf("File     : %s\n", opt->path);
+        printf("Save to  : %s\n", opt->out);
+        printf("Thread   : %d\n", opt->thread_num);
+        dex_file_analyse(opt->path,
+                         opt->out,
+                         opt->thread_num,
+                         JD_DEX_TASK_SMALI);
+        printf("\n[Done]\n");
+
     }
     else {
         prepare_opt_output(opt);
@@ -229,7 +256,10 @@ static void run_for_dex(jd_opt *opt)
         printf("File     : %s\n", opt->path);
         printf("Save to  : %s\n", opt->out);
         printf("Thread   : %d\n", opt->thread_num);
-        dex_file_analyse(opt->path, opt->out, opt->thread_num);
+        dex_file_analyse(opt->path,
+                         opt->out,
+                         opt->thread_num,
+                         JD_DEX_TASK_DECOMPILE);
         printf("\n[Done]\n");
     }
 }
@@ -242,7 +272,18 @@ static void run_for_apk(jd_opt *opt)
     printf("File     : %s\n", opt->path);
     printf("Save to  : %s\n", opt->out);
     printf("Thread   : %d\n", opt->thread_num);
-    apk_file_analyse(opt->path, opt->out, opt->thread_num);
+    if (opt->option == JD_FILE_OPTION_SMALI) {
+        apk_decompile_analyse(opt->path,
+                              opt->out,
+                              opt->thread_num,
+                              JD_DEX_TASK_SMALI);
+    } else {
+        apk_decompile_analyse(opt->path,
+                              opt->out,
+                              opt->thread_num,
+                              JD_DEX_TASK_DECOMPILE);
+    }
+
     printf("\n[Done]\n");
 }
 

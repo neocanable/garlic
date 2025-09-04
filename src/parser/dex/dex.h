@@ -357,7 +357,7 @@ typedef struct {
     encoded_method *virtual_methods;
 } dex_class_data_item;
 
-typedef struct {
+typedef struct dex_class_def {
     u4  class_idx;
     u4  access_flags;
     u4  superclass_idx;
@@ -378,6 +378,8 @@ typedef struct {
     list_object *inner_classes;
     list_object *anonymous_classes;
 } dex_class_def;
+
+typedef struct dex_class_def dex_class;
 
 typedef struct {
     u4  callSiteOff;

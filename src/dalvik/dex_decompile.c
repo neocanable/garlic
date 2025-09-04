@@ -20,6 +20,7 @@
 #include "dex_annotation.h"
 #include "dex_dump.h"
 #include "output_tools.h"
+#include "dex_smali.h"
 
 void dex_status(jd_dex *dex)
 {
@@ -143,6 +144,26 @@ static void dex_class_source_save_dir(jd_dex *dex, jsource_file *jf)
     jf->source = stream;
 }
 
+FILE* dex_class_smali_save_dir(jd_dex *dex, dex_class_def *cf)
+{
+    jd_meta_dex *meta = dex->meta;
+    string desc = dex_str_of_type_id(dex->meta, cf->class_idx);
+    string fname = class_full_name(desc);
+    string sname = class_simple_name(fname);
+    string pname = class_package_name_of(fname);
+
+    string full_dir = str_create("%s/%s", meta->source_dir, pname);
+    mkdir_p(full_dir);
+
+    string path = str_create("%s/%s.smali", full_dir, sname);
+    FILE *stream = fopen(path, "w");
+    if (stream == NULL) {
+        fprintf(stdout, "[error]: open file %s failed: %d\n", path, errno);
+        return NULL;
+    }
+    return stream;
+}
+
 static void dex_inner_class_list(jsource_file *jf)
 {
     dex_class_def *cf = jf->jclass;
@@ -248,6 +269,14 @@ void dex_decompile_class(jd_dex *dex, dex_class_def *cf)
     mem_free_pool();
 }
 
+void dex_smali_class(jd_dex *dex, dex_class_def *cf)
+{
+    mem_init_pool();
+    FILE *stream = dex_class_smali_save_dir(dex, cf);
+    dex_class_def_to_smali(dex->meta, cf, stream);
+    mem_free_pool();
+}
+
 void dex_to_source(string dex_path, string save_dir)
 {
     jd_meta_dex *meta = parse_dex_file(dex_path);
@@ -322,7 +351,7 @@ jd_dex* dex_init_without_thread(jd_meta_dex *meta)
     return dex;
 }
 
-void dex_thread_task(jd_dex_task *task)
+void dex_decompile_thread_task(jd_dex_task *task)
 {
     thread_local_data *tls = get_thread_local_data();
     tls->pool = mem_create_pool();
@@ -340,7 +369,27 @@ void dex_thread_task(jd_dex_task *task)
     dex_status(dex);
 }
 
-void dex_threadpool_start(jd_dex *dex)
+void dex_smali_thread_task(jd_dex_task *task)
+{
+    thread_local_data *tls = get_thread_local_data();
+    tls->pool = mem_create_pool();
+
+    jd_dex *dex = task->dex;
+    dex_class_def *cf = task->cf;
+
+    FILE *stream = dex_class_smali_save_dir(dex, cf);
+
+    dex_class_def_to_smali(dex->meta, cf, stream);
+
+    if (stream != NULL)
+        fclose(stream);
+
+    mem_pool_free(tls->pool);
+
+    dex_status(dex);
+}
+
+void dex_decompile_threadpool_start(jd_dex *dex)
 {
     jd_meta_dex *meta = dex->meta;
     for (int i = 0; i < meta->header->class_defs_size; ++i) {
@@ -352,12 +401,12 @@ void dex_threadpool_start(jd_dex *dex)
         jd_dex_task *t = make_obj(jd_dex_task);
         t->dex = dex;
         t->cf = cf;
-        threadpool_add(dex->threadpool, &dex_thread_task, t, 0);
+        threadpool_add(dex->threadpool, &dex_decompile_thread_task, t, 0);
         dex->added++;
     }
 }
 
-void dex_main_thread_start(jd_dex *dex)
+void dex_decompile_main_thread_start(jd_dex *dex)
 {
     jd_meta_dex *meta = dex->meta;
     for (int i = 0; i < meta->header->class_defs_size; ++i) {
@@ -378,6 +427,37 @@ void dex_main_thread_start(jd_dex *dex)
     }
 }
 
+void dex_smali_threadpool_start(jd_dex *dex)
+{
+    jd_meta_dex *meta = dex->meta;
+    for (int i = 0; i < meta->header->class_defs_size; ++i) {
+        dex_class_def *cf = &meta->class_defs[i];
+        jd_dex_task *t = make_obj(jd_dex_task);
+        t->dex = dex;
+        t->cf = cf;
+        t->type = JD_DEX_TASK_SMALI;
+        threadpool_add(dex->threadpool, &dex_smali_thread_task, t, 0);
+        dex->added++;
+    }
+}
+
+void dex_smali_main_thread_start(jd_dex *dex)
+{
+    jd_meta_dex *meta = dex->meta;
+    for (int i = 0; i < meta->header->class_defs_size; ++i) {
+        mem_init_pool();
+        dex_class_def *cf = &meta->class_defs[i];
+
+        FILE *stream = dex_class_smali_save_dir(dex, cf);
+
+        dex_class_def_to_smali(dex->meta, cf, stream);
+
+        mem_free_pool();
+        dex->done ++;
+        dex_main_thread_status(dex);
+    }
+}
+
 void dex_release(jd_dex *dex)
 {
     if (dex->threadpool) {
@@ -391,18 +471,26 @@ void dex_release(jd_dex *dex)
 
 }
 
-void dex_file_analyse(string path, string save_dir, int thread_num)
+void dex_file_analyse(string path, string save_dir, int thread_num, jd_dex_task_type type)
 {
     mem_init_pool();
     jd_meta_dex *meta = parse_dex_file(path);
     meta->source_dir = save_dir;
     jd_dex *dex = dex_init(meta, thread_num);
 
-    if (thread_num > 1) {
-        dex_threadpool_start(dex);
+    if (type == JD_DEX_TASK_DECOMPILE) {
+        if (thread_num > 1) {
+            dex_decompile_threadpool_start(dex);
+        } else {
+            dex_decompile_main_thread_start(dex);
+        }
     }
-    else {
-        dex_main_thread_start(dex);
+    else if (type == JD_DEX_TASK_SMALI) {
+        if (thread_num > 1) {
+            dex_smali_threadpool_start(dex);
+        } else {
+            dex_smali_main_thread_start(dex);
+        }
     }
 
     dex_release(dex);
@@ -454,5 +542,4 @@ void dex_analyse_in_apk_task(jd_meta_dex *meta)
     }
 
     mem_pool_free(meta->pool);
-
 }

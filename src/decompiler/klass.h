@@ -4,6 +4,11 @@
 #include "decompiler/structure.h"
 #include "common/endian_x.h"
 
+#define CONCAT_ACCESS_FLAG(access_flag, flag, list, str)        \
+    if (access_flags_contains(access_flag, flag)) {             \
+        str_concat(list, str);                                  \
+    }                                                           \
+
 #define access_flags_contains(access_flags, flag) ((access_flags & flag) != 0)
 
 bool is_inner_class(string class_name);
@@ -22,6 +27,8 @@ string class_simple_name(string full);
 string class_full_name(string descriptor);
 
 string class_package_name(jsource_file *jf);
+
+string class_package_name_of(string path);
 
 void class_create_definations(jsource_file *jf);
 
