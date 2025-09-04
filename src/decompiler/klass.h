@@ -28,6 +28,8 @@ string class_full_name(string descriptor);
 
 string class_package_name(jsource_file *jf);
 
+string class_package_name_of(string path);
+
 void class_create_definations(jsource_file *jf);
 
 void class_create_blocks(jsource_file *jf);

@@ -4,21 +4,28 @@
 #include "dalvik/dex_structure.h"
 #include "apk/apk.h"
 
+typedef enum {
+    JD_DEX_TASK_DECOMPILE = 0,
+    JD_DEX_TASK_SMALI,
+    JD_DEX_TASK_ALL,
+} jd_dex_task_type;
+
 typedef struct {
     jd_dex *dex;
-    dex_class_def *cf;
     jd_apk *apk;
+    dex_class_def *cf;
+    jd_dex_task_type type;
 } jd_dex_task;
 
-void dex_threadpool_start(jd_dex *dex);
+void dex_decompile_threadpool_start(jd_dex *dex);
 
-void dex_main_thread_start(jd_dex *dex);
+void dex_decompile_main_thread_start(jd_dex *dex);
 
-void dex_file_analyse(string path, string save_dir, int thread_num);
+void dex_file_analyse(string path, string save_dir, int thread_num, jd_dex_task_type type);
 
 jd_dex* dex_init_without_thread(jd_meta_dex *meta);
 
-void dex_thread_task(jd_dex_task *task);
+void dex_decompile_thread_task(jd_dex_task *task);
 
 void dex_analyse_in_apk_task(jd_meta_dex *meta);
 

@@ -208,9 +208,8 @@ string class_simple_name(string full)
     }
 }
 
-string class_package_name(jsource_file *jf)
+string class_package_name_of(string path)
 {
-    string path = jf->fname;
     size_t len = strlen(path);
     size_t start = len;
     char p = path[0];
@@ -225,6 +224,26 @@ string class_package_name(jsource_file *jf)
     package[start] = '\0';
     // str_replace_char(package, '/', '.');
     return package;
+}
+
+string class_package_name(jsource_file *jf)
+{
+    string path = jf->fname;
+    return class_package_name_of(path);
+//    size_t len = strlen(path);
+//    size_t start = len;
+//    char p = path[0];
+//    while (p != '/' && start > 0)
+//        p = path[--start];
+//
+//    if (start == 0)
+//        return NULL;
+//
+//    string package = x_alloc(start+1);
+//    memcpy(package, path, start);
+//    package[start] = '\0';
+//    // str_replace_char(package, '/', '.');
+//    return package;
 }
 
 void class_import(jsource_file *jf, string path)

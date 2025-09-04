@@ -33,22 +33,6 @@ static void smali_method_defination(jd_meta_dex *dex,
     }
 
     printf("\t.registers %d\n\n", code->registers_size);
-
-//    printf("\t\t[%02x%36s]: "
-//           "registers: %d, "
-//           "ins: %d, "
-//           "outs: %d, "
-//           "tries: %d, "
-//           "debug_info_off: %d, "
-//           "insns_size: %d\n",
-//           m->code_off,
-//           " ",
-//           code->registers_size,
-//           code->ins_size,
-//           code->outs_size,
-//           code->tries_size,
-//           code->debug_info_off,
-//           code->insns_size);
 }
 
 static void smali_instruction_header(encoded_method *m,
@@ -775,7 +759,6 @@ static void smali_write_method(jd_meta_dex *dex,
             case DEX_INS_MUL_DOUBLE:
             case DEX_INS_DIV_DOUBLE:
             case DEX_INS_REM_DOUBLE: {
-                // 90..af 23x
                 u1 v_a = (*item >> 8);
                 u2 second = code->insns[i+1];
                 u1 v_b = second & 0xFF;
@@ -913,7 +896,6 @@ static void smali_write_method(jd_meta_dex *dex,
                 break;
             }
             case DEX_INS_INVOKE_CUSTOM: {
-                // 35c
                 u1 v_a = *item >> 12;
                 u1 v_g = (*item >> 8) & 0x0F;
                 u2 second = code->insns[i+2];
@@ -985,8 +967,6 @@ static void smali_write_method(jd_meta_dex *dex,
             }
         }
         i += (len - 1);
-//        if (i != code->insns_size - 1)
-//            printf("\n");
     }
     printf(".end method\n\n");
 }
@@ -998,6 +978,11 @@ static void smali_write_class_fields(jd_meta_dex *dex,
     dex_class_data_item *item = cf->class_data;
     if (item == NULL) return;
     encoded_field *efield;
+
+//    string desc = dex_str_of_type_id(dex, cf->class_idx);
+//    string fname = class_full_name(desc);
+//    string sname = class_simple_name(fname);
+
     if (item->static_fields_size > 0) {
         printf("#static fields\n");
         for (int i = 0; i < item->static_fields_size; ++i) {
@@ -1032,8 +1017,7 @@ static void smali_write_class_fields(jd_meta_dex *dex,
 
 
 static void smali_write_class_def(jd_meta_dex *dex,
-                                  dex_class *cf,
-                                  int index)
+                                  dex_class *cf)
 {
     string class_name = dex_str_of_type_id(dex, cf->class_idx);
     string super_name = dex_str_of_type_id(dex, cf->superclass_idx);
@@ -1058,32 +1042,39 @@ static void smali_write_class_def(jd_meta_dex *dex,
     smali_write_class_fields(dex, cf);
 }
 
-
-void dex2smali(jd_meta_dex *dex)
+void class2smali(jd_meta_dex *dex, dex_class_def *cf)
 {
+    dex_class_data_item *class_data = cf->class_data;
+    smali_write_class_def(dex, cf);
+    if (class_data == NULL)
+        return;
+
+    for (int j = 0; j < class_data->direct_methods_size; ++j) {
+        encoded_method *m = &class_data->direct_methods[j];
+        dex_code_item *code = m->code;
+        if (code == NULL)
+            continue;
+        smali_write_method(dex, m, code, 0);
+    }
+
+    for (int j = 0; j < class_data->virtual_methods_size; ++j) {
+        encoded_method *m = &class_data->virtual_methods[j];
+        dex_code_item *code = m->code;
+        if (code == NULL)
+            continue;
+        smali_write_method(dex, m, code, 1);
+    }
+}
+
+void dex2smali(string path)
+{
+    mem_init_pool();
+    jd_meta_dex *dex = parse_dex_file(path);
+
     dex_header *header = dex->header;
     for (int i = 0; i < header->class_defs_size; ++i) {
         dex_class *cf = &dex->class_defs[i];
-        dex_class_data_item *class_data = cf->class_data;
-        smali_write_class_def(dex, cf, i);
-        if (class_data == NULL)
-            continue;
-
-        for (int j = 0; j < class_data->direct_methods_size; ++j) {
-            encoded_method *m = &class_data->direct_methods[j];
-            dex_code_item *code = m->code;
-            if (code == NULL)
-                continue;
-            smali_write_method(dex, m, code, 0);
-        }
-
-        for (int j = 0; j < class_data->virtual_methods_size; ++j) {
-            encoded_method *m = &class_data->virtual_methods[j];
-            dex_code_item *code = m->code;
-            if (code == NULL)
-                continue;
-
-            smali_write_method(dex, m, code, 1);
-        }
+        class2smali(dex, cf);
     }
+    mem_free_pool();
 }

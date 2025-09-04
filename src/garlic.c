@@ -236,10 +236,18 @@ static void run_for_dex(jd_opt *opt)
         dex_file_dump(opt->path);
     }
     else if (opt->option == JD_FILE_OPTION_SMALI) {
-        printf("[Garlic] DEX to Smali\n");
+        prepare_opt_output(opt);
+        prepare_opt_threads(opt);
+        printf("[Garlic] DEX file analysis\n");
         printf("File     : %s\n", opt->path);
-        dex2smali(opt->path);
+        printf("Save to  : %s\n", opt->out);
+        printf("Thread   : %d\n", opt->thread_num);
+        dex_file_analyse(opt->path,
+                         opt->out,
+                         opt->thread_num,
+                         JD_DEX_TASK_SMALI);
         printf("\n[Done]\n");
+
     }
     else {
         prepare_opt_output(opt);
@@ -248,7 +256,10 @@ static void run_for_dex(jd_opt *opt)
         printf("File     : %s\n", opt->path);
         printf("Save to  : %s\n", opt->out);
         printf("Thread   : %d\n", opt->thread_num);
-        dex_file_analyse(opt->path, opt->out, opt->thread_num);
+        dex_file_analyse(opt->path,
+                         opt->out,
+                         opt->thread_num,
+                         JD_DEX_TASK_DECOMPILE);
         printf("\n[Done]\n");
     }
 }
