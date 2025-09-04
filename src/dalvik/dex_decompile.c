@@ -144,7 +144,7 @@ static void dex_class_source_save_dir(jd_dex *dex, jsource_file *jf)
     jf->source = stream;
 }
 
-static void dex_class_smali_save_dir(jd_dex *dex, dex_class_def *cf)
+static FILE* dex_class_smali_save_dir(jd_dex *dex, dex_class_def *cf)
 {
     jd_meta_dex *meta = dex->meta;
     string desc = dex_str_of_type_id(dex->meta, cf->class_idx);
@@ -159,8 +159,9 @@ static void dex_class_smali_save_dir(jd_dex *dex, dex_class_def *cf)
     FILE *stream = fopen(path, "w");
     if (stream == NULL) {
         fprintf(stdout, "[error]: open file %s failed: %d\n", path, errno);
-        return;
+        return NULL;
     }
+    return stream;
 }
 
 static void dex_inner_class_list(jsource_file *jf)
@@ -271,8 +272,8 @@ void dex_decompile_class(jd_dex *dex, dex_class_def *cf)
 void dex_smali_class(jd_dex *dex, dex_class_def *cf)
 {
     mem_init_pool();
-    dex_class_smali_save_dir(dex, cf);
-    class2smali(dex->meta, cf);
+    FILE *stream = dex_class_smali_save_dir(dex, cf);
+    dex_class_def_to_smali(dex->meta, cf, stream);
     mem_free_pool();
 }
 
@@ -376,7 +377,12 @@ void dex_smali_thread_task(jd_dex_task *task)
     jd_dex *dex = task->dex;
     dex_class_def *cf = task->cf;
 
-    class2smali(dex->meta, cf);
+    FILE *stream = dex_class_smali_save_dir(dex, cf);
+
+    dex_class_def_to_smali(dex->meta, cf, stream);
+
+    if (stream != NULL)
+        fclose(stream);
 
     mem_pool_free(tls->pool);
 
@@ -442,7 +448,9 @@ void dex_smali_main_thread_start(jd_dex *dex)
         mem_init_pool();
         dex_class_def *cf = &meta->class_defs[i];
 
-        class2smali(dex, cf);
+        FILE *stream = dex_class_smali_save_dir(dex, cf);
+
+        dex_class_def_to_smali(dex->meta, cf, stream);
 
         mem_free_pool();
         dex->done ++;
@@ -534,5 +542,4 @@ void dex_analyse_in_apk_task(jd_meta_dex *meta)
     }
 
     mem_pool_free(meta->pool);
-
 }

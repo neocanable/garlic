@@ -13,6 +13,8 @@ void dex_method_init(jsource_file *jf,
 
 jd_val* dex_method_parameter_val(jd_method *m, int index);
 
+void dex_method_access_flag_with_flags(u4 flags, str_list *list);
+
 void dex_method_access_flags(jd_method *m, str_list *list);
 
 static inline bool dex_encoded_method_is_lambda(jd_meta_dex *meta,

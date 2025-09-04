@@ -4,10 +4,15 @@
 #include "dex_class.h"
 #include "dex_method.h"
 
+static FILE* _smali_stream(FILE *out) {
+    return out == NULL ? stdout : out;
+}
+
 static void smali_method_defination(jd_meta_dex *dex,
                                       encoded_method *m,
                                       dex_code_item *code,
-                                      int type)
+                                      int type,
+                                      FILE *stream)
 {
     dex_method_id *method_id = &dex->method_ids[m->method_id];
     dex_proto_id *proto_id = &dex->proto_ids[method_id->proto_idx];
@@ -21,23 +26,33 @@ static void smali_method_defination(jd_meta_dex *dex,
     string access_flags = str_join(list);
 
     if (proto_id->parameters_off == 0) {
-        printf(".method %s %s()%s\n", access_flags, method_name, str_return);
+        fprintf(_smali_stream(stream),
+                ".method %s %s()%s\n",
+                access_flags,
+                method_name,
+                str_return);
     } else {
-        printf(".method %s %s(", access_flags, method_name);
+        fprintf(_smali_stream(stream), 
+                ".method %s %s(", 
+                access_flags, 
+                method_name);
         for (int i = 0; i < proto_id->type_list->size; ++i) {
             dex_type_item *type_item = &proto_id->type_list->list[i];
             string type = dex_str_of_type_id(dex, type_item->type_idx);
-            printf("%s", type);
+            fprintf(_smali_stream(stream), "%s", type);
         }
-        printf(")%s\n", str_return);
+        fprintf(_smali_stream(stream), ")%s\n", str_return);
     }
 
-    printf("\t.registers %d\n\n", code->registers_size);
+    fprintf(_smali_stream(stream),
+            "\t.registers %d\n\n",
+            code->registers_size);
 }
 
 static void smali_instruction_header(encoded_method *m,
                                        u1 opcode,
-                                       int i)
+                                       int i,
+                                       FILE *stream)
 {
     dex_code_item *code = m->code;
     int len = dex_opcode_len(opcode);
@@ -53,15 +68,16 @@ static void smali_instruction_header(encoded_method *m,
         opcode == DEX_INS_MOVE_OBJECT_16)
         return;
 
-    printf("\t%s ", dex_opcode_name(opcode));
+    fprintf(_smali_stream(stream), "\t%s ", dex_opcode_name(opcode));
 }
 
 static void smali_write_method(jd_meta_dex *dex,
                                  encoded_method *m,
                                  dex_code_item *code,
-                                 int type)
+                                 int type,
+                                 FILE *stream)
 {
-    smali_method_defination(dex, m, code, type);
+    smali_method_defination(dex, m, code, type, stream);
 
     for (int i = 0; i < code->insns_size; ++i) {
         u2 *item = &code->insns[i];
@@ -69,7 +85,7 @@ static void smali_write_method(jd_meta_dex *dex,
 
 
         int len = dex_opcode_len(opcode);
-        smali_instruction_header(m, opcode, i);
+        smali_instruction_header(m, opcode, i, stream);
         switch(opcode) {
             case DEX_INS_NOP: { // nop
                 if (*item == 0x0100) {
@@ -81,8 +97,9 @@ static void smali_write_method(jd_meta_dex *dex,
                                      (code->insns[i+5+j] << 16);
                     }
                     len = size * 2 + 4;
-                    printf("packed-switch-payload: size=%d, first_key=%d\n",
-                           size, first_key);
+                    fprintf(_smali_stream(stream),
+                            "packed-switch-payload: size=%d, first_key=%d\n",
+                            size, first_key);
                 }
                 else if (*item == 0x0200) {
                     u2 size = code->insns[i+1];
@@ -97,7 +114,9 @@ static void smali_write_method(jd_meta_dex *dex,
                                      (code->insns[i+3+size+j] << 16);
                     }
                     len = size * 4 + 2;
-                    printf("sparse-switch-payload: size=%d\n", size);
+                    fprintf(_smali_stream(stream),
+                            "sparse-switch-payload: size=%d\n",
+                            size);
                 }
                 else if (*item == 0x0300) {
                     u2 element_size = code->insns[i+1];
@@ -106,12 +125,11 @@ static void smali_write_method(jd_meta_dex *dex,
                     for (int j = 0; j < size; ++j) {
                         data[j] = code->insns[i+3+j];
                     }
-                    printf("fill-array-data-payload: size=%d", size);
+                    fprintf(_smali_stream(stream),
+                            "fill-array-data-payload: size=%d",
+                            size);
 
                     len = (size * element_size + 1) / 2 + 4;
-                }
-                else {
-//                    printf("%s\n", header);
                 }
                 break;
             }
@@ -184,11 +202,11 @@ static void smali_write_method(jd_meta_dex *dex,
             case DEX_INS_MOVE_EXCEPTION: { // move-result-exception
                 // move-result <T> vAA
                 u1 v_a = (*item >> 8);
-                printf("v%d\n", v_a);
+                fprintf(_smali_stream(stream), "v%d\n", v_a);
                 break;
             }
             case DEX_INS_RETURN_VOID: { // return-void
-                printf("\n");
+                fprintf(_smali_stream(stream), "\n");
                 break;
             }
             case DEX_INS_RETURN: // return vAA
@@ -197,11 +215,11 @@ static void smali_write_method(jd_meta_dex *dex,
                 // return <vAA>
                 u1 v_a = (*item >> 8);
                 if (opcode == DEX_INS_RETURN) {
-                    printf("v%d\n", v_a);
+                    fprintf(_smali_stream(stream), "v%d\n", v_a);
                 } else if (opcode == DEX_INS_RETURN_WIDE) {
-                    printf("v%d\n", v_a);
+                    fprintf(_smali_stream(stream), "v%d\n", v_a);
                 } else {
-                    printf("v%d\n", v_a);
+                    fprintf(_smali_stream(stream), "v%d\n", v_a);
                 }
                 break;
             }
@@ -209,14 +227,14 @@ static void smali_write_method(jd_meta_dex *dex,
                 // const/4 vA, #+B
                 s1 v_a = ((s4)*item >> 8) & 0x0F;
                 s1 v_b = (s4)*item >> 12;
-                printf("v%d, %d\n", v_a, v_b);
+                fprintf(_smali_stream(stream), "v%d, %d\n", v_a, v_b);
                 break;
             }
             case DEX_INS_CONST_16: { // const/16
                 // const/16 vAA, #+BBBB
                 u1 v_a = (*item >> 8);
                 s2 v_b = code->insns[i+1];
-                printf("v%d, %d\n", v_a, v_b);
+                fprintf(_smali_stream(stream), "v%d, %d\n", v_a, v_b);
                 break;
             }
             case DEX_INS_CONST: { // const vAA, #+BBBBBBBB
@@ -225,7 +243,7 @@ static void smali_write_method(jd_meta_dex *dex,
                 u4 low = code->insns[i+1];
                 u4 high = code->insns[i+2];
                 u8 v_b = (u8)high << 32 | low;
-                printf("v%d, %lu\n", v_a, v_b);
+                fprintf(_smali_stream(stream), "v%d, %lu\n", v_a, v_b);
                 break;
             }
             case DEX_INS_CONST_HIGH16: { // const/high16
@@ -233,14 +251,14 @@ static void smali_write_method(jd_meta_dex *dex,
                 u1 v_a = (*item >> 8);
                 s2 v_b = code->insns[i + 1];
                 v_b = v_b << 16;
-                printf("v%d, %d\n", v_a, v_b);
+                fprintf(_smali_stream(stream), "v%d, %d\n", v_a, v_b);
                 break;
             }
             case DEX_INS_CONST_WIDE_16: { // const-wide/16
                 // const-wide/16 vAA, #+BBBB
                 u1 v_a = (*item >> 8);
                 s2 v_b = code->insns[i+1];
-                printf("v%d, %d\n", v_a, v_b);
+                fprintf(_smali_stream(stream), "v%d, %d\n", v_a, v_b);
                 break;
             }
             case DEX_INS_CONST_WIDE_32: { // const-wide/32
@@ -249,7 +267,7 @@ static void smali_write_method(jd_meta_dex *dex,
                 s4 b1 = code->insns[i+1];
                 s4 b2 = code->insns[i+2];
                 s8 v_b = (s8)b1 << 32 | b2;
-                printf("v%d, %ld\n", v_a, v_b);
+                fprintf(_smali_stream(stream), "v%d, %ld\n", v_a, v_b);
                 break;
             }
             case DEX_INS_CONST_WIDE: { // const-wide vAA, #+BBBBBBBBBBBBBBBB
@@ -260,7 +278,7 @@ static void smali_write_method(jd_meta_dex *dex,
                 s4 b3 = code->insns[i+3];
                 s4 b4 = code->insns[i+4];
                 s8 v_b = (s8)b1 << 48 | (s8)b2 << 32 | (s8)b3 << 16 | b4;
-                printf("v%d, %ld\n", v_a, v_b);
+                fprintf(_smali_stream(stream), "v%d, %ld\n", v_a, v_b);
                 break;
             }
             case DEX_INS_CONST_WIDE_HIGH16: { // const-wide/high16
@@ -268,7 +286,7 @@ static void smali_write_method(jd_meta_dex *dex,
                 u1 v_a = (*item >> 8);
                 s2 b1 = code->insns[i+1];
                 s8 v_b = (s8)b1 << 48;
-                printf("v%d, %ld\n", v_a, v_b);
+                fprintf(_smali_stream(stream), "v%d, %ld\n", v_a, v_b);
                 break;
             }
             case DEX_INS_CONST_STRING: { // const-string
@@ -276,7 +294,7 @@ static void smali_write_method(jd_meta_dex *dex,
                 u1 v_a = (*item >> 8);
                 u2 string_index = code->insns[i+1];
                 string str = dex->strings[string_index].data;
-                printf("v%d, \"%s\"\n", v_a, str);
+                fprintf(_smali_stream(stream), "v%d, \"%s\"\n", v_a, str);
                 break;
             }
             case DEX_INS_CONST_STRING_JUMBO: { // const-string/jumbo
@@ -286,7 +304,7 @@ static void smali_write_method(jd_meta_dex *dex,
                 u2 index2 = code->insns[i+2];
                 u4 string_index = ((u4)index2 << 16) | index1;
                 string str = dex->strings[string_index].data;
-                printf("v%d, \"%s\"\n", v_a, str);
+                fprintf(_smali_stream(stream), "v%d, \"%s\"\n", v_a, str);
                 break;
             }
             case DEX_INS_CONST_CLASS: { // const-class
@@ -294,21 +312,21 @@ static void smali_write_method(jd_meta_dex *dex,
                 u1 v_a = (*item >> 8);
                 u2 type_index = code->insns[i+1];
                 string type_name = dex_str_of_type_id(dex, type_index);
-                printf("v%d, %s\n", v_a, type_name);
+                fprintf(_smali_stream(stream), "v%d, %s\n", v_a, type_name);
                 break;
             }
             case DEX_INS_MONITOR_ENTER: // monitor-enter
             case DEX_INS_MONITOR_EXIT: { // monitor-exit
                 // monitor-enter vAA
                 u1 v_a = (*item >> 8);
-                printf("v%d\n", v_a);
+                fprintf(_smali_stream(stream), "v%d\n", v_a);
                 break;
             }
             case DEX_INS_CHECK_CAST: { // check-cast
                 u1 v_a = (*item >> 8);
                 u2 type_index = code->insns[i+1];
                 string type_name = dex_str_of_type_id(dex, type_index);
-                printf("v%d, %s\n",
+                fprintf(_smali_stream(stream), "v%d, %s\n",
                        v_a, type_name);
                 break;
             }
@@ -319,7 +337,7 @@ static void smali_write_method(jd_meta_dex *dex,
                 u2 type_index = code->insns[i+1];
                 dex_type_id *type_id = &dex->type_ids[type_index];
                 string type_name = dex->strings[type_id->descriptor_idx].data;
-                printf("v%d, v%d, %s\n",
+                fprintf(_smali_stream(stream), "v%d, v%d, %s\n",
                        v_a, v_b, type_name);
                 break;
             }
@@ -327,7 +345,7 @@ static void smali_write_method(jd_meta_dex *dex,
                 // array-length vA, vB
                 u1 v_a = *item >> 12;
                 u1 v_b = (*item >> 8) & 0x0F;
-                printf("v%d, v%d\n", v_a, v_b);
+                fprintf(_smali_stream(stream), "v%d, v%d\n", v_a, v_b);
                 break;
             }
             case DEX_INS_NEW_INSTANCE: { // new-instance
@@ -335,7 +353,7 @@ static void smali_write_method(jd_meta_dex *dex,
                 u1 v_a = (*item >> 8);
                 u2 type_index = code->insns[i+1];
                 string tname = dex_str_of_type_id(dex, type_index);
-                printf("v%d, %s\n",
+                fprintf(_smali_stream(stream), "v%d, %s\n",
                        v_a, tname);
                 break;
             }
@@ -344,7 +362,9 @@ static void smali_write_method(jd_meta_dex *dex,
                 u1 v_a = *item >> 12;
                 u1 v_b = (*item >> 8) & 0x0F;
                 u2 type_index = code->insns[i+1];
-                printf("v%d, v%d %d\n", v_a, v_b, type_index);
+                fprintf(_smali_stream(stream),
+                        "v%d, v%d %d\n",
+                        v_a, v_b, type_index);
                 break;
             }
             case DEX_INS_FILLED_NEW_ARRAY: { // filled-new-array
@@ -359,36 +379,59 @@ static void smali_write_method(jd_meta_dex *dex,
                 u2 type_index = code->insns[i+1];
                 switch (v_a) {
                     case 0: {
-                        printf("type@%02x\n", type_index);
+                        fprintf(_smali_stream(stream),
+                                "type@%02x\n",
+                                type_index);
                         break;
                     }
                     case 1: {
-                        printf("{v%d} type@%02x\n",
-                               v_c, type_index);
+                        fprintf(_smali_stream(stream),
+                                "{v%d} type@%02x\n",
+                               v_c,
+                               type_index);
                         break;
                     }
                     case 2: {
-                        printf("{v%d, v%d} type@%02x\n",
-                               v_c, v_d, type_index);
+                        fprintf(_smali_stream(stream),
+                                "{v%d, v%d} type@%02x\n",
+                               v_c,
+                               v_d,
+                               type_index);
                         break;
                     }
                     case 3: {
-                        printf("{v%d, v%d, v%d} type@%02x\n",
-                               v_c, v_d, v_e, type_index);
+                        printf(_smali_stream(stream),
+                               "{v%d, v%d, v%d} type@%02x\n",
+                               v_c,
+                               v_d,
+                               v_e,
+                               type_index);
                         break;
                     }
                     case 4: {
-                        printf(" {v%d, v%d, v%d, v%d} type@%02x\n",
-                               v_c, v_d, v_e, v_f, type_index);
+                        fprintf(_smali_stream(stream),
+                                " {v%d, v%d, v%d, v%d} type@%02x\n",
+                               v_c,
+                               v_d,
+                               v_e,
+                               v_f,
+                               type_index);
                         break;
                     }
                     case 5: {
-                        printf(" {v%d, v%d, v%d, v%d, v%d} type@%02x\n",
-                               v_c, v_d, v_e, v_f, v_g, type_index);
+                        fprintf(_smali_stream(stream),
+                                " {v%d, v%d, v%d, v%d, v%d} type@%02x\n",
+                               v_c,
+                               v_d,
+                               v_e,
+                               v_f,
+                               v_g,
+                               type_index);
                         break;
                     }
                     default: {
-                        fprintf(stderr, "[instruction] error \n");
+                        fprintf(_smali_stream(stream),
+                                "[instruction] error \n");
                         break;
                     }
 
@@ -401,10 +444,10 @@ static void smali_write_method(jd_meta_dex *dex,
                 u2 type_index = code->insns[i+1];
                 u2 count = counter + v_a - 1;
 
-                printf("{\n");
+                fprintf(_smali_stream(stream), "{\n");
                 for (int j = counter; j < count; ++j)
-                    printf("v%d, ", j);
-                printf("} @%d\n", type_index);
+                    fprintf(_smali_stream(stream), "v%d, ", j);
+                fprintf(_smali_stream(stream), "} @%d\n", type_index);
                 break;
             }
             case DEX_INS_FILL_ARRAY_DATA: { // fill-array-data
@@ -413,25 +456,28 @@ static void smali_write_method(jd_meta_dex *dex,
                 u2 array_data0 = code->insns[i+1];
                 u2 array_data1 = code->insns[i+2];
                 u4 array_data = (u4)array_data0 << 16 | array_data1;
-                printf("v%d, %d\n", v_a, array_data);
+                fprintf(_smali_stream(stream),
+                        "v%d, %d\n",
+                        v_a,
+                        array_data);
                 break;
             }
             case DEX_INS_THROW: { // throw
                 // throw vAA
                 u1 v_a = (*item >> 8);
-                printf("v%d\n", v_a);
+                fprintf(_smali_stream(stream), "v%d\n", v_a);
                 break;
             }
             case DEX_INS_GOTO: { // goto
                 // goto +AA
                 s1 v_a = *item >> 8;
-                printf("%d\n", v_a);
+                fprintf(_smali_stream(stream), "%d\n", v_a);
                 break;
             }
             case DEX_INS_GOTO_16: { // goto/16
                 // goto/16 +AAAA
                 s2 v_a = code->insns[i+1];
-                printf("%d\n", v_a);
+                fprintf(_smali_stream(stream), "%d\n", v_a);
                 break;
             }
             case DEX_INS_GOTO_32: { // goto/32
@@ -439,7 +485,7 @@ static void smali_write_method(jd_meta_dex *dex,
                 s2 jump_index1 = code->insns[i+1];
                 s2 jump_index2 = code->insns[i+2];
                 s4 v_a = (s4)jump_index1 << 16 | jump_index2;
-                printf("%d\n", v_a);
+                fprintf(_smali_stream(stream), "%d\n", v_a);
                 break;
             }
             case DEX_INS_PACKED_SWITCH: // packed-switch
@@ -449,7 +495,7 @@ static void smali_write_method(jd_meta_dex *dex,
                 s2 low = code->insns[i+1];
                 s2 high = code->insns[i+2];
                 s4 v_b = (s4)high << 16 | low;
-                printf("v%d %d\n", v_a, v_b);
+                fprintf(_smali_stream(stream), "v%d %d\n", v_a, v_b);
                 break;
             }
             case DEX_INS_CMPL_FLOAT: // cmpl-float
@@ -462,7 +508,11 @@ static void smali_write_method(jd_meta_dex *dex,
                 u2 second = code->insns[i+1];
                 u1 v_b = second >> 8;
                 u1 v_c = second & 0x0F;
-                printf("v%d v%d v%d\n", v_a, v_b, v_c);
+                fprintf(_smali_stream(stream),
+                        "v%d v%d v%d\n",
+                        v_a,
+                        v_b,
+                        v_c);
                 break;
             }
             case DEX_INS_IF_EQ: // if-eq
@@ -475,7 +525,11 @@ static void smali_write_method(jd_meta_dex *dex,
                 u1 v_a = *item >> 12;
                 u1 v_b = (*item >> 8) & 0x0F;
                 s2 v_c = code->insns[i+1];
-                printf("v%d, v%d => %d\n", v_a, v_b, v_c + i);
+                fprintf(_smali_stream(stream),
+                        "v%d, v%d => %d\n",
+                        v_a,
+                        v_b,
+                        v_c + i);
                 break;
             }
             case DEX_INS_IF_EQZ: // if-eqz
@@ -486,7 +540,10 @@ static void smali_write_method(jd_meta_dex *dex,
             case DEX_INS_IF_LEZ: { // if-lez
                 u1 v_a = (*item >> 8);
                 s2 v_b = code->insns[i+1];
-                printf("v%d => %d\n", v_a, v_b + i);
+                fprintf(_smali_stream(stream),
+                        "v%d => %d\n",
+                        v_a,
+                        v_b + i);
                 break;
             }
             case 0x3E:
@@ -515,7 +572,11 @@ static void smali_write_method(jd_meta_dex *dex,
                 u2 second = code->insns[i+1];
                 u1 v_b = second >> 8;
                 u1 v_c = second & 0x0F;
-                printf("v%d, v%d, %d\n", v_a, v_b, v_c);
+                fprintf(_smali_stream(stream),
+                        "v%d, v%d, %d\n",
+                        v_a,
+                        v_b,
+                        v_c);
                 break;
             }
             case DEX_INS_IGET: // iget
@@ -543,7 +604,8 @@ static void smali_write_method(jd_meta_dex *dex,
                 string field_name = dex_str_of_idx(dex, name_idx);
                 string class_name = dex_str_of_type_id(dex, class_idx);
                 string type_name = dex_str_of_type_id(dex, type_idx);
-                printf("v%d, v%d, %s->%s:%s\n",
+                fprintf(_smali_stream(stream),
+                        "v%d, v%d, %s->%s:%s\n",
                        v_a,
                        v_b,
                        class_name,
@@ -575,8 +637,12 @@ static void smali_write_method(jd_meta_dex *dex,
                 string field_name = dex_str_of_idx(dex, name_idx);
                 string class_name = dex_str_of_type_id(dex, class_idx);
                 string type_name = dex_str_of_type_id(dex, type_idx);
-                printf("v%d, %s->%s:%s\n",
-                       v_a, class_name, field_name, type_name);
+                fprintf(_smali_stream(stream),
+                        "v%d, %s->%s:%s\n",
+                        v_a,
+                        class_name,
+                        field_name,
+                        type_name);
                 break;
             }
             case DEX_INS_INVOKE_VIRTUAL: // invoke-virtual
@@ -606,50 +672,66 @@ static void smali_write_method(jd_meta_dex *dex,
                 dex_type_list *type_list = proto->type_list;
                 switch (v_a) {
                     case 0: {
-                        printf("{}, ");
+                        fprintf(_smali_stream(stream), "{}, ");
                         break;
                     }
                     case 1: {
-                        printf("{v%d}, ",
-                               v_c);
+                        fprintf(_smali_stream(stream),
+                                "{v%d}, ",
+                                v_c);
                         break;
                     }
                     case 2: {
-                        printf("{v%d, v%d}, ",
-                               v_c, v_d);
+                        fprintf(_smali_stream(stream),
+                                "{v%d, v%d}, ",
+                                v_c,
+                                v_d);
                         break;
                     }
                     case 3: {
-                        printf("{v%d, v%d, v%d}, ",
-                               v_c, v_d, v_e);
+                        fprintf(_smali_stream(stream),
+                                "{v%d, v%d, v%d}, ",
+                                v_c,
+                                v_d,
+                                v_e);
                         break;
                     }
                     case 4: {
-                        printf("{v%d, v%d, v%d, v%d}, ",
-                               v_c, v_d, v_e, v_f);
+                        fprintf(_smali_stream(stream),
+                                "{v%d, v%d, v%d, v%d}, ",
+                                v_c,
+                                v_d,
+                                v_e,
+                                v_f);
                         break;
                     }
                     case 5: {
-                        printf("{v%d, v%d, v%d, v%d, v%d}, ",
-                               v_c, v_d, v_e, v_f, v_g);
+                        fprintf(_smali_stream(stream),
+                                "{v%d, v%d, v%d, v%d, v%d}, ",
+                                v_c,
+                                v_d,
+                                v_e,
+                                v_f,
+                                v_g);
                         break;
                     }
                     default: {
-                        printf("[instruction] error at invoke-kind\n");
+                        fprintf(_smali_stream(stream),
+                                "[instruction] error at invoke-kind\n");
                         break;
                     }
 
                 }
 
-                printf("%s->%s(", cname, name);
+                fprintf(_smali_stream(stream), "%s->%s(", cname, name);
                 if (type_list != NULL) {
                     for (int j = 0; j < type_list->size; ++j) {
                         dex_type_item *item = &type_list->list[j];
                         string desc = dex_str_of_type_id(dex, item->type_idx);
-                        printf("%s", desc);
+                        fprintf(_smali_stream(stream), "%s", desc);
                     }
                 }
-                printf(")%s\n", return_str);
+                fprintf(_smali_stream(stream), ")%s\n", return_str);
 
                 break;
             }
@@ -677,28 +759,32 @@ static void smali_write_method(jd_meta_dex *dex,
 
                 u2 start_index = code->insns[i+2];
                 u2 count = start_index + v_a - 1;
-                printf("{");
+                fprintf(_smali_stream(stream), "{");
                 for (int j = start_index; j <= count; ++j) {
-                    printf("v%d", j);
+                    fprintf(_smali_stream(stream), "v%d", j);
                     if (j < count)
-                        printf(", ");
+                        fprintf(_smali_stream(stream), ", ");
 
                 }
-                printf("},");
-                printf("%s->%s(", cname, name);
+                fprintf(_smali_stream(stream), "},");
+                fprintf(_smali_stream(stream), "%s->%s(", cname, name);
                 if (type_list != NULL) {
                     for (int j = 0; j < type_list->size; ++j) {
                         u2 type_idx = type_list->list[j].type_idx;
                         string desc = dex_str_of_type_id(dex,type_idx);
-                        printf("%s", desc);
+                        fprintf(_smali_stream(stream), "%s", desc);
                     }
                 }
-                printf(")%s # method@%02x\n", rstr, method_index);
+                fprintf(_smali_stream(stream),
+                        ")%s # method@%02x\n",
+                        rstr,
+                        method_index);
                 break;
             }
             case 0x79:
             case 0x7A: {
-                fprintf(stdout, "[instruction opcode] not used\n");
+                fprintf(_smali_stream(stream),
+                        "[instruction opcode] not used\n");
                 break;
             }
             case DEX_INS_NEG_INT:
@@ -724,7 +810,7 @@ static void smali_write_method(jd_meta_dex *dex,
             case DEX_INS_INT_TO_SHORT: {
                 u1 v_a = *item >> 12;
                 u1 v_b = (*item >> 8) & 0x0F;
-                printf("v%d, v%d\n", v_a, v_b);
+                fprintf(_smali_stream(stream), "v%d, v%d\n", v_a, v_b);
                 break;
             }
             case DEX_INS_ADD_INT:
@@ -763,7 +849,11 @@ static void smali_write_method(jd_meta_dex *dex,
                 u2 second = code->insns[i+1];
                 u1 v_b = second & 0xFF;
                 u1 v_c = second >> 8;
-                printf("v%d, v%d, v%d\n", v_a, v_b, v_c);
+                fprintf(_smali_stream(stream),
+                        "v%d, v%d, v%d\n",
+                        v_a,
+                        v_b,
+                        v_c);
                 break;
             }
             case DEX_INS_ADD_INT_2ADDR:
@@ -801,7 +891,7 @@ static void smali_write_method(jd_meta_dex *dex,
                 // 12x
                 u1 v_a = *item >> 12;
                 u1 v_b = (*item >> 8) & 0x0F;
-                printf("v%d, v%d\n", v_a, v_b);
+                fprintf(_smali_stream(stream), "v%d, v%d\n", v_a, v_b);
                 break;
             }
             case DEX_INS_ADD_INT_LIT16:
@@ -815,7 +905,11 @@ static void smali_write_method(jd_meta_dex *dex,
                 u1 v_a = *item >> 12;
                 u1 v_b = (*item >> 8) & 0x0F;
                 s2 v_c = code->insns[i+1];
-                printf("v%d, v%d, %d\n", v_a, v_b, v_c);
+                fprintf(_smali_stream(stream),
+                        "v%d, v%d, %d\n",
+                        v_a,
+                        v_b,
+                        v_c);
                 break;
             }
             case DEX_INS_ADD_INT_LIT8:
@@ -833,7 +927,11 @@ static void smali_write_method(jd_meta_dex *dex,
                 s2 second = code->insns[i+1];
                 s1 v_c = second >> 8;
                 s1 v_b = second & 0x0F;
-                printf("v%d v%d %d\n", v_a, v_b, v_c);
+                fprintf(_smali_stream(stream),
+                        "v%d v%d %d\n",
+                        v_a,
+                        v_b,
+                        v_c);
                 break;
             }
             case DEX_INS_INVOKE_POLYMORPHIC:
@@ -851,32 +949,37 @@ static void smali_write_method(jd_meta_dex *dex,
 
                 switch (v_a) {
                     case 1: {
-                        printf("{v%d} %d, %d\n",
-                               v_c, v_bbbb, v_hhhh);
+                        fprintf(_smali_stream(stream),
+                                "{v%d} %d, %d\n", v_c, v_bbbb, v_hhhh);
                         break;
                     }
                     case 2: {
-                        printf("{v%d, v%d} %d, %d\n",
-                               v_c, v_d, v_bbbb, v_hhhh);
+                        fprintf(_smali_stream(stream),
+                                "{v%d, v%d} %d, %d\n",
+                                v_c, v_d, v_bbbb, v_hhhh);
                         break;
                     }
                     case 3: {
-                        printf("{v%d, v%d, v%d} %d, %d\n",
+                        fprintf(_smali_stream(stream),
+                               "{v%d, v%d, v%d} %d, %d\n",
                                v_c, v_d, v_e, v_bbbb, v_hhhh);
                         break;
                     }
                     case 4: {
-                        printf("{v%d, v%d, v%d, v%d} %d, %d\n",
+                        fprintf(_smali_stream(stream),
+                                "{v%d, v%d, v%d, v%d} %d, %d\n",
                                v_c, v_d, v_e, v_f, v_bbbb, v_hhhh);
                         break;
                     }
                     case 5: {
-                        printf("{v%d, v%d, v%d, v%d, v%d} %d, %d\n",
-                               v_c, v_d, v_e, v_f, v_g, v_bbbb, v_hhhh);
+                        fprintf(_smali_stream(stream),
+                                "{v%d, v%d, v%d, v%d, v%d} %d, %d\n",
+                                v_c, v_d, v_e, v_f, v_g, v_bbbb, v_hhhh);
                         break;
                     }
                     default: {
-                        printf("error at invoke-kind\n");
+                        fprintf(_smali_stream(stream),
+                                "error at invoke-kind\n");
                         break;
                     }
                 }
@@ -888,11 +991,14 @@ static void smali_write_method(jd_meta_dex *dex,
                 u2 v_hhhh = code->insns[i+3];
                 u2 v_cccc = code->insns[i+2];
                 u2 count = v_cccc + v_a - 1;
-                printf("{");
-                for (int j = v_cccc; j <= count; ++j) {
-                    printf("v%d, ", j);
-                }
-                printf("} %d, %d\n", v_bbbb, v_hhhh);
+                fprintf(_smali_stream(stream), "{");
+                for (int j = v_cccc; j <= count; ++j)
+                    fprintf(_smali_stream(stream), "v%d, ", j);
+                
+                fprintf(_smali_stream(stream),
+                        "} %d, %d\n",
+                        v_bbbb,
+                        v_hhhh);
                 break;
             }
             case DEX_INS_INVOKE_CUSTOM: {
@@ -907,37 +1013,50 @@ static void smali_write_method(jd_meta_dex *dex,
                 u2 method_index = code->insns[i+1];
                 switch (v_a) {
                     case 0: {
-                        printf("call_site@%02x\n",
+                        fprintf(_smali_stream(stream),
+                                "call_site@%02x\n",
                                method_index);
                         break;
                     }
                     case 1: {
-                        printf("{v%d} call_site@%02x\n",
-                               v_c, method_index);
+                        fprintf(_smali_stream(stream),
+                                "{v%d} call_site@%02x\n",
+                                v_c,
+                                method_index);
                         break;
                     }
                     case 2: {
-                        printf("{v%d, v%d}, call_site@%02x\n",
-                               v_c, v_d, method_index);
+                        fprintf(_smali_stream(stream),
+                                "{v%d, v%d}, call_site@%02x\n",
+                                v_c,
+                                v_d,
+                                method_index);
                         break;
                     }
                     case 3: {
-                        printf("{v%d, v%d, v%d}, call_site@%02x\n",
-                               v_c, v_d, v_e, method_index);
+                        fprintf(_smali_stream(stream),
+                                "{v%d, v%d, v%d}, call_site@%02x\n",
+                                v_c,
+                                v_d,
+                                v_e,
+                                method_index);
                         break;
                     }
                     case 4: {
-                        printf("{v%d, v%d, v%d, v%d}, call_site@%02x\n",
+                        fprintf(_smali_stream(stream),
+                               "{v%d, v%d, v%d, v%d}, call_site@%02x\n",
                                v_c, v_d, v_e, v_f, method_index);
                         break;
                     }
                     case 5: {
-                        printf("{v%d, v%d, v%d, v%d, v%d}, call_site@%02x\n",
+                        fprintf(_smali_stream(stream),
+                               "{v%d, v%d, v%d, v%d, v%d}, call_site@%02x\n",
                                v_c, v_d, v_e, v_f, v_g, method_index);
                         break;
                     }
                     default: {
-                        fprintf(stderr, "[instruction] error at invoke\n");
+                        fprintf(_smali_stream(stream),
+                                "[instruction] error at invoke\n");
                         break;
                     }
 
@@ -950,11 +1069,13 @@ static void smali_write_method(jd_meta_dex *dex,
                 u2 v_bbbb = code->insns[i+1];
                 u2 v_cccc = code->insns[i+2];
                 u2 count = v_cccc + v_a - 1;
-                printf("{");
+                fprintf(_smali_stream(stream), "{");
                 for (int j = v_cccc; j <= count; ++j) {
-                    printf("v%d, ", j);
+                    fprintf(_smali_stream(stream), "v%d, ", j);
                 }
-                printf("}, call_site@%d\n", v_bbbb);
+                fprintf(_smali_stream(stream),
+                        "}, call_site@%d\n",
+                        v_bbbb);
                 break;
             }
             case DEX_INS_CONST_METHOD_HANDLE:
@@ -962,29 +1083,25 @@ static void smali_write_method(jd_meta_dex *dex,
                 // TODO: const-m-type
                 u1 v_a = *item >> 8;
                 u2 v_bbbb = code->insns[i+1];
-                printf("v%d, %d\n", v_a, v_bbbb);
+                fprintf(_smali_stream(stream), "v%d, %d\n", v_a, v_bbbb);
                 break;
             }
         }
         i += (len - 1);
     }
-    printf(".end method\n\n");
+    fprintf(_smali_stream(stream), ".end method\n\n");
 }
 
 
 static void smali_write_class_fields(jd_meta_dex *dex,
-                                       dex_class *cf)
+                                       dex_class *cf,
+                                       FILE *stream)
 {
     dex_class_data_item *item = cf->class_data;
     if (item == NULL) return;
     encoded_field *efield;
-
-//    string desc = dex_str_of_type_id(dex, cf->class_idx);
-//    string fname = class_full_name(desc);
-//    string sname = class_simple_name(fname);
-
     if (item->static_fields_size > 0) {
-        printf("#static fields\n");
+        fprintf(_smali_stream(stream), "#static fields\n");
         for (int i = 0; i < item->static_fields_size; ++i) {
             efield = &item->static_fields[i];
             string field_name = dex_field_name(dex, efield);
@@ -992,14 +1109,17 @@ static void smali_write_class_fields(jd_meta_dex *dex,
             str_list *list = str_list_init();
             dex_field_access_flag_with_flags(efield->access_flags, list);
             string flags = str_join(list);
-            printf(".field %s %s:%s\n",
-                   flags, field_name, desc);
+            fprintf(_smali_stream(stream),
+                    ".field %s %s:%s\n",
+                    flags,
+                    field_name,
+                    desc);
 
         }
     }
 
     if (item->instance_fields_size > 0) {
-        printf("#instance-fields\n");
+        fprintf(_smali_stream(stream), "#instance-fields\n");
         for (int i = 0; i < item->instance_fields_size; ++i) {
             efield = &item->instance_fields[i];
             string field_name = dex_field_name(dex, efield);
@@ -1007,17 +1127,18 @@ static void smali_write_class_fields(jd_meta_dex *dex,
             str_list *list = str_list_init();
             dex_field_access_flag_with_flags(efield->access_flags, list);
             string flags = str_join(list);
-            printf(".field %s %s:%s\n",
-                   flags, field_name, desc);
+            fprintf(_smali_stream(stream),
+                    ".field %s %s:%s\n", flags, field_name, desc);
 
         }
     }
-    printf("\n");
+    fprintf(_smali_stream(stream), "\n");
 }
 
 
 static void smali_write_class_def(jd_meta_dex *dex,
-                                  dex_class *cf)
+                                  dex_class *cf,
+                                  FILE *stream)
 {
     string class_name = dex_str_of_type_id(dex, cf->class_idx);
     string super_name = dex_str_of_type_id(dex, cf->superclass_idx);
@@ -1025,27 +1146,28 @@ static void smali_write_class_def(jd_meta_dex *dex,
     str_list *list = str_list_init();
     dex_class_access_flag_with_flags(cf->access_flags, list);
     string cf_access_flags = str_join(list);
-    printf(".class %s %s\n", cf_access_flags, class_name);
-    printf(".super %s\n", super_name);
-    printf(".source \"%s\"\n", "SourceFile");
+    fprintf(_smali_stream(stream),
+            ".class %s %s\n", cf_access_flags, class_name);
+    fprintf(_smali_stream(stream), ".super %s\n", super_name);
+    fprintf(_smali_stream(stream), ".source \"%s\"\n", "SourceFile");
 
     if (cf->interfaces != NULL) {
-        printf("implements ");
+        fprintf(_smali_stream(stream), "implements ");
         for (int i = 0; i < cf->interfaces->size; ++i) {
             dex_type_item *item = &cf->interfaces->list[i];
             string name = dex_str_of_type_id(dex, item->type_idx);
-            printf("%s ",name);
+            fprintf(_smali_stream(stream), "%s ",name);
         }
     }
-    printf("\n");
+    fprintf(_smali_stream(stream), "\n");
 
-    smali_write_class_fields(dex, cf);
+    smali_write_class_fields(dex, cf, stream);
 }
 
-void class2smali(jd_meta_dex *dex, dex_class_def *cf)
+void dex_class_def_to_smali(jd_meta_dex *dex, dex_class_def *cf, FILE *stream)
 {
     dex_class_data_item *class_data = cf->class_data;
-    smali_write_class_def(dex, cf);
+    smali_write_class_def(dex, cf, stream);
     if (class_data == NULL)
         return;
 
@@ -1054,7 +1176,7 @@ void class2smali(jd_meta_dex *dex, dex_class_def *cf)
         dex_code_item *code = m->code;
         if (code == NULL)
             continue;
-        smali_write_method(dex, m, code, 0);
+        smali_write_method(dex, m, code, 0, stream);
     }
 
     for (int j = 0; j < class_data->virtual_methods_size; ++j) {
@@ -1062,11 +1184,11 @@ void class2smali(jd_meta_dex *dex, dex_class_def *cf)
         dex_code_item *code = m->code;
         if (code == NULL)
             continue;
-        smali_write_method(dex, m, code, 1);
+        smali_write_method(dex, m, code, 1, stream);
     }
 }
 
-void dex2smali(string path)
+void dex_to_smali(string path)
 {
     mem_init_pool();
     jd_meta_dex *dex = parse_dex_file(path);
@@ -1074,7 +1196,7 @@ void dex2smali(string path)
     dex_header *header = dex->header;
     for (int i = 0; i < header->class_defs_size; ++i) {
         dex_class *cf = &dex->class_defs[i];
-        class2smali(dex, cf);
+        dex_class_def_to_smali(dex, cf, NULL);
     }
     mem_free_pool();
 }
