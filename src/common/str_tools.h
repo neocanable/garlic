@@ -154,4 +154,32 @@ static inline int number_digits(int num)
     return floor(log10(abs(num))) + 1;
 }
 
+static inline string str_replace_nl(string *src)
+{
+    size_t len = strlen(src);
+    size_t new_len = len;
+
+    for (size_t i = 0; i < len; i++) {
+        if (src[i] == '\n') new_len++;
+    }
+
+    char *dst = x_alloc(new_len + 1);
+    if (!dst) return NULL;
+
+    const char *p = src;
+    char *q = dst;
+
+    while (*p) {
+        if (*p == '\n') {
+            *q++ = '\\';
+            *q++ = 'n';
+        } else {
+            *q++ = *p;
+        }
+        p++;
+    }
+    *q = '\0';
+    return dst;
+}
+
 #endif //GARLIC_STR_TOOLS_H

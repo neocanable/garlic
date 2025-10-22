@@ -49,8 +49,10 @@ static string get_const_value(jd_exp *expression)
         case JD_VAR_NULL_T:
             return str_dup("null");
         case JD_VAR_REFERENCE_T: {
-            if (const_exp_is_string(const_exp))
-                return str_create("\"%s\"", const_exp->val->data->val);
+            if (const_exp_is_string(const_exp)) {
+                string new_str = str_replace_nl(const_exp->val->data->val);
+                return str_create("\"%s\"", new_str);
+            }
             else if (const_exp_is_class(const_exp))
                 return str_create("%s.class",
                                   class_simple_name(

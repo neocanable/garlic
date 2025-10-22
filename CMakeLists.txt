@@ -21,7 +21,6 @@ if(NOT WIN32)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -flto")
 endif ()
 
-
 if (UNIX)
     SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -pthread")
 endif ()
