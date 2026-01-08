@@ -154,7 +154,7 @@ static inline int number_digits(int num)
     return floor(log10(abs(num))) + 1;
 }
 
-static inline string str_replace_nl(string *src)
+static inline string str_replace_nl(string src)
 {
     size_t len = strlen(src);
     size_t new_len = len;

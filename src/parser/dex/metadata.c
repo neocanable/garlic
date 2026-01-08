@@ -78,55 +78,17 @@ static void setup_current_offset(jd_meta_dex *dex, size_t offset)
 
 static void parse_dex_header(jd_meta_dex *dex)
 {
-    dex->header = make_obj_in(dex_header, dex->pool);
-    dex_header *header = dex->header;
-    jdex_read(dex, header->magic, sizeof(u1) * 8);
-    jdex_read4(dex, &header->checksum);
-    jdex_read(dex, header->signature, sizeof(u1) * kSHA1DigestLen);
-    jdex_read4(dex, &header->file_size);
-    jdex_read4(dex, &header->header_size);
-    jdex_read4(dex, &header->endian_tag);
-    jdex_read4(dex, &header->link_size);
-    jdex_read4(dex, &header->link_off);
-    jdex_read4(dex, &header->map_off);
-    jdex_read4(dex, &header->string_ids_size);
-    jdex_read4(dex, &header->string_ids_off);
-    jdex_read4(dex, &header->type_ids_size);
-    jdex_read4(dex, &header->type_ids_off);
-    jdex_read4(dex, &header->proto_ids_size);
-    jdex_read4(dex, &header->proto_ids_off);
-    jdex_read4(dex, &header->field_ids_size);
-    jdex_read4(dex, &header->field_ids_off);
-    jdex_read4(dex, &header->method_ids_size);
-    jdex_read4(dex, &header->method_ids_off);
-    jdex_read4(dex, &header->class_defs_size);
-    jdex_read4(dex, &header->class_defs_off);
-    jdex_read4(dex, &header->data_size);
-    jdex_read4(dex, &header->data_off);
+    dex->header = dex->bin->buffer;
 }
 
 static void parse_dex_links(jd_meta_dex *dex)
 {
-    dex_header *header = dex->header;
-    setup_current_offset(dex, header->link_off);
-
-    dex->links = make_obj_arr_in(dex_link, header->link_size, dex->pool);
-    jdex_read(dex, dex->links, sizeof(dex_link)*header->link_size);
-    DEBUG_PRINT("[link_size]: %d\n", header->link_size);
+    dex->links = dex->bin->buffer + dex->header->link_off;
 }
 
 static void parse_dex_map_list(jd_meta_dex *dex)
 {
-    dex_header *header = dex->header;
-    setup_current_offset(dex, header->map_off);
-
-    dex->maps = make_obj_in(dex_map_list, dex->pool);
-    dex_map_list *maps = dex->maps;
-    jdex_read4(dex, &maps->size);
-    maps->list = make_obj_arr_in(dex_map_item, maps->size, dex->pool);
-    jdex_read(dex, maps->list, sizeof(dex_map_item)*maps->size);
-
-    DEBUG_PRINT("[map_size]: %d\n", maps->size);
+    dex->maps = dex->bin->buffer + dex->header->map_off;
 }
 
 static int dex_string_byte_size(jd_meta_dex *dex, uint32_t utf16_size)
@@ -154,13 +116,8 @@ static int dex_string_byte_size(jd_meta_dex *dex, uint32_t utf16_size)
 static void parse_dex_string_ids(jd_meta_dex *dex)
 {
     dex_header *header = dex->header;
-    setup_current_offset(dex, header->string_ids_off);
+    dex->string_ids = dex->bin->buffer + header->string_ids_off;
 
-    dex->string_ids = make_obj_arr_in(dex_string_id,
-                                      header->string_ids_size,
-                                      dex->pool);
-    jdex_read(dex, dex->string_ids,
-              sizeof(dex_string_id)*header->string_ids_size);
 
     dex->strings = make_obj_arr_in(dex_string_item,
                                    header->string_ids_size,
@@ -186,12 +143,7 @@ static void parse_dex_string_ids(jd_meta_dex *dex)
 
 static void parse_dex_type_ids(jd_meta_dex *dex)
 {
-    dex_header *header = dex->header;
-    setup_current_offset(dex, header->type_ids_off);
-
-    u4 size = header->type_ids_size;
-    dex->type_ids = make_obj_arr_in(dex_type_id, size, dex->pool);
-    jdex_read(dex, dex->type_ids, sizeof(dex_type_id)*size);
+    dex->type_ids = dex->bin->buffer + dex->header->type_ids_off;
 }
 
 static void parse_dex_proto_ids(jd_meta_dex *dex)
@@ -233,23 +185,12 @@ static void parse_dex_proto_ids(jd_meta_dex *dex)
 
 static void parse_dex_field_ids(jd_meta_dex *dex)
 {
-    dex_header *header = dex->header;
-    setup_current_offset(dex, header->field_ids_off);
-    u4 size = header->field_ids_size;
-    dex->field_ids = make_obj_arr_in(dex_field_id, size, dex->pool);
-    jdex_read(dex, dex->field_ids, sizeof(dex_field_id)*size);
-    DEBUG_PRINT("[field_ids_size]: %d\n", header->field_ids_size);
+    dex->field_ids = dex->bin->buffer + dex->header->field_ids_off;
 }
 
 static void parse_dex_method_ids(jd_meta_dex *dex)
 {
-    dex_header *header = dex->header;
-    setup_current_offset(dex, header->method_ids_off);
-
-    u4 size = header->method_ids_size;
-    dex->method_ids = make_obj_arr_in(dex_method_id, size, dex->pool);
-    jdex_read(dex, dex->method_ids, sizeof(dex_method_id)*size);
-    DEBUG_PRINT("[method_ids_size]: %d\n", header->method_ids_size);
+    dex->method_ids = dex->bin->buffer + dex->header->method_ids_off;
 }
 
 static void parse_dex_class_interfaces(jd_meta_dex *dex, dex_class_def *cdef)
@@ -739,8 +680,8 @@ static void parse_dex_code_item(jd_meta_dex *dex, encoded_method *em)
     jdex_read4(dex, &code->debug_info_off);
     jdex_read4(dex, &code->insns_size);
 
-    code->insns = make_obj_arr_in(u2, code->insns_size, pool);
-    jdex_read(dex, code->insns, sizeof(u2)*code->insns_size);
+    code->insns = dex->bin->buffer + dex->bin->cur_off;
+    setup_current_offset(dex, dex->bin->cur_off + sizeof(u2)*code->insns_size);
 
     parse_dex_code_try_item(dex, code);
 

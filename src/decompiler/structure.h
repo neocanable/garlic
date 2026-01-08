@@ -12,7 +12,6 @@
 #include "libs/str/str.h"
 #include "libs/trie/trie_tree.h"
 #include "libs/threadpool/threadpool.h"
-#include "libs/threadpool/threadpool.h"
 
 
 typedef struct jd_nblock            jd_nblock;
