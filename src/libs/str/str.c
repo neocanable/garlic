@@ -26,6 +26,7 @@ void str_concat(str_list *list, string buf)
 {
     str_entry *entry = make_obj(str_entry);
     entry->buf = buf;
+    entry->next = NULL;
     list->len += strlen(buf);
     list->count ++;
 
