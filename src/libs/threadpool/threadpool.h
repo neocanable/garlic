@@ -4,7 +4,7 @@
 #include "mem_pool.h"
 
 #define MAX_THREADS 64
-#define MAX_QUEUE 65536
+#define MAX_QUEUE 65536*32
 
 typedef struct threadpool_t threadpool_t;
 

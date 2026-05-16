@@ -36,7 +36,7 @@ threadpool_t* threadpool_create_in(mem_pool *mem_pool, int cnt, int flags)
     pool->head = pool->tail = pool->count = 0;
     pool->shutdown = pool->started = 0;
     pool->threads = x_alloc_in(mem_pool, sizeof(pthread_t) * cnt);
-    pool->queue = x_alloc_in(mem_pool, sizeof(threadpool_task_t) * MAX_QUEUE);
+    pool->queue = x_alloc_in(mem_pool, sizeof(threadpool_task_t) * pool->queue_size);
     pool->init_count = 0;
 
     pool->lock = malloc(sizeof(pthread_mutex_t));
