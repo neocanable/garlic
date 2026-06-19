@@ -7,6 +7,7 @@
 #include "decompiler/expression_writter.h"
 #include "common/output_tools.h"
 #include "dex_smali.h"
+#include "apk_manifest.h"
 
 void apk_status(jd_apk *apk)
 {
@@ -39,6 +40,7 @@ void apk_decompile_thread_task(jd_dex_task *task)
     dex_class_def *cf = task->cf;
 
     jsource_file *jf = dex_class_inside(dex, cf, NULL);
+
     if (jf->parent == NULL) {
         writter_for_class(jf, NULL);
         fclose(jf->source);
@@ -79,6 +81,13 @@ static void apk_decompile_task_start(jd_apk *apk)
     for (int i = 0; i < apk->entries_size; ++i) {
         zip_entry_openbyindex(zip, i);
         string path_in_zip = (string)zip_entry_name(zip);
+
+        if (str_end_with(path_in_zip, "AndroidManifest.xml")) {
+            apk_parse_manifest_from_zip(apk);
+            zip_entry_close(zip);
+            continue;
+        }
+
         if (!str_end_with(path_in_zip, ".dex")) {
             zip_entry_close(zip);
             continue;
