@@ -455,6 +455,8 @@ void apk_parse_manifest_from_zip(jd_apk *apk)
     buf = x_alloc_in(apk->pool, buf_size * sizeof(unsigned char));
     zip_entry_noallocread(zip, (void *)buf, buf_size);
     FILE *stream = android_manifest_stream(apk);
+    if (stream == NULL)
+        return;
     parse_manifest_binary(stream, (u1*)buf, buf_size);
 }
 
