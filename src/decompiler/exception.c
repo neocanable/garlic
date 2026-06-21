@@ -5,6 +5,7 @@
 #include "jvm/jvm_ins.h"
 #include "decompiler/dominator_tree.h"
 #include "decompiler/method.h"
+#include "dex_ins_helper.h"
 
 static void print_cfg_exception_table(jd_method *m)
 {
@@ -1056,6 +1057,50 @@ static void expand_exception_with_jump(jd_method *m)
     }
 }
 
+static void expand_synchronized_exception_block_range(jd_method *m)
+{
+    /**
+      *   0000: monitor-enter v2
+      *   0001: if-eqz v3, 0019 // +0018
+      *   0003: invoke-static {v3}, Ljava/lang/Integer;.parseInt:(Ljava/lang/String;)I
+      *   0006: move-result v3
+      *   .........................................................
+      *   0014: monitor-exit v2
+      *   .........................................................
+      *   catches
+      *     0x0003 - 0x0014
+      *       Ljava/lang/Exception; -> 0x0019
+      *       <any> -> 0x0016
+      *
+      *   this exception's try range is 0x3 -> 0x14 in exceptions table
+      *   but its a synchronized block, so the exception's range should
+      *   pullin idom block into try range, the exception range should change to
+      *   0x1 -> 0x14 
+     **/
+    for (int i = 0; i < m->closed_exceptions->size; ++i) {
+        jd_exc *exc = lget_obj(m->closed_exceptions, i);
+        jd_ins *start = get_ins(m, exc->try_start_idx);
+        jd_bblock *start_bb = block_start_offset(m, start->offset);
+        if (start_bb == NULL)
+            continue;
+        jd_bblock *idom = start_bb->idom;
+        if (idom == NULL)
+            continue;
+
+        if (idom->type == JD_BB_NORMAL) {
+            jd_ins *in_start_ins = get_ins(m, idom->ub->nblock->start_idx);
+            if (in_start_ins->type != JD_TYPE_DALVIK)
+                continue;
+
+            if (dex_ins_is_monitor_enter(in_start_ins)) {
+                jd_ins *monitor_next = get_ins(m, in_start_ins->idx+1);
+                exc->try_start = monitor_next->offset;
+                exc->try_start_idx = monitor_next->idx;
+            }
+        }
+    }
+}
+
 void cleanup_full_exception_table(jd_method *m)
 {
     if (m->closed_exceptions->size == 0)
@@ -1074,6 +1119,7 @@ void cleanup_full_exception_table(jd_method *m)
     print_full_exception_table(m);
     remove_share_handler_finally(m);
     remove_share_hanlder_catch(m);
+    expand_synchronized_exception_block_range(m);
 
 
     DEBUG_EXCEPTION_PRINT("\n3 ----------->\n");

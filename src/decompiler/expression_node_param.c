@@ -11,18 +11,23 @@ static void setup_first_effective_to_node_param(jd_method *m, jd_node *node)
 
 static void setup_synchronized_node_param(jd_method *m, jd_node *node)
 {
-//    jd_exp *exp = get_exp(m, node->start_idx - 1);
     jd_exp *exp = prev_valid_exp(m, node->start_idx - 1);
-    assert(exp_is_monitor_enter(exp));
+    if (exp == NULL)
+        return;
+    if (!exp_is_monitor_enter(exp))
+        return;
+//    assert(exp_is_monitor_enter(exp));
     jd_exp_monitorenter *monitorenter = exp->data;
     jd_exp *first = &monitorenter->list->args[0];
     if (exp_is_local_variable(first)) {
         node->param_exp = first;
+        exp_mark_nopped(exp);
     }
     else if (exp_is_operator(first)) {
         jd_exp_operator *op = first->data;
         jd_exp *right = &op->list->args[1];
         node->param_exp = right;
+        exp_mark_nopped(exp);
     }
 }
 
@@ -43,8 +48,6 @@ static void setup_catch_node_param(jd_method *m, jd_node *node)
 static void setup_for_loop_node_param(jd_method *m, jd_node *node)
 {
     jd_node *n = lget_obj_first(node->children);
-//    jd_node *first = next_valid_node(m, n);
-//    jd_exp *exp = first->data;
     jd_exp *exp = get_exp(m, n->end_idx);
     node->param_exp = exp;
     node->type = JD_NODE_FOR;
