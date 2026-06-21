@@ -125,11 +125,8 @@ static string get_array_variable_name(string name)
     return result;
 }
 
-static string gen_variable_name(jd_method *m,
-                                  jd_exp *exp,
-                                  string cname)
+static string gen_variable_name(jd_method *m, jd_exp *exp, string cname)
 {
-//    string cname = val->data->cname;
     int count = hget_s2i(m->class_counter_map, cname);
     if (count == -1)
         count = 0;
@@ -151,6 +148,8 @@ static string gen_variable_name(jd_method *m,
         var_name = str_create("short%d", count);
     else if (STR_EQL(cname, g_str_boolean))
         var_name = str_create("bool%d", count);
+    else if (STR_EQL(cname, g_str_char))
+        var_name = str_create("char%d", count);
 
     string last_word = get_last_word_lower(cname);
     string lower = str_lower(last_word);
