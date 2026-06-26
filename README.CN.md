@@ -1,7 +1,7 @@
 # Garlic decompiler
 [![License](http://img.shields.io/:license-apache-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 
-中文 | [English](https://github.com/neocanable/garlic/blob/main/README.md)
+中文 | [English](README.md)
 
 
 用C语言实现的Android/Java反编译器
@@ -40,7 +40,18 @@ cmake --build build
 
 ##### 2. 在windows上编译
 
-​	请查看在[windows编译方法](https://github.com/neocanable/garlic/blob/main/docs/build-garlic-on-windows.md)
+​	请查看在[windows编译方法](docs/build-garlic-on-windows.md)
+
+##### 3. 使用 Zig 编译 (跨平台)
+
+​	**编译环境**: zig >= **0.16.0**
+
+```sh
+git clone https://github.com/neocanable/garlic.git
+cd garlic
+zig build --release=fast
+./zig-out/bin/garlic
+```
 
 
 
@@ -139,7 +150,7 @@ Benchmark 1: garlic ~/wechat/wechat.apk
 **微信:** neocanable
 
 
-![author](https://github.com/neocanable/garlic/blob/main/shell/images/qrcode.jpg)
+![author](shell/images/qrcode.jpg)
 
 
 
