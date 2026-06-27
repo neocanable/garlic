@@ -1,7 +1,7 @@
 # Garlic decompiler
 [![License](http://img.shields.io/:license-apache-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 
-English | [Chinese](https://github.com/neocanable/garlic/blob/main/README.CN.md)
+English | [Chinese](README.CN.md)
 
 The world's fastest apk (android)/java open source decompiler
 
@@ -44,7 +44,18 @@ cmake --build build
 
 ##### 2. Build on Windows
 
-please check the [windows build document](https://github.com/neocanable/garlic/blob/main/docs/build-garlic-on-windows.md)
+please check the [windows build document](docs/build-garlic-on-windows.md)
+
+##### 3. Build with Zig (cross-platform)
+
+​	**requirements**: zig >= **0.16.0**
+
+```sh
+git clone https://github.com/neocanable/garlic.git
+cd garlic
+zig build --release=fast
+./zig-out/bin/garlic
+```
 
 
 
@@ -146,7 +157,7 @@ Progress : 192538 (192538)
 [Done]
 ```
 
-![decompile tiktok](https://github.com/neocanable/garlic/blob/main/shell/images/garlic-show.gif)
+![decompile tiktok](shell/images/garlic-show.gif)
 
 
 ### Customization
@@ -156,7 +167,7 @@ Progress : 192538 (192538)
 **wechat:** neocanable
 
 
-![author](https://github.com/neocanable/garlic/blob/main/shell/images/qrcode.jpg)
+![author](shell/images/qrcode.jpg)
 
 
 --------------------------------------------
