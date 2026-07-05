@@ -1,6 +1,9 @@
 # Garlic decompiler
 [![License](http://img.shields.io/:license-apache-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 
+[![Telegram](https://img.shields.io/badge/Telegram-Join%20Chat-blue?logo=telegram)](https://t.me/+8N--zZal0KExMzA1)
+
+
 English | [Chinese](README.CN.md)
 
 The world's fastest apk (android)/java open source decompiler
