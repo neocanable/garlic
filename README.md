@@ -160,6 +160,11 @@ Progress : 192538 (192538)
 ![decompile tiktok](shell/images/garlic-show.gif)
 
 
+### Garlic + Rosemary pipeline
+
+[Video](https://youtu.be/I_cwuW4UKOs?si=eTCFuC1XzHuBi5a0)
+
+
 ### Customization
 
 **Email:**   neocanable#gmail.com (replace # to @)
