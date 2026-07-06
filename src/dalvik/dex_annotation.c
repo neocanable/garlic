@@ -43,14 +43,18 @@ string encoded_value_to_s(jd_meta_dex *meta, encoded_value *ev)
             for (int i = 0; i < ev->value_length; ++i) {
                 v = v | ev->value[i] << (i * 8);
             }
-            return str_create("%f", *(float *)&v);
+            float f;
+            memcpy(&f, &v, sizeof(f));
+            return str_create("%f", f);
         }
         case kDexAnnotationDouble: {
             u8 v = 0;
             for (int i = 0; i < ev->value_length; ++i) {
                 v = v | ev->value[i] << (i * 8);
             }
-            return str_create("%lf", *(double *)&v);
+            double d;
+            memcpy(&d, &v, sizeof(d));
+            return str_create("%lf", d);
         }
         case kDexAnnotationString: {
             u4 v = 0;
