@@ -88,7 +88,8 @@ static void apk_decompile_task_start(jd_apk *apk)
             continue;
         }
 
-        if (!str_end_with(path_in_zip, ".dex")) {
+        if (!str_end_with(path_in_zip, ".dex") ||
+            strchr(path_in_zip, '/') != NULL) {
             zip_entry_close(zip);
             continue;
         }

@@ -466,7 +466,7 @@ static void write_notice(jsource_file *jf)
 
     fprintf(stream, "/*\n");
     fprintf(stream, " * Decompiled by Garlic\n");
-    fprintf(stream, " * Version: 1.0\n");
+    fprintf(stream, " * Version: 1.5\n");
     fprintf(stream, " */ \n");
 }
 

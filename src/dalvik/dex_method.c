@@ -47,7 +47,7 @@ static void init_dex_ins_unconditional_jump(jd_dex_ins *ins)
 
 static void init_dex_ins_conditional_jump(jd_dex_ins *ins)
 {
-    s2 jump_offset = ins->param[1] + ins->offset;
+    u4 jump_offset = (s2)(ins->param[1]) + ins->offset;
     jd_dex_ins *next = ins->next;
     if (next != NULL)
         ladd_obj_no_dup(ins->targets, next);

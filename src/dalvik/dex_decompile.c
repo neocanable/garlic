@@ -185,7 +185,7 @@ jsource_file* dex_class_inside(jd_dex *dex,
     jf->sname = class_simple_name_without_primitive(jf->fname);
     jf->pname = class_package_name(jf);
     if (jf->pname == NULL)
-        jf->pname = g_str_default;
+        jf->pname = (string) g_str_default;
     jf->imports = trie_create_node("");
     jf->meta = dex;
     jf->jclass = cf;

@@ -75,7 +75,7 @@ void jvm_analyse_class_file_inside(jsource_file *jf)
     jf->fname = pool_str(jf->jclass, ((jclass_file*)jf->jclass)->this_class);
     jf->pname = class_package_name(jf);
     if (jf->pname == NULL)
-        jf->pname = g_str_default;
+        jf->pname = (string) g_str_default;
     jf->sname = class_simple_name(jf->fname);
     jf->access_flags_fn = jvm_class_access_flag;
 
