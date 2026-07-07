@@ -53,6 +53,8 @@ please check the [windows build document](docs/build-garlic-on-windows.md)
 
 ​	**requirements**: zig >= **0.16.0**
 
+Build for your host platform directly:
+
 ```sh
 git clone https://github.com/neocanable/garlic.git
 cd garlic
@@ -60,6 +62,35 @@ zig build --release=fast
 ./zig-out/bin/garlic
 ```
 
+Cross-compile to any target with `-Dtarget`:
+
+```sh
+# Linux x86_64 (musl)
+zig build --release=fast -Dtarget=x86_64-linux-musl
+
+# Linux x86_64 (glibc)
+zig build --release=fast -Dtarget=x86_64-linux-gnu
+
+# Linux aarch64
+zig build --release=fast -Dtarget=aarch64-linux-musl
+
+# Linux i686 (32-bit)
+zig build --release=fast -Dtarget=x86-linux-musl
+
+# Windows x86_64
+zig build --release=fast -Dtarget=x86_64-windows
+
+# Windows 32-bit
+zig build --release=fast -Dtarget=x86-windows
+
+# macOS x86_64 (Intel)
+zig build --release=fast -Dtarget=x86_64-macos
+
+# macOS aarch64 (Apple Silicon)
+zig build --release=fast -Dtarget=aarch64-macos
+```
+
+Zig bundles its own cross-linkers and libc, so **no cross-toolchain needs to be installed** — everything works out of the box. The output goes to `zig-out/bin/`.
 
 
 ### Usage

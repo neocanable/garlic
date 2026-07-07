@@ -1,10 +1,16 @@
 # Garlic decompiler
 [![License](http://img.shields.io/:license-apache-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 
+[![Telegram](https://img.shields.io/badge/Telegram-Join%20Chat-blue?logo=telegram)](https://t.me/+8N--zZal0KExMzA1)
+
+
 中文 | [English](README.md)
 
+世界最快的 APK (Android)/Java 开源反编译器
 
-用C语言实现的Android/Java反编译器
+用 C 语言实现的 Android/Java 反编译器
+
+从 class/jar/dex/apk 文件生成 Java 源码的工具
 
 
 ### 功能
@@ -46,12 +52,44 @@ cmake --build build
 
 ​	**编译环境**: zig >= **0.16.0**
 
+直接编译本机平台：
+
 ```sh
 git clone https://github.com/neocanable/garlic.git
 cd garlic
 zig build --release=fast
 ./zig-out/bin/garlic
 ```
+
+使用 `-Dtarget` 交叉编译到任意目标平台：
+
+```sh
+# Linux x86_64 (musl)
+zig build --release=fast -Dtarget=x86_64-linux-musl
+
+# Linux x86_64 (glibc)
+zig build --release=fast -Dtarget=x86_64-linux-gnu
+
+# Linux aarch64
+zig build --release=fast -Dtarget=aarch64-linux-musl
+
+# Linux i686 (32位)
+zig build --release=fast -Dtarget=x86-linux-musl
+
+# Windows x86_64
+zig build --release=fast -Dtarget=x86_64-windows
+
+# Windows 32位
+zig build --release=fast -Dtarget=x86-windows
+
+# macOS x86_64 (Intel)
+zig build --release=fast -Dtarget=x86_64-macos
+
+# macOS aarch64 (Apple Silicon)
+zig build --release=fast -Dtarget=aarch64-macos
+```
+
+Zig 自带交叉链接器和 libc，**无需安装任何交叉编译工具链**，开箱即用。产物输出到 `zig-out/bin/`。
 
 
 
@@ -120,7 +158,22 @@ zig build --release=fast
   garlic ~/demo/demo.dex -f "info" # search contains string in demo.dex
   ```
 
-    
+### 调试
+
+修改 **src/jvm.c** 中的 main 函数:
+
+```c
+int main(int argc, char **argv)
+{
+    jar_file_analyse(path_of_jar, out_of_jar, 1);
+    return 0;
+}
+
+```
+
+如果线程数小于 2，则会禁用多线程。
+
+
 
 ### 速度
 
@@ -136,12 +189,14 @@ Progress : 192538 (192538)
 [Done]
 ```
 
-```sh
-$ hyperfine "garlic ~/wechat/wechat.apk"
-Benchmark 1: garlic ~/wechat/wechat.apk
-  Time (mean ± σ):     11.502 s ±  0.105 s    [User: 31.803 s, System: 10.588 s]
-  Range (min … max):   11.373 s … 11.774 s    10 runs
-```
+
+![decompile tiktok](shell/images/garlic-show.gif)
+
+
+### Garlic + Rosemary 流水线
+
+[视频](https://youtu.be/I_cwuW4UKOs?si=eTCFuC1XzHuBi5a0)
+
 
 ### 定制服务
 
