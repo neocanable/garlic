@@ -1,6 +1,11 @@
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <sys/wait.h>
+#endif
+
 #include "jd_mcp.h"
 #include "str_tools.h"
-#include <sys/wait.h>
 #include <stdarg.h>
 #include <dirent.h>
 
@@ -201,7 +206,11 @@ static int exec_silent(const char *cmd_fmt, ...)
     jd_mcp_log("exec: %s", cmd);
     int rc = system(cmd);
     if (rc == -1) return -1;
+#ifndef _WIN32
     if (WIFEXITED(rc)) return WEXITSTATUS(rc);
+#else
+    return rc;
+#endif
     return -1;
 }
 
@@ -242,14 +251,24 @@ static string tool_decompile(const char *path, const char *output_dir)
         return result;
     }
 
-    char *abs = realpath(save_dir, NULL);
     char *result = malloc(1024);
+#ifdef _WIN32
+    char abs[4096];
+    char *p = _fullpath(abs, save_dir, sizeof(abs));
+    if (p) {
+        snprintf(result, 1024, "Decompiled to: %s", abs);
+    } else {
+        snprintf(result, 1024, "Decompiled to: %s", save_dir);
+    }
+#else
+    char *abs = realpath(save_dir, NULL);
     if (abs) {
         snprintf(result, 1024, "Decompiled to: %s", abs);
         free(abs);
     } else {
         snprintf(result, 1024, "Decompiled to: %s", save_dir);
     }
+#endif
     return result;
 }
 

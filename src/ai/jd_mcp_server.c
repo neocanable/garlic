@@ -1,6 +1,34 @@
 #include "jd_mcp.h"
 #include "str_tools.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#include <time.h>
+
+/* Windows implementation of mkdtemp — creates a unique temp directory */
+static char* win_mkdtemp(const char *prefix)
+{
+    char tmp_path[MAX_PATH];
+    char dir_name[MAX_PATH];
+
+    if (!GetTempPathA(sizeof(tmp_path), tmp_path))
+        return NULL;
+
+    /* Try up to 100 times with different suffixes */
+    srand((unsigned)time(NULL));
+    for (int i = 0; i < 100; i++) {
+        snprintf(dir_name, sizeof(dir_name), "%s%s%04x",
+                 tmp_path, prefix, (unsigned)rand() & 0xFFFF);
+        /* Remove trailing X's in the template if any, already handled */
+        if (CreateDirectoryA(dir_name, NULL))
+            return strdup(dir_name);
+        if (GetLastError() != ERROR_ALREADY_EXISTS)
+            break;
+    }
+    return NULL;
+}
+#endif
+
 const char *mcp_self_path = NULL;
 
 void jd_mcp_set_self_path(const char *path)
@@ -103,6 +131,9 @@ char* jd_mcp_read_file(const char *path)
 
 char* jd_mcp_create_temp_dir(void)
 {
+#ifdef _WIN32
+    return win_mkdtemp(JD_MCP_TEMP_DIR_PREFIX);
+#else
     char *dir = strdup(JD_MCP_TEMP_PATH);
     if (!dir) return NULL;
     if (mkdtemp(dir) == NULL) {
@@ -110,6 +141,7 @@ char* jd_mcp_create_temp_dir(void)
         return NULL;
     }
     return dir;
+#endif
 }
 
 static void remove_dir_recursive(const char *path)

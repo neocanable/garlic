@@ -18,7 +18,11 @@
 #define JD_MCP_SERVER_VERSION           "1.0.0"
 
 #define JD_MCP_MAX_LINE_SIZE            (1024U * 1024U)   // 1mb message
+#ifdef _WIN32
+#define JD_MCP_TEMP_DIR_PREFIX          "garlic_mcp_"
+#else
 #define JD_MCP_TEMP_PATH                "/tmp/garlic_mcp_XXXXXX"
+#endif
 
 #define JD_MCP_ERROR_PARSE              -32700
 #define JD_MCP_ERROR_INVALID_REQ        -32600
