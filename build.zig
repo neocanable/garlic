@@ -20,6 +20,8 @@ pub fn build(b: *std.Build) void {
         "src/libs/str",
         "src/libs/zip",
         "src/libs/threadpool",
+        "src/libs/cjson",
+        "src/ai",
         "src/jar",
         "src/dalvik",
     };

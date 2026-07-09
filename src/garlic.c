@@ -6,11 +6,9 @@
 #include "apk/apk.h"
 #include "dalvik/dex_decompile.h"
 #include "dex_smali.h"
+#include "analyzer/jd_analyzer.h"
+#include "ai/jd_mcp.h"
 #include <unistd.h>
-
-#define JAVA_CLASS_MAGIC 0xCAFEBABE
-#define JAR_FILE_MAGIC   0x504B0304
-#define DEX_FILE_MAGIC   0x6465780A
 
 typedef enum {
     JD_FILE_TYPE_UNKNOWN = 0,
@@ -25,6 +23,7 @@ typedef enum {
     JD_FILE_OPTION_DUMP, // like javap or dexdump
     JD_FILE_OPTION_SEARCH, // search for a string in the file
     JD_FILE_OPTION_SMALI, // dex/apk to smali
+    JD_FILE_OPTION_CALL_GRAPH, // generate call graph
 } jd_file_option_t;
 
 typedef struct jd_opt {
@@ -123,11 +122,13 @@ static void prepare_opt_threads(jd_opt *opt) {
 }
 
 static void opt_usage(const char *progname) {
-    fprintf(stderr, "Usage: %s file [-p] [-o outpath] [-t num]\n", progname);
+    fprintf(stderr, "Usage: %s file [-p] [-o outpath] [-t num] [-g] [-s]\n", progname);
     fprintf(stderr, "    -p: like javap or dexdump, print class info\n");
     fprintf(stderr, "    -o: output path for jar/dex/war files\n");
     fprintf(stderr, "    -t: number of threads to use (default is 4)\n");
+    fprintf(stderr, "    -g: generate call graph for dex/apk\n");
     fprintf(stderr, "    -s: apk/dex to smali\n");
+    fprintf(stderr, "    -m: start MCP server (stdio protocol)\n");
 }
 
 static jd_opt* parse_opt(int argc, char **argv) {
@@ -149,7 +150,7 @@ static jd_opt* parse_opt(int argc, char **argv) {
     opt->path = path;
     opt->ft = ft;
 
-    while ((oc = getopt(argc, argv, "spo:t:h")) != -1) {
+    while ((oc = getopt(argc, argv, "spo:t:ghm")) != -1) {
         switch (oc) {
             case 'p': { // like javap
                 opt->option = JD_FILE_OPTION_DUMP;
@@ -164,6 +165,14 @@ static jd_opt* parse_opt(int argc, char **argv) {
             }
             case 's': {
                 opt->option = JD_FILE_OPTION_SMALI;
+                break;
+            }
+            case 'g': {
+                opt->option = JD_FILE_OPTION_CALL_GRAPH;
+                break;
+            }
+            case 'm': {
+                /* handled in main */
                 break;
             }
             case 't': {
@@ -287,9 +296,36 @@ static void run_for_apk(jd_opt *opt)
     printf("\n[Done]\n");
 }
 
+/* MCP server entry (declared in mcp_tools.c) */
+extern const jd_mcp_tool MCP_TOOLS[];
+extern const int         MCP_TOOL_COUNT;
+
 int main(int argc, char **argv)
 {
+    if (argc >= 2 && strcmp(argv[1], "-m") == 0) {
+        jd_mcp_set_self_path(argv[0]);
+        jd_mcp_server server = {0 };
+        server.tools      = MCP_TOOLS;
+        server.tool_count = MCP_TOOL_COUNT;
+        jd_mcp_server_init(&server);
+        jd_mcp_server_run(&server);
+        jd_mcp_server_cleanup(&server);
+        return 0;
+    }
+
     jd_opt *opt = parse_opt(argc, argv);
+
+    if (opt->option == JD_FILE_OPTION_CALL_GRAPH) {
+        prepare_opt_output(opt);
+        mem_init_pool();
+        if (is_apk_file(opt))
+            apk_analyzer(opt->path, opt->out);
+        else
+            jd_dex_analyzer_from_file(opt->path, opt->out);
+        mem_free_pool();
+        free_opt(opt);
+        return 0;
+    }
 
     if (is_jvm_class(opt)) {
         run_for_jvm_class(opt);

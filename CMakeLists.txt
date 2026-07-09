@@ -34,6 +34,8 @@ include_directories(src/libs/queue)
 include_directories(src/libs/str)
 include_directories(src/libs/zip)
 include_directories(src/libs/threadpool)
+include_directories(src/libs/cjson)
+include_directories(src/ai)
 include_directories(src/jar)
 include_directories(src/dalvik)
 include_directories(src)
@@ -50,6 +52,7 @@ aux_source_directory(src/libs/memory MEMORY_POOL)
 aux_source_directory(src/libs/zip ZIP)
 aux_source_directory(src/libs/threadpool THREADPOOL)
 aux_source_directory(src/libs/bitset BITSET)
+aux_source_directory(src/libs/cjson CJSON)
 aux_source_directory(src/decompiler DECOMPILER)
 aux_source_directory(src/decompiler/transformer TRANSFORMER)
 aux_source_directory(src/jar JAR)
@@ -57,6 +60,9 @@ aux_source_directory(src/jvm JVM)
 aux_source_directory(src/apk APK)
 aux_source_directory(src/dalvik DEX)
 aux_source_directory(src/libs/trie TRIE)
+aux_source_directory(src/analyzer ANALYZER)
+aux_source_directory(src/ai AI)
+
 
 set(JAVA_DEC
         ${COMMON}
@@ -77,9 +83,12 @@ set(JAVA_DEC
         ${APK}
         ${DEX}
         ${THREADPOOL}
+        ${CJSON}
+        ${AI}
+        ${ANALYZER}
 )
 
-add_executable(garlic 
+add_executable(garlic
         ${JAVA_DEC}
         src/garlic.c
 )
