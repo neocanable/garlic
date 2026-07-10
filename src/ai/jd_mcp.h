@@ -53,7 +53,7 @@ typedef struct {
 typedef struct {
     bool initialized;
     bool shutdown;
-    jd_mcp_tool *tools;
+    const jd_mcp_tool *tools;
     int tool_count;
 } jd_mcp_server;
 

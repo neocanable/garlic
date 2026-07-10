@@ -278,11 +278,11 @@ static int register_method(jd_dumper_analyzer *analyzer, string class_name, stri
     }
 
     jd_graph_node *node = make_obj_in(jd_graph_node, analyzer->pool);
-    node->klass = class_name;
+    node->klass = str_create_in(analyzer->pool, "%s", class_name);
     node->type = 0;
-    node->method_name = method_name;
-    node->method_desc = method_desc;
-    node->ident = ident;
+    node->method_name = str_create_in(analyzer->pool, "%s", method_name);
+    node->method_desc = str_create_in(analyzer->pool, "%s", method_desc);
+    node->ident = (string) ident;
     node->id = analyzer->next_method_id ++;
     if (em != NULL) {
         if ((em->access_flags & ACC_DEX_NATIVE) != 0)
@@ -293,7 +293,7 @@ static int register_method(jd_dumper_analyzer *analyzer, string class_name, stri
         node->api_type = t;
     }
 
-    hset_s2o(analyzer->method_id_map, ident, node);
+    hset_s2o(analyzer->method_id_map, (string)ident, node);
     return node->id;
 }
 
@@ -565,6 +565,7 @@ static void dex_call_graph_scan_method(jd_meta_dex *meta, jd_dumper_analyzer *an
     char *caller_ident = str_create_in(analyzer->pool, "%s->%s%s", caller_class, caller_name, caller_desc);
 
     if (em->code == NULL) {
+
         register_method(analyzer, caller_class, caller_name, caller_desc,caller_ident,  em);
         return;
     }
@@ -683,10 +684,10 @@ void initialize_analyzer(string out_dir)
     g_dumpper_analyer->string_node_path = str_create_in(pool, "%s/string_node.csv", out_dir);
     g_dumpper_analyer->string_edge_path = str_create_in(pool, "%s/string_edge.csv", out_dir);
 
-    g_dumpper_analyer->method_node_stream = fopen(g_dumpper_analyer->method_node_path, "w");
-    g_dumpper_analyer->method_edge_stream = fopen(g_dumpper_analyer->method_edge_path, "w");
-    g_dumpper_analyer->string_node_stream = fopen(g_dumpper_analyer->string_node_path, "w");
-    g_dumpper_analyer->string_edge_stream = fopen(g_dumpper_analyer->string_edge_path, "w");
+    g_dumpper_analyer->method_node_stream = fopen(g_dumpper_analyer->method_node_path, "wb");
+    g_dumpper_analyer->method_edge_stream = fopen(g_dumpper_analyer->method_edge_path, "wb");
+    g_dumpper_analyer->string_node_stream = fopen(g_dumpper_analyer->string_node_path, "wb");
+    g_dumpper_analyer->string_edge_stream = fopen(g_dumpper_analyer->string_edge_path, "wb");
 
     g_dumpper_analyer->method_id_map = hashmap_init_in(pool, s2o_cmp, 0);
     g_dumpper_analyer->method_edge_map = hashmap_init_in(pool, s2i_cmp, 0);
