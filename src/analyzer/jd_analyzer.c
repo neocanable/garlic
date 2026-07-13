@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 
 #include "jd_analyzer.h"
 #include "parser/dex/metadata.h"
@@ -177,8 +178,8 @@ static void write_all_graph_node(jd_dumper_analyzer *analyzer)
     hashmap_iter_init(analyzer->method_id_map, &iter);
     struct hashmap_entry *_entry;
     while ((_entry = hashmap_iter_next(&iter))) {
-        u8_to_object *entry = _entry;
-        jd_graph_node *node = entry->value;
+        string_to_object *entry = (string_to_object *)_entry;
+        jd_graph_node *node = (jd_graph_node *)entry->value;
         fprintf(analyzer->method_node_stream, "%d,", node->id);
         csv_write_quoted(analyzer->method_node_stream, node->ident);
         fprintf(analyzer->method_node_stream, ",%d,", node->type);
@@ -187,7 +188,7 @@ static void write_all_graph_node(jd_dumper_analyzer *analyzer)
         csv_write_quoted(analyzer->method_node_stream, node->method_name);
         fprintf(analyzer->method_node_stream, ",");
         csv_write_quoted(analyzer->method_node_stream, node->method_desc);
-        fprintf(analyzer->method_node_stream, ",%d\n", node->api_type);
+        fprintf(analyzer->method_node_stream, ",%" PRIu64 "\n", node->api_type);
     }
 
 }
@@ -199,9 +200,9 @@ static void write_all_string(jd_dumper_analyzer *analyzer)
     struct hashmap_entry *_entry;
     fprintf(analyzer->string_node_stream, "id,pc,str,is_class_desc,is_field_name,is_method_name,is_return_type,is_method_param_type,is_internal_class_desc,is_url,is_enc_dec,is_uuid,is_pem_key,is_so_name,is_ipv4\n");
     while ((_entry = hashmap_iter_next(&iter))) {
-        u8_to_object *entry = _entry;
-        jd_export_str *str = entry->value;
-        fprintf(analyzer->string_node_stream, "%d,", str->id);
+        string_to_object *entry = (string_to_object *)_entry;
+        jd_export_str *str = (jd_export_str *)entry->value;
+        fprintf(analyzer->string_node_stream, "%" PRIu64 ",", str->id);
         fprintf(analyzer->string_node_stream, "%d,", 0);
         csv_write_quoted(analyzer->string_node_stream, str->val);
         fprintf(analyzer->string_node_stream, ",%d", jd_export_str_has_flag(str, JD_STR_TYPE_CLASS_DESC));
@@ -230,7 +231,7 @@ static void write_all_string(jd_dumper_analyzer *analyzer)
 
         int is_pem_key = 0;
         if (str->flags == 0) {
-            is_pem_key = str_is_pem_key(str) || str_is_der_base64_key(str);
+            is_pem_key = str_is_pem_key(str->val) || str_is_der_base64_key(str->val);
         }
         fprintf(analyzer->string_node_stream, ",%d", is_pem_key);
 
@@ -278,10 +279,10 @@ static int register_method(jd_dumper_analyzer *analyzer, string class_name, stri
     }
 
     jd_graph_node *node = make_obj_in(jd_graph_node, analyzer->pool);
-    node->klass = str_create_in(analyzer->pool, "%s", class_name);
+    node->klass = str_create_in(analyzer->pool, "%s", class_name ? class_name : "");
     node->type = 0;
-    node->method_name = str_create_in(analyzer->pool, "%s", method_name);
-    node->method_desc = str_create_in(analyzer->pool, "%s", method_desc);
+    node->method_name = str_create_in(analyzer->pool, "%s", method_name ? method_name : "");
+    node->method_desc = str_create_in(analyzer->pool, "%s", method_desc ? method_desc : "");
     node->ident = (string) ident;
     node->id = analyzer->next_method_id ++;
     if (em != NULL) {
@@ -708,6 +709,8 @@ void jd_dex_analyzer_from_file(string path, string save_dir)
 
     jd_meta_dex *meta = parse_dex_file(path);
     dex_call_graph(g_dumpper_analyer, meta);
+    write_all_graph_node(g_dumpper_analyer);
+    write_all_string(g_dumpper_analyer);
     mem_pool_free(meta->pool);
 }
 

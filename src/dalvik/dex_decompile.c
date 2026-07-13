@@ -136,7 +136,7 @@ static void dex_class_source_save_dir(jd_dex *dex, jsource_file *jf)
     mkdir_p(full_dir);
 
     string path = str_create("%s/%s.java", full_dir, jf->sname);
-    FILE *stream = fopen(path, "w");
+    FILE *stream = fopen(path, "wb");
     if (stream == NULL) {
         fprintf(stdout, "[error]: open file %s failed: %d\n", path, errno);
         return;
@@ -156,7 +156,7 @@ FILE* dex_class_smali_save_dir(jd_dex *dex, dex_class_def *cf)
     mkdir_p(full_dir);
 
     string path = str_create("%s/%s.smali", full_dir, sname);
-    FILE *stream = fopen(path, "w");
+    FILE *stream = fopen(path, "wb");
     if (stream == NULL) {
         fprintf(stdout, "[error]: open file %s failed: %d\n", path, errno);
         return NULL;
@@ -506,6 +506,12 @@ void dex_file_dump(string path)
     mem_free_pool();
 }
 
+static bool dex_class_filter(jd_meta_dex *meta, dex_class_def *cf)
+{
+    string class_name = dex_str_of_type_id(meta, cf->class_idx);
+    return STR_EQL(class_name, "Lcom/vivo/push/e;");
+}
+
 void dex_analyse(jd_meta_dex *meta)
 {
     jd_dex *dex = dex_init_without_thread(meta);
@@ -514,11 +520,16 @@ void dex_analyse(jd_meta_dex *meta)
     for (int i = 0; i < header->class_defs_size; ++i) {
         dex_class_def *cf = &meta->class_defs[i];
 
-        // string name = dex_str_of_type_id(meta, cf->class_idx);
         if (access_flags_contains(cf->access_flags, ACC_DEX_SYNTHETIC))
             continue;
 
-        // if (!dex_class_filter(meta, cf)) continue;
+        /**
+         * if (!dex_class_filter(meta, cf)) continue;
+         *
+         * debug dex special class
+         * if want to debug **Lcom/vivo/push/e;**
+         * in dex_class_filter, check current class's descriptor equals wanted
+         **/
 
         dex_decompile_class(dex, cf);
     }

@@ -63,7 +63,6 @@ aux_source_directory(src/libs/trie TRIE)
 aux_source_directory(src/analyzer ANALYZER)
 aux_source_directory(src/ai AI)
 
-
 set(JAVA_DEC
         ${COMMON}
         ${MEMORY_POOL}

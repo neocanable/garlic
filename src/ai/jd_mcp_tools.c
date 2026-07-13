@@ -296,13 +296,14 @@ static string tool_call_graph(const char *path, const char *output_dir)
         save_dir = tmp_path;
     }
 
-    snprintf(cmd, sizeof(cmd), "%s '%s' -g -o '%s' 2>/dev/null",
+    snprintf(cmd, sizeof(cmd), "%s '%s' -g -o '%s'",
              garlic_bin(), path, save_dir);
 
     int rc = exec_silent(cmd);
 
-    if (rc != 0 && !output_dir) {
-        jd_mcp_remove_temp_dir(save_dir);
+    if (rc != 0) {
+        if (!output_dir || output_dir[0] == '\0')
+            jd_mcp_remove_temp_dir(save_dir);
         char err[256];
         snprintf(err, sizeof(err), "Error: call_graph failed (exit=%d)", rc);
         return strdup(err);
@@ -310,10 +311,6 @@ static string tool_call_graph(const char *path, const char *output_dir)
 
     char *result = malloc(1024);
     snprintf(result, 1024, "Call graph generated in: %s", save_dir);
-
-    if (!output_dir || output_dir[0] == '\0') {
-        // tmp dir
-    }
     return result;
 }
 
@@ -332,7 +329,7 @@ static char* tool_cg_import(const char *cg_dir, const char *db_path)
 
     char cmd[16384];
     int n = snprintf(cmd, sizeof(cmd),
-        "duckdb '%s' 2>/dev/null << 'DUCKEOF'\n"
+        "duckdb '%s' 2>&1 << 'DUCKEOF'\n"
         "PRAGMA threads=4;\n"
         "PRAGMA memory_limit='4GB';\n"
         "PRAGMA preserve_insertion_order=false;\n"
@@ -416,6 +413,10 @@ static char* tool_analyze(const char *path, const char *out_dir)
     snprintf(edge_csv, sizeof(edge_csv), "%s/call_graph_edge.csv", cg_dir);
     if (access(node_csv, F_OK) == 0 && access(edge_csv, F_OK) == 0) {
         char *import_result = tool_cg_import(cg_dir, db_path);
+        if (import_result && strncmp(import_result, "err:", 4) == 0) {
+            free(import_result);
+            return strdup("err: duckdb import failed");
+        }
         free(import_result);
     }
 

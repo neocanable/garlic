@@ -48,6 +48,8 @@ cmake --build build
 
 ​	请查看在[windows编译方法](docs/build-garlic-on-windows.md)
 
+	另见 [Windows 使用指南](docs/garlic-on-windows.md) 了解性能优化和已知问题。
+
 ##### 3. 使用 Zig 编译 (跨平台)
 
 ​	**编译环境**: zig >= **0.16.0**

@@ -49,6 +49,8 @@ cmake --build build
 
 please check the [windows build document](docs/build-garlic-on-windows.md)
 
+Also see [Garlic on Windows](docs/garlic-on-windows.md) for performance tips and known issues.
+
 ##### 3. Build with Zig (cross-platform)
 
 ​	**requirements**: zig >= **0.16.0**
