@@ -72,32 +72,41 @@ void apk_smali_thread_task(jd_dex_task *task)
     apk_status(apk);
 }
 
-static void apk_decompile_task_start(jd_apk *apk)
+static void apk_process_dex_from_zip(jd_apk *apk, struct zip_t *zip)
 {
-    struct zip_t *zip = zip_open(apk->path, 0, 'r');
-    apk->zip = zip;
-    apk->entries_size = zip_entries_total(zip);
-
-    for (int i = 0; i < apk->entries_size; ++i) {
+    int total = zip_entries_total(zip);
+    for (int i = 0; i < total; ++i) {
         zip_entry_openbyindex(zip, i);
         string path_in_zip = (string)zip_entry_name(zip);
 
-        if (str_end_with(path_in_zip, "AndroidManifest.xml")) {
-            apk_parse_manifest_from_zip(apk);
+        if (strchr(path_in_zip, '/') != NULL) {
             zip_entry_close(zip);
             continue;
         }
 
-        if (!str_end_with(path_in_zip, ".dex") ||
-            strchr(path_in_zip, '/') != NULL) {
+        if (str_end_with(path_in_zip, ".apk")) {
+            size_t buf_size = zip_entry_size(zip);
+            char *buf = malloc(buf_size);
+            if (buf) {
+                zip_entry_noallocread(zip, (void *)buf, buf_size);
+                struct zip_t *nested = zip_stream_open(buf, buf_size, 0, 'r');
+                if (nested) {
+                    apk_process_dex_from_zip(apk, nested);
+                    zip_stream_close(nested);
+                }
+                free(buf);
+            }
             zip_entry_close(zip);
             continue;
         }
 
-        char *buf = NULL;
-        size_t buf_size;
-        buf_size = zip_entry_size(zip);
-        buf = x_alloc_in(apk->pool, buf_size * sizeof(unsigned char));
+        if (!str_end_with(path_in_zip, ".dex")) {
+            zip_entry_close(zip);
+            continue;
+        }
+
+        size_t buf_size = zip_entry_size(zip);
+        char *buf = x_alloc_in(apk->pool, buf_size * sizeof(unsigned char));
         zip_entry_noallocread(zip, (void *)buf, buf_size);
         zip_entry_close(zip);
 
@@ -133,7 +142,29 @@ static void apk_decompile_task_start(jd_apk *apk)
             apk->added++;
         }
     }
+}
+
+static void apk_decompile_task_start(jd_apk *apk)
+{
+    struct zip_t *zip = zip_open(apk->path, 0, 'r');
+    apk->zip = zip;
+    apk->entries_size = zip_entries_total(zip);
+
+    for (int i = 0; i < apk->entries_size; ++i) {
+        zip_entry_openbyindex(zip, i);
+        string path_in_zip = (string)zip_entry_name(zip);
+
+        if (str_end_with(path_in_zip, "AndroidManifest.xml")) {
+            apk_parse_manifest_from_zip(apk);
+            zip_entry_close(zip);
+            break;
+        }
+        zip_entry_close(zip);
+    }
+
+    apk_process_dex_from_zip(apk, zip);
     zip_close(zip);
+    apk->zip = NULL;
 }
 
 static void apk_release(jd_apk *apk)
