@@ -327,6 +327,10 @@ static char* tool_cg_import(const char *cg_dir, const char *db_path)
         return strdup("err: call graph code not found");
     }
 
+    if (system("command -v duckdb >/dev/null 2>&1") != 0)
+        return strdup("err: duckdb not found on PATH — install it and ensure "
+                      "it is on PATH (e.g. Homebrew's /opt/homebrew/bin)");
+
     char cmd[16384];
     int n = snprintf(cmd, sizeof(cmd),
         "duckdb '%s' 2>&1 << 'DUCKEOF'\n"
@@ -372,18 +376,15 @@ static char* tool_cg_query(const char *db_path, const char *sql)
     if (access(db_path, F_OK) != 0)
         return strdup("err: database file not found");
 
-    char escaped_sql[16384];
-    size_t j = 0;
-    for (size_t i = 0; sql[i] && j < sizeof(escaped_sql) - 1; i++) {
-        if (sql[i] == '\'') escaped_sql[j++] = '\'';
-        escaped_sql[j++] = sql[i];
-    }
-    escaped_sql[j] = '\0';
-
+    /* Pass SQL via a quoted heredoc (as tool_cg_import does) so the shell
+     * performs no expansion or quote processing on it — avoids the
+     * single-quote-in-double-quote collapse entirely. */
     char cmd[16512];
     snprintf(cmd, sizeof(cmd),
-        "duckdb -readonly -csv '%s' \"%s\" 2>/dev/null",
-        db_path, escaped_sql);
+        "duckdb -readonly -csv '%s' 2>/dev/null << 'DUCKEOF'\n"
+        "%s\n"
+        "DUCKEOF",
+        db_path, sql);
 
     char *out = exec_and_capture("%s", cmd);
     if (!out) return strdup("(no results)");
@@ -413,11 +414,11 @@ static char* tool_analyze(const char *path, const char *out_dir)
     snprintf(edge_csv, sizeof(edge_csv), "%s/call_graph_edge.csv", cg_dir);
     if (access(node_csv, F_OK) == 0 && access(edge_csv, F_OK) == 0) {
         char *import_result = tool_cg_import(cg_dir, db_path);
-        if (import_result && strncmp(import_result, "err:", 4) == 0) {
-            free(import_result);
-            return strdup("err: duckdb import failed");
-        }
+        if (import_result && strncmp(import_result, "err:", 4) == 0)
+            return import_result;   /* propagate the real reason (e.g. "not on PATH") */
         free(import_result);
+        if (access(db_path, F_OK) != 0)
+            return strdup("err: duckdb import produced no database file");
     }
 
     char result[16384];
