@@ -54,6 +54,13 @@ static const char* garlic_bin(void)
     "\"output_dir\":{\"type\":\"string\",\"description\":\"Output directory from analyze or decompile tool\"}"  \
     "},\"required\":[\"output_dir\"]}"
 
+
+#ifdef _WIN32
+#define DUCKDB_CMD_CHECK "where duckdb >nul 2>&1"
+#else
+#define DUCKDB_CMD_CHECK "command -v duckdb >/dev/null 2>&1"
+#endif
+
 const jd_mcp_tool MCP_TOOLS[] = {
     {
         .name         = "decompile",
@@ -327,7 +334,7 @@ static char* tool_cg_import(const char *cg_dir, const char *db_path)
         return strdup("err: call graph code not found");
     }
 
-    if (system("command -v duckdb >/dev/null 2>&1") != 0)
+    if (system(DUCKDB_CMD_CHECK) != 0)
         return strdup("err: duckdb not found on PATH — install it and ensure "
                       "it is on PATH (e.g. Homebrew's /opt/homebrew/bin)");
 
