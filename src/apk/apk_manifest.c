@@ -226,7 +226,7 @@ void parse_manifest_binary(FILE *stream, const u1* buffer, size_t buffer_size) {
                 const char* tag_name = get_string(&str_table, name_idx);
                 if (!tag_name[0]) tag_name = "unknown";
 
-                for (int i = 0; i < indent; i++) printf("  ");
+                for (int i = 0; i < indent; i++) fprintf(stream, "  ");
                 fprintf(stream, "<%s", tag_name);
 
                 if (attr_size == 0) attr_size = 20;
@@ -398,7 +398,7 @@ void parse_manifest_binary(FILE *stream, const u1* buffer, size_t buffer_size) {
 
                 indent--;
                 if (indent < 0) indent = 0;
-                for (int i = 0; i < indent; i++) printf("  ");
+                for (int i = 0; i < indent; i++) fprintf(stream, "  ");
                 fprintf(stream, "</%s>\n", tag_name);
                 processed = 1;
                 break;

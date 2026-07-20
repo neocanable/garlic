@@ -19,25 +19,24 @@
 #include "file_tools.h"
 #include "dex_annotation.h"
 #include "dex_dump.h"
-#include "output_tools.h"
 #include "dex_smali.h"
+
+static int dex_progress_len = 0;
 
 void dex_status(jd_dex *dex)
 {
     pthread_mutex_lock(dex->threadpool->lock);
     dex->done++;
-    fflush(stdout);
-    backspace(25);
-    printf("Progress : %d (%d)", dex->done, dex->added);
+    for (int i = 0; i < dex_progress_len; i++) putchar('\b');
+    dex_progress_len = printf("Progress : %d (%d)", dex->done, dex->added);
     fflush(stdout);
     pthread_mutex_unlock(dex->threadpool->lock);
 }
 
 void dex_main_thread_status(jd_dex *dex)
 {
-    fflush(stdout);
-    backspace(25);
-    printf("Progress : %d", dex->done);
+    for (int i = 0; i < dex_progress_len; i++) putchar('\b');
+    dex_progress_len = printf("Progress : %d", dex->done);
     fflush(stdout);
 }
 

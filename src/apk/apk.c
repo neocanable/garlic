@@ -5,17 +5,17 @@
 #include "dalvik/dex_structure.h"
 #include "dalvik/dex_class.h"
 #include "decompiler/expression_writter.h"
-#include "common/output_tools.h"
 #include "dex_smali.h"
 #include "apk_manifest.h"
+
+static int apk_progress_len = 0;
 
 void apk_status(jd_apk *apk)
 {
     pthread_mutex_lock(apk->threadpool->lock);
     apk->done++;
-    fflush(stdout);
-    backspace(30);
-    printf("Progress : %d (%d)", apk->done, apk->added);
+    for (int i = 0; i < apk_progress_len; i++) putchar('\b');
+    apk_progress_len = printf("Progress : %d (%d)", apk->done, apk->added);
     fflush(stdout);
     pthread_mutex_unlock(apk->threadpool->lock);
 }
