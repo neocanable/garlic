@@ -35,6 +35,7 @@ include_directories(src/libs/str)
 include_directories(src/libs/zip)
 include_directories(src/libs/threadpool)
 include_directories(src/libs/cjson)
+include_directories(libs/include)
 include_directories(src/ai)
 include_directories(src/jar)
 include_directories(src/dalvik)
@@ -87,6 +88,8 @@ set(JAVA_DEC
         ${ANALYZER}
 )
 
+link_directories(${CMAKE_SOURCE_DIR}/libs)
+
 add_executable(garlic
         ${JAVA_DEC}
         src/garlic.c
@@ -94,11 +97,11 @@ add_executable(garlic
 
 
 if (UNIX)
-  target_link_libraries(garlic pthread)
+  target_link_libraries(garlic pthread rosemary)
 endif ()
 
 if (WIN32)
-  target_link_libraries(garlic ws2_32)
+  target_link_libraries(garlic ws2_32 rosemary)
 endif ()
 
 

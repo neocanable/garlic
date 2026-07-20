@@ -21,6 +21,7 @@ pub fn build(b: *std.Build) void {
         "src/libs/zip",
         "src/libs/threadpool",
         "src/libs/cjson",
+        "libs/include",
         "src/ai",
         "src/jar",
         "src/dalvik",
@@ -105,6 +106,10 @@ pub fn build(b: *std.Build) void {
     });
 
     exe.root_module.linkLibrary(lib);
+
+    // Link pre-built librosemary from libs/
+    exe.root_module.addLibraryPath(b.path("libs"));
+    exe.root_module.linkSystemLibrary("rosemary", .{});
 
     if (optimize != .Debug) {
         lib.root_module.strip = true;
