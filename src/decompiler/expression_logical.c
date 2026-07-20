@@ -302,7 +302,8 @@ void identify_cmp_after_if(jd_method *m)
             right = assignment->right;
         }
         else {
-            abort();
+//            abort();
+            continue;
         }
         jd_exp_operator *right_exp = right->data;
         operator_exp->list->args[0] = right_exp->list->args[0];
