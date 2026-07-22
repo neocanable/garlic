@@ -6,8 +6,9 @@
 
 #include "jd_mcp.h"
 #include "str_tools.h"
-#include <stdarg.h>
 #include <dirent.h>
+#include <errno.h>
+#include <stdarg.h>
 
 static const char* garlic_bin(void)
 {
@@ -54,12 +55,6 @@ static const char* garlic_bin(void)
     "\"output_dir\":{\"type\":\"string\",\"description\":\"Output directory from analyze or decompile tool\"}"  \
     "},\"required\":[\"output_dir\"]}"
 
-
-#ifdef _WIN32
-#define DUCKDB_CMD_CHECK "where duckdb >nul 2>&1"
-#else
-#define DUCKDB_CMD_CHECK "command -v duckdb >/dev/null 2>&1"
-#endif
 
 const jd_mcp_tool MCP_TOOLS[] = {
     {
@@ -162,70 +157,464 @@ static char* mcp_read_dir_java(const char *dir)
 }
 
 
-static char* exec_and_capture(const char *cmd_fmt, ...)
+static bool append_output(char **out, size_t *cap, size_t *len,
+                          const char *data, size_t data_len)
 {
-    char cmd[4096];
-    va_list ap;
-    va_start(ap, cmd_fmt);
-    vsnprintf(cmd, sizeof(cmd), cmd_fmt, ap);
-    va_end(ap);
-
-    jd_mcp_log("exec: %s", cmd);
-
-    FILE *fp = popen(cmd, "r");
-    if (!fp) return NULL;
-
-    size_t cap = 4096, len = 0;
-    char *buf = malloc(cap);
-    if (!buf) { pclose(fp); return NULL; }
-    buf[0] = '\0';
-
-    char line[4096];
-    while (fgets(line, sizeof(line), fp)) {
-        size_t slen = strlen(line);
-        if (len + slen + 1 > cap) {
-            cap = (len + slen + 1) * 2;
-            char *nb = realloc(buf, cap);
-            if (!nb) { free(buf); pclose(fp); return NULL; }
-            buf = nb;
-        }
-        memcpy(buf + len, line, slen);
-        len += slen;
-        buf[len] = '\0';
+    if (*len + data_len + 1 > *cap) {
+        size_t new_cap = (*len + data_len + 1) * 2;
+        char *new_out = realloc(*out, new_cap);
+        if (!new_out) return false;
+        *out = new_out;
+        *cap = new_cap;
     }
-
-    int rc = pclose(fp);
-    if (rc != 0 && len == 0) {
-        free(buf);
-        return NULL;
-    }
-    return buf;
+    memcpy(*out + *len, data, data_len);
+    *len += data_len;
+    (*out)[*len] = '\0';
+    return true;
 }
 
-static int exec_silent(const char *cmd_fmt, ...)
+#ifdef _WIN32
+static wchar_t* utf8_to_wide(const char *str)
 {
-    char cmd[4096];
-    va_list ap;
-    va_start(ap, cmd_fmt);
-    vsnprintf(cmd, sizeof(cmd), cmd_fmt, ap);
-    va_end(ap);
+    UINT code_page = CP_UTF8;
+    int len = MultiByteToWideChar(code_page, MB_ERR_INVALID_CHARS,
+                                  str, -1, NULL, 0);
+    if (len == 0) {
+        code_page = CP_ACP;
+        len = MultiByteToWideChar(code_page, 0, str, -1, NULL, 0);
+    }
+    if (len == 0) return NULL;
 
-    jd_mcp_log("exec: %s", cmd);
-    int rc = system(cmd);
-    if (rc == -1) return -1;
-#ifndef _WIN32
-    if (WIFEXITED(rc)) return WEXITSTATUS(rc);
+    wchar_t *wide = malloc((size_t)len * sizeof(wchar_t));
+    if (!wide) return NULL;
+    if (MultiByteToWideChar(code_page, 0, str, -1, wide, len) == 0) {
+        free(wide);
+        return NULL;
+    }
+    return wide;
+}
+
+static bool append_wchars(wchar_t *dst, size_t cap, size_t *len,
+                          wchar_t value, size_t count)
+{
+    if (*len + count + 1 > cap) return false;
+    for (size_t i = 0; i < count; ++i)
+        dst[(*len)++] = value;
+    dst[*len] = L'\0';
+    return true;
+}
+
+static bool append_windows_arg(wchar_t *cmd, size_t cap, size_t *len,
+                               const char *arg)
+{
+    wchar_t *wide = utf8_to_wide(arg);
+    if (!wide) return false;
+
+    bool ok = true;
+    if (*len > 0)
+        ok = append_wchars(cmd, cap, len, L' ', 1);
+    if (ok)
+        ok = append_wchars(cmd, cap, len, L'"', 1);
+
+    size_t backslashes = 0;
+    for (const wchar_t *p = wide; ok && *p; ++p) {
+        if (*p == L'\\') {
+            backslashes++;
+            continue;
+        }
+        if (*p == L'"') {
+            ok = append_wchars(cmd, cap, len, L'\\', backslashes * 2 + 1) &&
+                 append_wchars(cmd, cap, len, L'"', 1);
+        } else {
+            ok = append_wchars(cmd, cap, len, L'\\', backslashes) &&
+                 append_wchars(cmd, cap, len, *p, 1);
+        }
+        backslashes = 0;
+    }
+    if (ok)
+        ok = append_wchars(cmd, cap, len, L'\\', backslashes * 2) &&
+             append_wchars(cmd, cap, len, L'"', 1);
+
+    free(wide);
+    return ok;
+}
+
+static int exec_process(const char *const argv[], const char *stdin_path,
+                        bool capture, char **output)
+{
+    wchar_t command_line[32768] = {0};
+    size_t command_len = 0;
+    for (int i = 0; argv[i]; ++i) {
+        if (!append_windows_arg(command_line,
+                                sizeof(command_line) / sizeof(command_line[0]),
+                                &command_len, argv[i]))
+            return -1;
+    }
+
+    SECURITY_ATTRIBUTES sa = {
+        .nLength = sizeof(SECURITY_ATTRIBUTES),
+        .lpSecurityDescriptor = NULL,
+        .bInheritHandle = TRUE,
+    };
+    HANDLE output_read = NULL;
+    HANDLE output_write = NULL;
+    HANDLE null_output = NULL;
+    if (capture) {
+        if (!CreatePipe(&output_read, &output_write, &sa, 0))
+            return -1;
+        SetHandleInformation(output_read, HANDLE_FLAG_INHERIT, 0);
+    } else {
+        null_output = CreateFileW(L"NUL", GENERIC_WRITE,
+                                  FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                  &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
+                                  NULL);
+        if (null_output == INVALID_HANDLE_VALUE)
+            return -1;
+        output_write = null_output;
+    }
+
+    HANDLE input_handle = NULL;
+    wchar_t *wide_stdin = NULL;
+    if (stdin_path) {
+        wide_stdin = utf8_to_wide(stdin_path);
+        if (wide_stdin)
+            input_handle = CreateFileW(wide_stdin, GENERIC_READ, FILE_SHARE_READ,
+                                       &sa, OPEN_EXISTING,
+                                       FILE_ATTRIBUTE_NORMAL, NULL);
+    } else {
+        input_handle = CreateFileW(L"NUL", GENERIC_READ,
+                                   FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                   &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
+                                   NULL);
+    }
+    free(wide_stdin);
+    if (!input_handle || input_handle == INVALID_HANDLE_VALUE) {
+        if (capture) {
+            CloseHandle(output_read);
+            CloseHandle(output_write);
+        } else {
+            CloseHandle(null_output);
+        }
+        return -1;
+    }
+
+    STARTUPINFOW si = {0};
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdInput = input_handle;
+    si.hStdOutput = output_write;
+    si.hStdError = output_write;
+
+    PROCESS_INFORMATION pi = {0};
+    BOOL created = CreateProcessW(NULL, command_line, NULL, NULL, TRUE,
+                                  CREATE_NO_WINDOW, NULL, NULL, &si, &pi);
+    CloseHandle(input_handle);
+    CloseHandle(output_write);
+    if (!created) {
+        if (capture) CloseHandle(output_read);
+        return -1;
+    }
+
+    char *captured = NULL;
+    size_t cap = 0;
+    size_t len = 0;
+    bool read_ok = true;
+    if (capture) {
+        cap = 4096;
+        captured = malloc(cap);
+        if (!captured) {
+            read_ok = false;
+        } else {
+            captured[0] = '\0';
+            char buf[4096];
+            DWORD read_len;
+            while (ReadFile(output_read, buf, sizeof(buf), &read_len, NULL) &&
+                   read_len > 0) {
+                if (!append_output(&captured, &cap, &len, buf, read_len)) {
+                    read_ok = false;
+                    break;
+                }
+            }
+        }
+        CloseHandle(output_read);
+    }
+
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    DWORD exit_code = 1;
+    GetExitCodeProcess(pi.hProcess, &exit_code);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+
+    if (!read_ok) {
+        free(captured);
+        captured = NULL;
+    }
+    if (output) *output = read_ok ? captured : NULL;
+    else free(captured);
+    return (int)exit_code;
+}
 #else
-    return rc;
-#endif
+static int exec_process(const char *const argv[], const char *stdin_path,
+                        bool capture, char **output)
+{
+    int pipe_fd[2] = {-1, -1};
+    if (capture && pipe(pipe_fd) != 0)
+        return -1;
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        if (capture) {
+            close(pipe_fd[0]);
+            close(pipe_fd[1]);
+        }
+        return -1;
+    }
+
+    if (pid == 0) {
+        int input_fd = open(stdin_path ? stdin_path : "/dev/null", O_RDONLY);
+        int output_fd = capture ? pipe_fd[1] : open("/dev/null", O_WRONLY);
+        if (input_fd < 0 || output_fd < 0)
+            _exit(126);
+
+        dup2(input_fd, STDIN_FILENO);
+        dup2(output_fd, STDOUT_FILENO);
+        dup2(output_fd, STDERR_FILENO);
+        close(input_fd);
+        close(output_fd);
+        if (capture) close(pipe_fd[0]);
+
+        execvp(argv[0], (char *const *)argv);
+        _exit(127);
+    }
+
+    char *captured = NULL;
+    size_t cap = 0;
+    size_t len = 0;
+    bool read_ok = true;
+    if (capture) {
+        close(pipe_fd[1]);
+        cap = 4096;
+        captured = malloc(cap);
+        if (!captured) {
+            read_ok = false;
+        } else {
+            captured[0] = '\0';
+            char buf[4096];
+            ssize_t read_len;
+            while ((read_len = read(pipe_fd[0], buf, sizeof(buf))) > 0) {
+                if (!append_output(&captured, &cap, &len, buf,
+                                   (size_t)read_len)) {
+                    read_ok = false;
+                    break;
+                }
+            }
+        }
+        close(pipe_fd[0]);
+    }
+
+    int status;
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno != EINTR) {
+            free(captured);
+            return -1;
+        }
+    }
+
+    if (!read_ok) {
+        free(captured);
+        captured = NULL;
+    }
+    if (output) *output = read_ok ? captured : NULL;
+    else free(captured);
+
+    if (WIFEXITED(status)) return WEXITSTATUS(status);
     return -1;
+}
+#endif
+
+static bool ensure_directory(const char *path)
+{
+    if (!path || path[0] == '\0') return false;
+
+#ifdef _WIN32
+    wchar_t *wide = utf8_to_wide(path);
+    if (!wide) return false;
+
+    for (wchar_t *p = wide; *p; ++p) {
+        if (*p != L'/' && *p != L'\\')
+            continue;
+        if (p == wide || (p == wide + 2 && wide[1] == L':'))
+            continue;
+
+        wchar_t separator = *p;
+        *p = L'\0';
+        if (!CreateDirectoryW(wide, NULL) &&
+            GetLastError() != ERROR_ALREADY_EXISTS) {
+            *p = separator;
+            free(wide);
+            return false;
+        }
+        *p = separator;
+    }
+
+    bool ok = CreateDirectoryW(wide, NULL) ||
+              GetLastError() == ERROR_ALREADY_EXISTS;
+    if (ok) {
+        DWORD attrs = GetFileAttributesW(wide);
+        ok = attrs != INVALID_FILE_ATTRIBUTES &&
+             (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0;
+    }
+    free(wide);
+    return ok;
+#else
+    char *copy = strdup(path);
+    if (!copy) return false;
+
+    for (char *p = copy + 1; *p; ++p) {
+        if (*p != '/') continue;
+        *p = '\0';
+        if (mkdir(copy, 0777) != 0 && errno != EEXIST) {
+            free(copy);
+            return false;
+        }
+        *p = '/';
+    }
+
+    bool ok = mkdir(copy, 0777) == 0 || errno == EEXIST;
+    if (ok) {
+        struct stat st;
+        ok = stat(copy, &st) == 0 && S_ISDIR(st.st_mode);
+    }
+    free(copy);
+    return ok;
+#endif
+}
+
+static bool ensure_parent_directory(const char *path)
+{
+    char *copy = strdup(path);
+    if (!copy) return false;
+
+    char *slash = strrchr(copy, '/');
+    char *backslash = strrchr(copy, '\\');
+    char *separator = slash;
+    if (!separator || (backslash && backslash > separator))
+        separator = backslash;
+    if (!separator) {
+        free(copy);
+        return true;
+    }
+    *separator = '\0';
+    bool ok = copy[0] == '\0' || ensure_directory(copy);
+    free(copy);
+    return ok;
+}
+
+static bool duckdb_available(void)
+{
+    const char *argv[] = {"duckdb", "--version", NULL};
+    return exec_process(argv, NULL, false, NULL) == 0;
+}
+
+static bool append_format(char *buf, size_t cap, size_t *len,
+                          const char *fmt, ...)
+{
+    if (*len >= cap) return false;
+    va_list ap;
+    va_start(ap, fmt);
+    int written = vsnprintf(buf + *len, cap - *len, fmt, ap);
+    va_end(ap);
+    if (written < 0 || (size_t)written >= cap - *len)
+        return false;
+    *len += (size_t)written;
+    return true;
+}
+
+static char* duckdb_escape_path(const char *path)
+{
+    size_t len = strlen(path);
+    char *escaped = malloc(len * 2 + 1);
+    if (!escaped) return NULL;
+
+    size_t out = 0;
+    for (size_t i = 0; i < len; ++i) {
+        char c = path[i];
+#ifdef _WIN32
+        if (c == '\\') c = '/';
+#endif
+        if (c == '\'') escaped[out++] = '\'';
+        escaped[out++] = c;
+    }
+    escaped[out] = '\0';
+    return escaped;
+}
+
+static char* run_duckdb_script(const char *db_path, const char *sql,
+                               bool readonly_csv, int *exit_code)
+{
+    char *temp_dir = jd_mcp_create_temp_dir();
+    if (!temp_dir) {
+        if (exit_code) *exit_code = -1;
+        return NULL;
+    }
+
+    char script_path[4096];
+    snprintf(script_path, sizeof(script_path), "%s/query.sql", temp_dir);
+    FILE *script = fopen(script_path, "wb");
+    if (!script) {
+        jd_mcp_remove_temp_dir(temp_dir);
+        free(temp_dir);
+        if (exit_code) *exit_code = -1;
+        return NULL;
+    }
+    fwrite(sql, 1, strlen(sql), script);
+    fputc('\n', script);
+    fclose(script);
+
+    const char *write_argv[] = {"duckdb", db_path, NULL};
+    const char *read_argv[] = {
+        "duckdb", "-readonly", "-csv", db_path, NULL
+    };
+    char *output = NULL;
+    int rc = exec_process(readonly_csv ? read_argv : write_argv,
+                          script_path, true, &output);
+
+    jd_mcp_remove_temp_dir(temp_dir);
+    free(temp_dir);
+    if (exit_code) *exit_code = rc;
+    return output;
+}
+
+static char* process_error(const char *operation, int rc, const char *detail)
+{
+    size_t detail_len = detail ? strlen(detail) : 0;
+    char *result = malloc(strlen(operation) + detail_len + 64);
+    if (!result) return NULL;
+    snprintf(result, strlen(operation) + detail_len + 64,
+             "err: %s failed (exit=%d)%s%s",
+             operation, rc, detail_len ? ": " : "", detail_len ? detail : "");
+    return result;
 }
 
 static string tool_decompile(const char *path, const char *output_dir)
 {
-    char escaped_path[2048];
-    char escaped_out[2048];
-    snprintf(escaped_path, sizeof(escaped_path), "'%s'", path);
+    if (jd_mcp_detect_file_type(path) == JD_MCP_FILE_CLASS) {
+        const char *argv[] = {garlic_bin(), path, NULL};
+        char *source = NULL;
+        int rc = exec_process(argv, NULL, true, &source);
+        if (rc != 0) {
+            free(source);
+            char err[256];
+            snprintf(err, sizeof(err),
+                     "Error: decompilation failed (exit=%d)", rc);
+            return strdup(err);
+        }
+        if (!source || source[0] == '\0') {
+            free(source);
+            return strdup("(decompilation produced no output)");
+        }
+        return source;
+    }
 
     const char *save_dir = output_dir;
     char tmp_path[2048];
@@ -236,16 +625,18 @@ static string tool_decompile(const char *path, const char *output_dir)
         free(d);
         save_dir = tmp_path;
     }
-    snprintf(escaped_out, sizeof(escaped_out), "'%s'", save_dir);
 
-    char cmd[4096];
-    snprintf(cmd, sizeof(cmd), "%s %s -o %s 2>/dev/null",
-             garlic_bin(), escaped_path, escaped_out);
+    if (!ensure_directory(save_dir)) {
+        if (!output_dir || output_dir[0] == '\0')
+            jd_mcp_remove_temp_dir(save_dir);
+        return strdup("Error: cannot create output directory");
+    }
 
-    int rc = exec_silent(cmd);
-
-    if (rc != 0 && !output_dir) {
-        jd_mcp_remove_temp_dir(save_dir);
+    const char *argv[] = {garlic_bin(), path, "-o", save_dir, NULL};
+    int rc = exec_process(argv, NULL, false, NULL);
+    if (rc != 0) {
+        if (!output_dir || output_dir[0] == '\0')
+            jd_mcp_remove_temp_dir(save_dir);
         char err[256];
         snprintf(err, sizeof(err), "Error: decompilation failed (exit=%d)", rc);
         return strdup(err);
@@ -259,6 +650,8 @@ static string tool_decompile(const char *path, const char *output_dir)
     }
 
     char *result = malloc(1024);
+    if (!result)
+        return strdup("Error: out of memory while formatting result");
 #ifdef _WIN32
     char abs[4096];
     char *p = _fullpath(abs, save_dir, sizeof(abs));
@@ -281,17 +674,23 @@ static string tool_decompile(const char *path, const char *output_dir)
 
 static string tool_dump_info(const char *path)
 {
-    char cmd[4096];
-    snprintf(cmd, sizeof(cmd), "%s '%s' -p 2>/dev/null", garlic_bin(), path);
-
-    char *out = exec_and_capture(cmd);
-    if (!out) return strdup("Error: dump_info failed (file not found or unsupported)");
+    const char *argv[] = {garlic_bin(), path, "-p", NULL};
+    char *out = NULL;
+    int rc = exec_process(argv, NULL, true, &out);
+    if (rc != 0) {
+        free(out);
+        char err[256];
+        snprintf(err, sizeof(err),
+                 "Error: dump_info failed (exit=%d; file may be unsupported)",
+                 rc);
+        return strdup(err);
+    }
+    if (!out) return strdup("(no output)");
     return out;
 }
 
 static string tool_call_graph(const char *path, const char *output_dir)
 {
-    char cmd[4096];
     const char *save_dir = output_dir;
     char tmp_path[2048];
 
@@ -303,10 +702,14 @@ static string tool_call_graph(const char *path, const char *output_dir)
         save_dir = tmp_path;
     }
 
-    snprintf(cmd, sizeof(cmd), "%s '%s' -g -o '%s'",
-             garlic_bin(), path, save_dir);
+    if (!ensure_directory(save_dir)) {
+        if (!output_dir || output_dir[0] == '\0')
+            jd_mcp_remove_temp_dir(save_dir);
+        return strdup("Error: cannot create output directory");
+    }
 
-    int rc = exec_silent(cmd);
+    const char *argv[] = {garlic_bin(), path, "-g", "-o", save_dir, NULL};
+    int rc = exec_process(argv, NULL, false, NULL);
 
     if (rc != 0) {
         if (!output_dir || output_dir[0] == '\0')
@@ -317,6 +720,8 @@ static string tool_call_graph(const char *path, const char *output_dir)
     }
 
     char *result = malloc(1024);
+    if (!result)
+        return strdup("Error: out of memory while formatting result");
     snprintf(result, 1024, "Call graph generated in: %s", save_dir);
     return result;
 }
@@ -334,13 +739,37 @@ static char* tool_cg_import(const char *cg_dir, const char *db_path)
         return strdup("err: call graph code not found");
     }
 
-    if (system(DUCKDB_CMD_CHECK) != 0)
-        return strdup("err: duckdb not found on PATH — install it and ensure "
-                      "it is on PATH (e.g. Homebrew's /opt/homebrew/bin)");
+    if (!duckdb_available())
+        return strdup("err: duckdb not found on PATH");
 
-    char cmd[16384];
-    int n = snprintf(cmd, sizeof(cmd),
-        "duckdb '%s' 2>&1 << 'DUCKEOF'\n"
+    if (!ensure_parent_directory(db_path))
+        return strdup("err: cannot create database output directory");
+
+    char *node_path = duckdb_escape_path(node_csv);
+    char *edge_path = duckdb_escape_path(edge_csv);
+    char *str_node_path = duckdb_escape_path(str_node_csv);
+    char *str_edge_path = duckdb_escape_path(str_edge_csv);
+    if (!node_path || !edge_path || !str_node_path || !str_edge_path) {
+        free(node_path);
+        free(edge_path);
+        free(str_node_path);
+        free(str_edge_path);
+        return strdup("err: out of memory while preparing DuckDB import");
+    }
+
+    size_t sql_cap = 65536 + strlen(node_path) + strlen(edge_path) +
+                     strlen(str_node_path) + strlen(str_edge_path);
+    char *sql = malloc(sql_cap);
+    if (!sql) {
+        free(node_path);
+        free(edge_path);
+        free(str_node_path);
+        free(str_edge_path);
+        return strdup("err: out of memory while preparing DuckDB import");
+    }
+
+    size_t n = 0;
+    bool ok = append_format(sql, sql_cap, &n,
         "PRAGMA threads=4;\n"
         "PRAGMA memory_limit='4GB';\n"
         "PRAGMA preserve_insertion_order=false;\n"
@@ -349,32 +778,49 @@ static char* tool_cg_import(const char *cg_dir, const char *db_path)
         "INSERT INTO java_cg_nodes SELECT CAST(id AS BIGINT), CAST(method AS VARCHAR), CAST(COALESCE(type,0) AS BIGINT), CAST(COALESCE(api_type,0) AS BIGINT) FROM read_csv_auto('%s', HEADER=TRUE, SAMPLE_SIZE=-1, ignore_errors=true);\n"
         "CREATE TABLE IF NOT EXISTS java_cg_edges(src_id BIGINT, dst_id BIGINT);\n"
         "INSERT INTO java_cg_edges SELECT DISTINCT CAST(src_id AS BIGINT), CAST(dst_id AS BIGINT) FROM read_csv_auto('%s', HEADER=TRUE, SAMPLE_SIZE=-1, ignore_errors=true);\n",
-        db_path, node_csv, edge_csv);
+        node_path, edge_path);
 
-    if (access(str_node_csv, F_OK) == 0) {
-        n += snprintf(cmd + n, sizeof(cmd) - n,
+    if (ok && access(str_node_csv, F_OK) == 0) {
+        ok = append_format(sql, sql_cap, &n,
             "CREATE TABLE IF NOT EXISTS string_nodes(id BIGINT, pc BIGINT, str VARCHAR, is_class_desc BOOLEAN, is_field_name BOOLEAN, is_method_name BOOLEAN, is_return_type BOOLEAN, is_method_param_type BOOLEAN, is_internal_class_desc BOOLEAN, is_url BOOLEAN, is_enc_dec BOOLEAN, is_uuid BOOLEAN, is_pem_key BOOLEAN, is_so_name BOOLEAN, is_ipv4 BOOLEAN);\n"
             "INSERT INTO string_nodes SELECT * FROM read_csv_auto('%s', HEADER=TRUE, SAMPLE_SIZE=-1, ignore_errors=true);\n",
-            str_node_csv);
+            str_node_path);
     }
-    if (access(str_edge_csv, F_OK) == 0) {
-        n += snprintf(cmd + n, sizeof(cmd) - n,
+    if (ok && access(str_edge_csv, F_OK) == 0) {
+        ok = append_format(sql, sql_cap, &n,
             "CREATE TABLE IF NOT EXISTS string_edges(string_id BIGINT, method_id BIGINT);\n"
             "INSERT INTO string_edges SELECT src_id AS string_id, dst_id AS method_id FROM read_csv_auto('%s', HEADER=TRUE, SAMPLE_SIZE=-1, ignore_errors=true);\n",
-            str_edge_csv);
+            str_edge_path);
     }
 
-    snprintf(cmd + n, sizeof(cmd) - n,
+    if (ok) {
+        ok = append_format(sql, sql_cap, &n,
         "CREATE INDEX IF NOT EXISTS idx_nodes_id ON java_cg_nodes(node_id);\n"
         "CREATE INDEX IF NOT EXISTS idx_edges_src ON java_cg_edges(src_id);\n"
         "CREATE INDEX IF NOT EXISTS idx_edges_dst ON java_cg_edges(dst_id);\n"
         "COMMIT;\n"
         "SELECT 'nodes' AS tbl, COUNT(*) AS cnt FROM java_cg_nodes "
-        "UNION ALL SELECT 'edges', COUNT(*) FROM java_cg_edges;\n"
-        "DUCKEOF");
+        "UNION ALL SELECT 'edges', COUNT(*) FROM java_cg_edges;\n");
+    }
 
-    char *out = exec_and_capture("%s", cmd);
-    if (!out) return strdup("err: duckdb import failed");
+    free(node_path);
+    free(edge_path);
+    free(str_node_path);
+    free(str_edge_path);
+    if (!ok) {
+        free(sql);
+        return strdup("err: DuckDB import SQL is too large");
+    }
+
+    int rc = -1;
+    char *out = run_duckdb_script(db_path, sql, false, &rc);
+    free(sql);
+    if (rc != 0) {
+        char *error = process_error("duckdb import", rc, out);
+        free(out);
+        return error ? error : strdup("err: duckdb import failed");
+    }
+    if (!out) return strdup("err: duckdb import produced no output");
     return out;
 }
 
@@ -383,88 +829,138 @@ static char* tool_cg_query(const char *db_path, const char *sql)
     if (access(db_path, F_OK) != 0)
         return strdup("err: database file not found");
 
-    /* Pass SQL via a quoted heredoc (as tool_cg_import does) so the shell
-     * performs no expansion or quote processing on it — avoids the
-     * single-quote-in-double-quote collapse entirely. */
-    char cmd[16512];
-    snprintf(cmd, sizeof(cmd),
-        "duckdb -readonly -csv '%s' 2>/dev/null << 'DUCKEOF'\n"
-        "%s\n"
-        "DUCKEOF",
-        db_path, sql);
+    if (!duckdb_available())
+        return strdup("err: duckdb not found on PATH");
 
-    char *out = exec_and_capture("%s", cmd);
-    if (!out) return strdup("(no results)");
+    int rc = -1;
+    char *out = run_duckdb_script(db_path, sql, true, &rc);
+    if (rc != 0) {
+        char *error = process_error("duckdb query", rc, out);
+        free(out);
+        return error ? error : strdup("err: duckdb query failed");
+    }
+    if (!out || out[0] == '\0') {
+        free(out);
+        return strdup("(no results)");
+    }
     return out;
+}
+
+static size_t count_files_with_suffix(const char *dir, const char *suffix)
+{
+    DIR *d = opendir(dir);
+    if (!d) return 0;
+
+    size_t count = 0;
+    struct dirent *entry;
+    char path[4096];
+    while ((entry = readdir(d)) != NULL) {
+        if (STR_EQL(entry->d_name, ".") || STR_EQL(entry->d_name, ".."))
+            continue;
+
+        snprintf(path, sizeof(path), "%s/%s", dir, entry->d_name);
+        struct stat st;
+        if (stat(path, &st) != 0)
+            continue;
+        if (S_ISDIR(st.st_mode))
+            count += count_files_with_suffix(path, suffix);
+        else if (str_end_with(entry->d_name, suffix))
+            count++;
+    }
+    closedir(d);
+    return count;
+}
+
+static size_t count_file_lines(const char *path)
+{
+    FILE *file = fopen(path, "rb");
+    if (!file) return 0;
+
+    size_t lines = 0;
+    int c;
+    int last = '\n';
+    while ((c = fgetc(file)) != EOF) {
+        if (c == '\n') lines++;
+        last = c;
+    }
+    fclose(file);
+    if (last != '\n') lines++;
+    return lines;
 }
 
 static char* tool_analyze(const char *path, const char *out_dir)
 {
+    if (!ensure_directory(out_dir))
+        return strdup("err: cannot create analysis output directory");
+
     char decompile_dir[4096], cg_dir[4096], db_path[4096];
     snprintf(decompile_dir, sizeof(decompile_dir), "%s/decompiled", out_dir);
     snprintf(cg_dir, sizeof(cg_dir), "%s/cg", out_dir);
     snprintf(db_path, sizeof(db_path), "%s/analysis.duckdb", out_dir);
 
-    char cmd[8192];
-    snprintf(cmd, sizeof(cmd), "%s '%s' -o '%s' >/dev/null 2>&1", garlic_bin(), path, decompile_dir);
-    int rc = exec_silent(cmd);
-    if (rc != 0)
-        return strdup("err: decompilation failed");
+    if (!ensure_directory(decompile_dir) || !ensure_directory(cg_dir))
+        return strdup("err: cannot create analysis subdirectories");
 
-    snprintf(cmd, sizeof(cmd), "%s '%s' -g -o '%s' >/dev/null 2>&1", garlic_bin(), path, cg_dir);
-    rc = exec_silent(cmd);
-    if (rc != 0)
-        return strdup("err: call graph created failed");
+    const char *decompile_argv[] = {
+        garlic_bin(), path, "-o", decompile_dir, NULL
+    };
+    int rc = exec_process(decompile_argv, NULL, false, NULL);
+    if (rc != 0) {
+        char err[128];
+        snprintf(err, sizeof(err),
+                 "err: decompilation failed (exit=%d)", rc);
+        return strdup(err);
+    }
+
+    const char *call_graph_argv[] = {
+        garlic_bin(), path, "-g", "-o", cg_dir, NULL
+    };
+    rc = exec_process(call_graph_argv, NULL, false, NULL);
+    if (rc != 0) {
+        char err[128];
+        snprintf(err, sizeof(err),
+                 "err: call graph creation failed (exit=%d)", rc);
+        return strdup(err);
+    }
 
     char node_csv[4096], edge_csv[4096];
     snprintf(node_csv, sizeof(node_csv), "%s/call_graph_node.csv", cg_dir);
     snprintf(edge_csv, sizeof(edge_csv), "%s/call_graph_edge.csv", cg_dir);
-    if (access(node_csv, F_OK) == 0 && access(edge_csv, F_OK) == 0) {
-        char *import_result = tool_cg_import(cg_dir, db_path);
-        if (import_result && strncmp(import_result, "err:", 4) == 0)
-            return import_result;   /* propagate the real reason (e.g. "not on PATH") */
-        free(import_result);
-        if (access(db_path, F_OK) != 0)
-            return strdup("err: duckdb import produced no database file");
-    }
+    if (access(node_csv, F_OK) != 0 || access(edge_csv, F_OK) != 0)
+        return strdup("err: call graph CSV files were not created");
+
+    char *import_result = tool_cg_import(cg_dir, db_path);
+    if (!import_result)
+        return strdup("err: duckdb import produced no result");
+    if (import_result && strncmp(import_result, "err:", 4) == 0)
+        return import_result;
+    free(import_result);
+    if (access(db_path, F_OK) != 0)
+        return strdup("err: duckdb import produced no database file");
 
     char result[16384];
-    int n = snprintf(result, sizeof(result),
+    size_t n = 0;
+    bool ok = append_format(result, sizeof(result), &n,
         "Analysis complete for: %s\n\n"
         "  Decompiled:  %s/\n"
         "  Call graph:  %s/\n"
         "  DuckDB:      %s\n\n",
         path, decompile_dir, cg_dir, db_path);
 
-    snprintf(cmd, sizeof(cmd), "find '%s' -name '*.java' 2>/dev/null | wc -l", decompile_dir);
-    FILE *fp = popen(cmd, "r");
-    if (fp) {
-        char buf[64];
-        if (fgets(buf, sizeof(buf), fp))
-            n += snprintf(result + n, sizeof(result) - n, "  Java files:  %s", buf);
-        pclose(fp);
-    }
+    size_t java_files = count_files_with_suffix(decompile_dir, ".java");
+    size_t node_lines = count_file_lines(node_csv);
+    size_t edge_lines = count_file_lines(edge_csv);
+    size_t node_count = node_lines > 0 ? node_lines - 1 : 0;
+    size_t edge_count = edge_lines > 0 ? edge_lines - 1 : 0;
 
-    snprintf(cmd, sizeof(cmd), "wc -l < '%s' 2>/dev/null", node_csv);
-    fp = popen(cmd, "r");
-    if (fp) {
-        char buf[64];
-        if (fgets(buf, sizeof(buf), fp))
-            n += snprintf(result + n, sizeof(result) - n, "  CG nodes:    %d\n", atoi(buf) - 1);
-        pclose(fp);
-    }
-
-    snprintf(cmd, sizeof(cmd), "wc -l < '%s' 2>/dev/null", edge_csv);
-    fp = popen(cmd, "r");
-    if (fp) {
-        char buf[64];
-        if (fgets(buf, sizeof(buf), fp))
-            n += snprintf(result + n, sizeof(result) - n, "  CG edges:    %d\n", atoi(buf) - 1);
-        pclose(fp);
-    }
-
-    n += snprintf(result + n, sizeof(result) - n,
-        "\nReady: cg_query(db_path=\"%s\", sql=\"...\")\n", db_path);
+    ok = ok && append_format(result, sizeof(result), &n,
+        "  Java files:  %zu\n"
+        "  CG nodes:    %zu\n"
+        "  CG edges:    %zu\n"
+        "\nReady: cg_query(db_path=\"%s\", sql=\"...\")\n",
+        java_files, node_count, edge_count, db_path);
+    if (!ok)
+        return strdup("err: analysis result is too large");
     return strdup(result);
 }
 
@@ -518,6 +1014,13 @@ void mcp_handle_tools_call(jd_mcp_server *server, unsigned id,
         cJSON *outdir_json = cJSON_GetObjectItem(args, "output_dir");
         const char *output_dir = (outdir_json && cJSON_IsString(outdir_json))
                                      ? outdir_json->valuestring : NULL;
+
+        if (STR_EQL(tool_name, "analyze") &&
+            (!output_dir || output_dir[0] == '\0')) {
+            jd_mcp_send_error(id, JD_MCP_ERROR_INVALID_PARAMS,
+                              "analyze requires 'output_dir' (string)");
+            return;
+        }
 
         if (STR_EQL(tool_name, "decompile")) {
             output = tool_decompile(file_path, output_dir);
