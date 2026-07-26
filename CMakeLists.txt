@@ -98,20 +98,84 @@ set(JAVA_DEC
         ${ANALYZER}
 )
 
-link_directories(${CMAKE_SOURCE_DIR}/libs)
+# ---------------------------------------------------------------------------
+# librosemarylib — locate the pre-built shared library for the target
+# platform, then embed it as a C data array so the garlic binary is
+# self-contained (extracted to temp + dlopen'd at runtime).
+# ---------------------------------------------------------------------------
+
+if(DEFINED PLATFORM_NAME)
+    # Cross-compilation: PLATFORM_NAME matches the lib subdirectory
+    # (linux-aarch64, macos-x64, win64, etc.)
+    set(ROSEMARYLIB_FILE "${CMAKE_SOURCE_DIR}/libs/${PLATFORM_NAME}/librosemarylib.so")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+        set(ROSEMARYLIB_FILE "${CMAKE_SOURCE_DIR}/libs/linux-aarch64/librosemarylib.so")
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64")
+        set(ROSEMARYLIB_FILE "${CMAKE_SOURCE_DIR}/libs/linux-x64/librosemarylib.so")
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "i686|i386")
+        set(ROSEMARYLIB_FILE "${CMAKE_SOURCE_DIR}/libs/linux-i686/librosemarylib.so")
+    else()
+        message(FATAL_ERROR "Unsupported Linux architecture: ${CMAKE_SYSTEM_PROCESSOR}")
+    endif()
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+        set(ROSEMARYLIB_FILE "${CMAKE_SOURCE_DIR}/libs/macos-aarch64/librosemarylib.dylib")
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+        set(ROSEMARYLIB_FILE "${CMAKE_SOURCE_DIR}/libs/macos-x64/librosemarylib.dylib")
+    else()
+        message(FATAL_ERROR "Unsupported macOS architecture: ${CMAKE_SYSTEM_PROCESSOR}")
+    endif()
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+        set(ROSEMARYLIB_FILE "${CMAKE_SOURCE_DIR}/libs/win64/librosemarylib.dll")
+    else()
+        set(ROSEMARYLIB_FILE "${CMAKE_SOURCE_DIR}/libs/win32/librosemarylib.dll")
+    endif()
+else()
+    message(FATAL_ERROR "Unsupported operating system: ${CMAKE_SYSTEM_NAME}")
+endif()
+
+if(ROSEMARYLIB_FILE)
+    # Convert the shared library to a C source file using a pure-CMake
+    # script so that no external tool (xxd, Python, etc.) is needed.
+    set(EMBED_SRC ${CMAKE_BINARY_DIR}/rosemarylib_data.c)
+    add_custom_command(
+        OUTPUT ${EMBED_SRC}
+        COMMAND ${CMAKE_COMMAND}
+                -DINPUT="${ROSEMARYLIB_FILE}"
+                -DOUTPUT=${EMBED_SRC}
+                -DVARNAME=rosemarylib_data
+                -P ${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake
+        MAIN_DEPENDENCY "${ROSEMARYLIB_FILE}"
+        COMMENT "Embedding ${ROSEMARYLIB_FILE} into garlic binary"
+    )
+    add_compile_definitions(ROSEMARYLIB_EMBEDDED=1)
+    message(STATUS "Embedding librosemarylib: ${ROSEMARYLIB_FILE}")
+else()
+    # Without a pre-built library the ELF-analysis (-n) feature is disabled
+    message(STATUS "librosemarylib embedding disabled (library not found)")
+endif()
+
+# -------------------------------------------------------------------------
 
 add_executable(garlic
         ${JAVA_DEC}
         src/garlic.c
+        src/rosemary/rosemary_embed.c
 )
 
+if(ROSEMARYLIB_FILE)
+    target_sources(garlic PRIVATE ${CMAKE_BINARY_DIR}/rosemarylib_data.c)
+endif()
 
-if (UNIX)
-  target_link_libraries(garlic pthread rosemary)
-endif ()
 
-if (WIN32)
-  target_link_libraries(garlic ws2_32 rosemary)
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_libraries(garlic pthread dl)
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  target_link_libraries(garlic pthread)
+elseif (WIN32)
+  target_link_libraries(garlic ws2_32)
 endif ()
 
 
@@ -120,19 +184,28 @@ if (RELEASE)
     add_executable(garlic-${PLATFORM_NAME}
             ${JAVA_DEC}
             src/garlic.c
+            src/rosemary/rosemary_embed.c
     )
+
+    if(ROSEMARYLIB_FILE)
+        target_sources(garlic-${PLATFORM_NAME} PRIVATE ${CMAKE_BINARY_DIR}/rosemarylib_data.c)
+    endif()
     endif()
 
 
-    if (UNIX)
+    if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        if(DEFINED PLATFORM_NAME)
+            target_link_libraries(garlic-${PLATFORM_NAME} pthread dl)
+        else()
+            target_link_libraries(garlic pthread dl)
+        endif()
+    elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
         if(DEFINED PLATFORM_NAME)
             target_link_libraries(garlic-${PLATFORM_NAME} pthread)
         else()
             target_link_libraries(garlic pthread)
         endif()
-    endif ()
-
-    if (WIN32)
+    elseif (WIN32)
         if (DEFINED PLATFORM_NAME)
             target_link_libraries(garlic-${PLATFORM_NAME} ws2_32)
         else()

@@ -119,74 +119,155 @@ Add to `config.json`:
 You can interact with the MCP server directly:
 
 ```sh
-# List available tools
+# List available tools (shows all tool names, descriptions, and JSON schemas)
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | garlic -m
+
+# Try a decompilation
+echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"dump_info","arguments":{"path":"/path/to/Hello.class"}}}' | garlic -m
 ```
 
 ---
 
 ## Tools Reference
 
-Garlic MCP provides **7 tools**:
+Garlic MCP provides **7 tools**. The tools are listed below in typical workflow order — **start with `analyze`** for most reverse-engineering tasks, then drill down with the other tools as needed.
 
 ### 1. `analyze`
 
-One-shot analysis: decompile + generate call graph + import into DuckDB.  
-This is the default tool for most use cases.
+**RECOMMENDED ENTRY POINT.** One-shot comprehensive analysis: decompile + generate call graph + import into DuckDB, all in one step.
 
-Requires `path` (string) — path to `.dex` or `.apk` file, and `output_dir` (string) — working directory. Creates `decompiled/`, `cg/`, and `analysis.duckdb` inside it.
-
-Requires `duckdb` CLI installed.
+- **Input**: `path` (string) — path to `.dex` or `.apk` file; `output_dir` (string) — working directory for all outputs.
+- **Output**: Creates three items inside `output_dir`:
+  - `decompiled/` — Java source files (package-directory hierarchy preserved)
+  - `cg/` — call graph CSV files (`call_graph_node.csv`, `call_graph_edge.csv`)
+  - `analysis.duckdb` — DuckDB database with indexed `java_cg_nodes` / `java_cg_edges` tables
+- **Returns**: A summary with Java file count, CG node count, and CG edge count, plus a ready-to-use `cg_query(...)` example.
+- **Dependencies**: Requires `duckdb` CLI installed on PATH.
+- **Use cases**: Run this first for most reverse-engineering tasks. After it completes, use:
+  - `android_manifest` to read app permissions / entry points
+  - `cg_query` to explore the call graph via SQL
+- **Example**:
+  ```
+  analyze(path="/path/to/app.apk", output_dir="./app_analysis")
+  ```
 
 ### 2. `decompile`
 
-Decompile a `.class` / `.jar` / `.dex` / `.apk` file to Java source code.
+Recover readable Java source code from compiled Java/Android binaries.
 
-Requires `path` (string) — path to the target file.  
-Accepts optional `output_dir` (string) — if omitted, results are returned inline and temp files are cleaned.
+- **Input**: `path` (string) — path to `.class`, `.jar`, `.dex`, or `.apk` file.
+  - Optional `output_dir` (string) — when omitted, sources are returned inline and temp files cleaned.
+- **Output**: Java source files preserving package directory structure. For APK inputs, `AndroidManifest.xml` is also extracted alongside the sources.
+- **Dependencies**: None (standalone — does not require DuckDB).
+- **Use cases**: Use when you only need Java source recovery without call graph or SQL analysis. For full analysis, prefer `analyze` instead.
+- **Example**:
+  ```
+  decompile(path="/path/to/app.apk", output_dir="./sources")
+  ```
 
 ### 3. `dump_info`
 
-Display class or DEX file structure (like `javap` / `dexdump`).
+Quick-inspect internal class/DEX file structure — methods, fields, constants, annotations, and signatures — without performing full decompilation. Similar to `javap` or `dexdump`.
 
-Requires `path` (string) — path to `.class` or `.dex` file.
+- **Input**: `path` (string) — path to `.class` or `.dex` file.
+- **Output**: Structured text showing class/bytecode structure.
+- **Dependencies**: None.
+- **Use cases**: Fast validation of file type, API-surface inspection, checking for obfuscation patterns.
+- **Example**:
+  ```
+  dump_info(path="/path/to/classes.dex")
+  ```
 
 ### 4. `call_graph`
 
-Generate a call graph for a `.dex` or `.apk` file.
+Generate a full call graph for a `.dex` or `.apk` file.
 
-Requires `path` (string) — path to `.dex` or `.apk` file.  
-Accepts optional `output_dir` (string) — if omitted, uses a temp directory. Produces `call_graph_node.csv` and `call_graph_edge.csv`.
+- **Input**: `path` (string) — path to `.dex` or `.apk` file.
+  - Optional `output_dir` (string) — when omitted, uses a temp directory.
+- **Output**: Two (or four) CSV files:
+  - `call_graph_node.csv` — each row is one method, with columns for `node_id`, `method_raw`, `node_type`, and `api_type`
+  - `call_graph_edge.csv` — each row is one caller→callee edge (`src_id`, `dst_id`)
+  - `string_node.csv` / `string_edge.csv` — present when string-reference analysis data is available
+- **Dependencies**: None (standalone — does not require DuckDB).
+- **Use cases**: Understanding method dependencies, finding entry points, tracing data flow, detecting unused code. The CSV output is designed for import into DuckDB via `cg_import`.
+- **Example**:
+  ```
+  call_graph(path="/path/to/app.apk", output_dir="./cg_output")
+  ```
 
 ### 5. `cg_import`
 
-Import call graph CSV files into a DuckDB database for SQL analysis.
+Import call graph CSV files into a DuckDB database with indexed tables for fast SQL analysis.
 
-Requires `cg_dir` (string) — directory containing `call_graph_node.csv` and `call_graph_edge.csv`, and `db_path` (string) — output path for the `.duckdb` database file.
-
-Requires `duckdb` CLI installed.
+- **Input**:
+  - `cg_dir` (string) — directory produced by `call_graph`, containing `call_graph_node.csv` and `call_graph_edge.csv`
+  - `db_path` (string) — output path for the `.duckdb` database file
+- **Output**: A DuckDB database at `db_path` containing:
+  - `java_cg_nodes(node_id, method_raw, node_type, api_type)` — method metadata, indexed
+  - `java_cg_edges(src_id, dst_id)` — call relationships, indexed on both ends
+  - `string_nodes` / `string_edges` — created only when the corresponding CSV files exist
+- **Dependencies**: Requires `duckdb` CLI installed on PATH.
+- **Use cases**: Intermediate step between `call_graph` and `cg_query`. Run this after `call_graph`, then use `cg_query` to analyse the database.
+- **Example**:
+  ```
+  cg_import(cg_dir="./cg_output", db_path="./analysis.duckdb")
+  ```
 
 ### 6. `cg_query`
 
-Run a SQL query against a call graph DuckDB database.
+Run a SQL query against a call graph DuckDB database (created by `cg_import`).
 
-Requires `db_path` (string) — path to the `.duckdb` database file, and `sql` (string) — the SQL query to execute.
-
-Requires `duckdb` CLI installed.
+- **Input**:
+  - `db_path` (string) — path to `.duckdb` database file (from `cg_import`)
+  - `sql` (string) — SQL query to execute
+- **Output**: Query results in CSV format.
+- **Dependencies**: Requires `duckdb` CLI installed on PATH.
+- **Database schema**:
+  - `java_cg_nodes` — `node_id BIGINT, method_raw VARCHAR, node_type BIGINT, api_type BIGINT`
+  - `java_cg_edges` — `src_id BIGINT, dst_id BIGINT`
+  - `string_nodes` — string constants metadata (if imported)
+  - `string_edges` — string-to-method references (if imported)
+- **Use cases**:
+  - Find all methods called by a given method: `SELECT * FROM java_cg_edges WHERE src_id = ?`
+  - Find all callers of a method: `SELECT * FROM java_cg_edges WHERE dst_id = ?`
+  - Discover app entry points: `SELECT * FROM java_cg_nodes WHERE api_type > 0`
+  - Find unused (zero-callee) methods: `SELECT n.* FROM java_cg_nodes n LEFT JOIN java_cg_edges e ON n.node_id = e.dst_id WHERE e.dst_id IS NULL`
+  - Count API calls by type: `SELECT node_type, COUNT(*) FROM java_cg_nodes GROUP BY node_type`
+- **Important**: Queries run in read-only mode — the database is never modified.
+- **Example**:
+  ```
+  cg_query(db_path="./analysis.duckdb", sql="SELECT method_raw, node_type FROM java_cg_nodes LIMIT 20")
+  ```
 
 ### 7. `android_manifest`
 
-Read AndroidManifest.xml from a previous decompile/analyze output directory.
+Read AndroidManifest.xml from a previous decompile or analyze output directory.
 
-Requires `output_dir` (string) — the output directory used with `analyze` or `decompile`. Returns the full contents of AndroidManifest.xml.
+- **Input**: `output_dir` (string) — the directory used with `decompile` or `analyze`.
+- **Output**: Full XML content of AndroidManifest.xml, including:
+  - App permissions (`<uses-permission>`)
+  - Activity, service, broadcast receiver, and content provider declarations
+  - Intent filters and exported-component flags
+- **Dependencies**: None.
+- **Use cases**: After decompiling an APK, use this to understand the app's attack surface, entry points, declared permissions, and inter-component communication (ICC) surface.
+- **Example**:
+  ```
+  android_manifest(output_dir="./app_analysis")
+  ```
 
-In Claude Desktop, ask:
+---
 
-> "help me analysis apk at '/path/to/apk'"
+### Workflow Summary
 
-Garlic MCP will decompile the APK, generate the call graph, and import everything into DuckDB for further analysis. You can then ask:
-
-> "read the AndroidManifest.xml"
+```
+analyze(path, output_dir)          ← Start here for most tasks
+  ├─ decompile(path, output_dir?)   ← Or use individually
+  ├─ dump_info(path)                ← Quick peek at structure
+  └─ call_graph(path, output_dir?)  ← Generate call graph CSVs
+       └─ cg_import(cg_dir, db_path)  ← Import into DuckDB
+             └─ cg_query(db_path, sql) ← Analyse with SQL
+ android_manifest(output_dir)      ← Read app permissions (after decompile/analyze)
+```
 
 ---
 

@@ -9,6 +9,8 @@
 #include "analyzer/jd_analyzer.h"
 #include "ai/jd_mcp.h"
 #include <unistd.h>
+/* Embedded librosemarylib — extracted to temp dir and dlopen'd at runtime */
+#include "rosemary/rosemary_embed.h"
 
 typedef enum {
     JD_FILE_TYPE_UNKNOWN = 0,
@@ -16,6 +18,7 @@ typedef enum {
     JD_FILE_TYPE_JAR,
     JD_FILE_TYPE_DEX,
     JD_FILE_TYPE_APK,
+    JD_FILE_TYPE_ELF,
 } jd_file_type_t;
 
 typedef enum {
@@ -24,6 +27,7 @@ typedef enum {
     JD_FILE_OPTION_SEARCH, // search for a string in the file
     JD_FILE_OPTION_SMALI, // dex/apk to smali
     JD_FILE_OPTION_CALL_GRAPH, // generate call graph
+    JD_FILE_OPTION_ELF_ANALYSIS, // analyze ELF binary
 } jd_file_option_t;
 
 typedef struct jd_opt {
@@ -65,6 +69,8 @@ static jd_file_type_t magic_of_file(char *filepath) {
         }
         case DEX_FILE_MAGIC:
             return JD_FILE_TYPE_DEX;
+        case ELF_FILE_MAGIC:
+            return JD_FILE_TYPE_ELF;
         default:
             fprintf(stderr, "[garlic] file: %s is not a "
                             "valid Java class/JAR/DEX file\n", filepath);
@@ -128,6 +134,7 @@ static void opt_usage(const char *progname) {
     fprintf(stderr, "    -t: number of threads to use (default is 4)\n");
     fprintf(stderr, "    -g: generate call graph for dex/apk\n");
     fprintf(stderr, "    -s: apk/dex to smali\n");
+    fprintf(stderr, "    -n: analyze ELF binary via librosemarylib\n");
     fprintf(stderr, "    -m: start MCP server (stdio protocol)\n");
 }
 
@@ -150,7 +157,7 @@ static jd_opt* parse_opt(int argc, char **argv) {
     opt->path = path;
     opt->ft = ft;
 
-    while ((oc = getopt(argc, argv, "spo:t:ghm")) != -1) {
+    while ((oc = getopt(argc, argv, "spo:t:ghmn")) != -1) {
         switch (oc) {
             case 'p': { // like javap
                 opt->option = JD_FILE_OPTION_DUMP;
@@ -169,6 +176,10 @@ static jd_opt* parse_opt(int argc, char **argv) {
             }
             case 'g': {
                 opt->option = JD_FILE_OPTION_CALL_GRAPH;
+                break;
+            }
+            case 'n': {
+                opt->option = JD_FILE_OPTION_ELF_ANALYSIS;
                 break;
             }
             case 'm': {
@@ -314,6 +325,20 @@ int main(int argc, char **argv)
     }
 
     jd_opt *opt = parse_opt(argc, argv);
+
+    if (opt->option == JD_FILE_OPTION_ELF_ANALYSIS) {
+        printf("[Garlic] ELF binary analysis\n");
+        printf("File     : %s\n", opt->path);
+        jd_elf *elf = jd_analysis_elf_from_path(opt->path);
+        if (elf == NULL) {
+            fprintf(stderr, "[Garlic] ELF analysis failed for: %s\n", opt->path);
+            free_opt(opt);
+            return 1;
+        }
+        printf("\n[Done]\n");
+        free_opt(opt);
+        return 0;
+    }
 
     if (opt->option == JD_FILE_OPTION_CALL_GRAPH) {
         prepare_opt_output(opt);

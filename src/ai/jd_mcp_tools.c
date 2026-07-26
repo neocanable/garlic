@@ -14,44 +14,51 @@ static const char* garlic_bin(void)
     return mcp_self_path ? mcp_self_path : "garlic";
 }
 
+/* ------------------------------------------------------------------ *
+ *  JSON Schema definitions for each tool's input parameters.
+ *  These property descriptions are surfaced in the MCP tools/list
+ *  response alongside the tool description, so every field must be
+ *  self-explanatory — the LLM reads them to decide what to fill in.
+ * ------------------------------------------------------------------ */
+
 #define SCHEMA_DECOMPILE  \
     "{\"type\":\"object\",\"properties\":{"  \
-    "\"path\":{\"type\":\"string\",\"description\":\"Path to .class/.jar/.dex/.apk file\"},"  \
-    "\"output_dir\":{\"type\":\"string\",\"description\":\"Output directory for decompiled source\"}"  \
+    "\"path\":{\"type\":\"string\",\"description\":\"Path to the target file. Supports .class (Java bytecode), .jar (Java archive), .dex (Dalvik bytecode), and .apk (Android package). Required.\"},"  \
+    "\"output_dir\":{\"type\":\"string\",\"description\":\"Directory to write decompiled Java source files into. Directory structure mirrors the Java package hierarchy. When omitted, sources are returned inline as text and the temp directory is cleaned up automatically.\"}"  \
     "},\"required\":[\"path\"]}"
 
 #define SCHEMA_DUMP_INFO  \
     "{\"type\":\"object\",\"properties\":{"  \
-    "\"path\":{\"type\":\"string\",\"description\":\"Path to .class or .dex file\"}"  \
+    "\"path\":{\"type\":\"string\",\"description\":\"Path to a .class (Java bytecode) or .dex (Dalvik bytecode) file. Shows the internal structure — methods, fields, constants, annotations, and signatures — without performing a full decompilation.\"}"  \
     "},\"required\":[\"path\"]}"
 
 #define SCHEMA_CALL_GRAPH  \
     "{\"type\":\"object\",\"properties\":{"  \
-    "\"path\":{\"type\":\"string\",\"description\":\"Path to .dex or .apk file\"},"  \
-    "\"output_dir\":{\"type\":\"string\",\"description\":\"Output directory for call graph CSV files\"}"  \
+    "\"path\":{\"type\":\"string\",\"description\":\"Path to a .dex (Dalvik bytecode) or .apk (Android package) file from which to generate the call graph.\"},"  \
+    "\"output_dir\":{\"type\":\"string\",\"description\":\"Directory to write CSV files into. Produces call_graph_node.csv (method metadata with type/api_type classification) and call_graph_edge.csv (caller-callee edges). When omitted, uses a temp directory. These CSVs are designed for import into DuckDB via the cg_import tool.\"}"  \
     "},\"required\":[\"path\"]}"
 
 #define SCHEMA_CG_IMPORT  \
     "{\"type\":\"object\",\"properties\":{"  \
-    "\"cg_dir\":{\"type\":\"string\",\"description\":\"Directory containing call_graph_node.csv and call_graph_edge.csv\"},"  \
-    "\"db_path\":{\"type\":\"string\",\"description\":\"Output path for .duckdb database file\"}"  \
+    "\"cg_dir\":{\"type\":\"string\",\"description\":\"Directory containing the CSV output from a previous call_graph run. Must include call_graph_node.csv and call_graph_edge.csv. Optionally also imports string_node.csv and string_edge.csv if present.\"},"  \
+    "\"db_path\":{\"type\":\"string\",\"description\":\"File path where the DuckDB database (.duckdb) will be created. This database is then queried via the cg_query tool. Example: ./analysis.duckdb\"}"  \
     "},\"required\":[\"cg_dir\",\"db_path\"]}"
 
 #define SCHEMA_CG_QUERY  \
     "{\"type\":\"object\",\"properties\":{"  \
-    "\"db_path\":{\"type\":\"string\",\"description\":\"Path to .duckdb database file\"},"  \
-    "\"sql\":{\"type\":\"string\",\"description\":\"SQL query to execute\"}"  \
+    "\"db_path\":{\"type\":\"string\",\"description\":\"Path to a .duckdb database file previously created by cg_import. Contains java_cg_nodes (method metadata) and java_cg_edges (call relationships) tables, plus optionally string_nodes (string constants) and string_edges (string-to-method references).\"},"  \
+    "\"sql\":{\"type\":\"string\",\"description\":\"SQL query to run. Supports SELECT, JOIN, aggregation, subqueries — any valid DuckDB SQL. Example: SELECT * FROM java_cg_nodes WHERE node_type = 1 LIMIT 20\"}"  \
     "},\"required\":[\"db_path\",\"sql\"]}"
 
 #define SCHEMA_ANALYZE  \
     "{\"type\":\"object\",\"properties\":{"  \
-    "\"path\":{\"type\":\"string\",\"description\":\"Path to .dex or .apk file\"},"  \
-    "\"output_dir\":{\"type\":\"string\",\"description\":\"Working directory for all outputs\"}"  \
+    "\"path\":{\"type\":\"string\",\"description\":\"Path to a .dex (Dalvik bytecode) or .apk (Android package) file for comprehensive one-shot analysis.\"},"  \
+    "\"output_dir\":{\"type\":\"string\",\"description\":\"Working directory for all outputs. Creates: decompiled/ (Java sources), cg/ (call graph CSVs), and analysis.duckdb (imported DuckDB database). Example: ./my_app_analysis\"}"  \
     "},\"required\":[\"path\",\"output_dir\"]}"
 
 #define SCHEMA_ANDROID_MANIFEST  \
     "{\"type\":\"object\",\"properties\":{"  \
-    "\"output_dir\":{\"type\":\"string\",\"description\":\"Output directory from analyze or decompile tool\"}"  \
+    "\"output_dir\":{\"type\":\"string\",\"description\":\"The output directory from a previous decompile or analyze run. Must contain AndroidManifest.xml which was extracted from the APK during decompilation. Returns the full XML content including permissions, activities, services, receivers, and intent filters.\"}"  \
     "},\"required\":[\"output_dir\"]}"
 
 
@@ -61,40 +68,53 @@ static const char* garlic_bin(void)
 #define DUCKDB_CMD_CHECK "command -v duckdb >/dev/null 2>&1"
 #endif
 
+/* ------------------------------------------------------------------ *
+ *  Tool declarations for the MCP protocol.
+ *
+ *  The `description` field is what every MCP client (and therefore
+ *  every LLM that decides whether to call the tool) sees in the
+ *  tools/list response.  These descriptions must be self-contained,
+ *  covering: what the tool does, when to use it, what it depends on,
+ *  what output to expect, and how it fits into a multi-tool workflow.
+ *
+ *  ORDERING NOTE:  tools are listed in typical workflow order so
+ *  that an LLM scanning the list sees the "entry point" tools first.
+ * ------------------------------------------------------------------ */
+
 const jd_mcp_tool MCP_TOOLS[] = {
     {
+        .name         = "analyze",
+        .description  = "RECOMMENDED ENTRY POINT. One-shot comprehensive reverse-engineering of an APK or DEX: (1) decompile to Java source, (2) generate a full call graph, (3) import everything into DuckDB for SQL analysis. Creates decompiled/ (Java sources), cg/ (call graph CSVs), and analysis.duckdb. Run this first for most workflows, then use cg_query to explore the call graph with SQL or android_manifest to read app permissions/entry points. Requires the 'duckdb' CLI on PATH.",
+        .input_schema = SCHEMA_ANALYZE,
+    },
+    {
         .name         = "decompile",
-        .description  = "Decompile a Java class, JAR, DEX or APK to Java source code via `garlic -o`",
+        .description  = "Decompile a Java class (.class), JAR archive (.jar), DEX bytecode (.dex), or Android APK (.apk) to readable Java source code. Preserves package directory structure and extracts AndroidManifest.xml alongside the sources. When no output_dir is given, results are returned inline and temp files are cleaned. Use this when you only need Java source recovery without call graph or SQL analysis.",
         .input_schema = SCHEMA_DECOMPILE,
     },
     {
         .name         = "dump_info",
-        .description  = "Display class/dex file structure (like javap / dexdump) via `garlic -p`",
+        .description  = "Quick-inspect the internal structure of a .class or .dex file — methods, fields, constants, annotations, and signatures — similar to javap / dexdump. Use this for fast validation or API-surface inspection without generating full decompiled source.",
         .input_schema = SCHEMA_DUMP_INFO,
     },
     {
         .name         = "call_graph",
-        .description  = "Generate call graph for a DEX or APK file via `garlic -g`",
+        .description  = "Generate a call graph for a .dex or .apk file, writing CSV files for downstream analysis. Produces call_graph_node.csv (each row = one method with node_type/api_type classification) and call_graph_edge.csv (each row = one caller→callee edge). When no output_dir is given, uses a temp directory. Use this when you want to understand method dependencies, find entry points, trace data flow, or detect unused code. The CSV output can be imported into DuckDB via cg_import for SQL queries.",
         .input_schema = SCHEMA_CALL_GRAPH,
     },
     {
         .name         = "cg_import",
-        .description  = "Import call graph CSV files into a DuckDB database for SQL analysis",
+        .description  = "Import call graph CSV files (produced by call_graph) into a DuckDB database with indexed tables for fast SQL querying. Creates java_cg_nodes (method metadata including type/api_type) and java_cg_edges (caller→callee relationships) tables with indexes. Also imports string_node.csv / string_edge.csv if present. Requires the 'duckdb' CLI. Run this after call_graph, then use cg_query to analyse the database.",
         .input_schema = SCHEMA_CG_IMPORT,
     },
     {
         .name         = "cg_query",
-        .description  = "Run a SQL query against a call graph DuckDB database",
+        .description  = "Run a SQL query against a call graph DuckDB database (created by cg_import). Supports full DuckDB SQL — SELECT, JOIN, aggregation, subqueries, window functions. Tables: java_cg_nodes(node_id, method_raw, node_type, api_type) for method metadata; java_cg_edges(src_id, dst_id) for call relationships; plus optional string_nodes/string_edges for string-reference analysis. Use cases: find all callers/callees of a method, discover app entry points, measure API usage frequency, trace data-flow paths through the call chain, find unused (zero-callee) methods. Requires the 'duckdb' CLI.",
         .input_schema = SCHEMA_CG_QUERY,
     },
     {
-        .name         = "analyze",
-        .description  = "One-shot: decompile + call graph + import DuckDB for an APK/DEX file",
-        .input_schema = SCHEMA_ANALYZE,
-    },
-    {
         .name         = "android_manifest",
-        .description  = "Read AndroidManifest.xml from a previous decompile/analyze output directory",
+        .description  = "Read the AndroidManifest.xml from a previous decompile or analyze output directory. Returns the full XML content including app permissions, activity/service/receiver declarations, and intent filters. Use after decompile or analyze on an APK to understand the app's attack surface, entry points, and declared capabilities.",
         .input_schema = SCHEMA_ANDROID_MANIFEST,
     },
 };
