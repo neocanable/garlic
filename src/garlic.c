@@ -11,6 +11,8 @@
 #include <unistd.h>
 /* Embedded librosemarylib — extracted to temp dir and dlopen'd at runtime */
 #include "rosemary/rosemary_embed.h"
+/* License verification */
+#include "ai/http_server.h"
 
 typedef enum {
     JD_FILE_TYPE_UNKNOWN = 0,
@@ -134,8 +136,10 @@ static void opt_usage(const char *progname) {
     fprintf(stderr, "    -t: number of threads to use (default is 4)\n");
     fprintf(stderr, "    -g: generate call graph for dex/apk\n");
     fprintf(stderr, "    -s: apk/dex to smali\n");
-    fprintf(stderr, "    -n: analyze ELF binary via librosemarylib\n");
+    fprintf(stderr, "    -n: analyze native libs\n");
     fprintf(stderr, "    -m: start MCP server (stdio protocol)\n");
+    fprintf(stderr, "    --serve [dir] [port]: start HTTP server (default: . 8080)\n");
+    fprintf(stderr, "    -l <email> <key>: install a purchased license\n");
 }
 
 static jd_opt* parse_opt(int argc, char **argv) {
@@ -313,14 +317,40 @@ extern const int         MCP_TOOL_COUNT;
 
 int main(int argc, char **argv)
 {
+    /* -l <email> <key>: install license file for librosemarylib */
+    if (argc >= 2 && strcmp(argv[1], "-l") == 0) {
+        if (argc < 4) {
+            fprintf(stderr, "Usage: garlic -l <email> <license_key>\n");
+            return 1;
+        }
+        const char *home = getenv("HOME");
+        if (!home) home = ".";
+        char lic_path[1024];
+        snprintf(lic_path, sizeof(lic_path), "%s/.garlic", home);
+        mkdir(lic_path, 0700);
+        snprintf(lic_path, sizeof(lic_path), "%s/.garlic/license", home);
+        FILE *fp = fopen(lic_path, "w");
+        if (!fp) { fprintf(stderr, "[garlic] Cannot write to %s\n", lic_path); return 1; }
+        fwrite(argv[3], 1, strlen(argv[3]), fp);
+        fclose(fp);
+        fprintf(stderr, "[garlic] License saved to %s for %s\n", lic_path, argv[2]);
+        return 0;
+    }
+
+    /* --- Modes that don't need license --- */
+    if (argc >= 2 && strcmp(argv[1], "--serve") == 0) {
+        const char *dir = (argc >= 3) ? argv[2] : ".";
+        int port = (argc >= 4) ? atoi(argv[3]) : 8080;
+        return http_serve(dir, port);
+    }
+
     if (argc >= 2 && strcmp(argv[1], "-m") == 0) {
         jd_mcp_set_self_path(argv[0]);
-        jd_mcp_server server = {0 };
-        server.tools      = MCP_TOOLS;
-        server.tool_count = MCP_TOOL_COUNT;
-        jd_mcp_server_init(&server);
-        jd_mcp_server_run(&server);
-        jd_mcp_server_cleanup(&server);
+        jd_mcp_server *server = jd_init_mcp_server();
+        server->tools = &MCP_TOOLS;
+        server->tool_count = MCP_TOOL_COUNT;
+        jd_mcp_server_run(server);
+        jd_mcp_server_cleanup(server);
         return 0;
     }
 

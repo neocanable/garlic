@@ -45,7 +45,10 @@ extern const unsigned int  rosemarylib_data_len;
 #else
   static void   *g_lib_handle = NULL;
 #endif
-static jd_elf* (*g_real_func)(const char *) = NULL;
+
+/* Resolved function pointers */
+static jd_elf* (*g_real_analysis)(const char *) = NULL;
+static void    (*g_real_dump_all)(jd_elf *)     = NULL;
 
 /* ---------------------------------------------------------------
  * Build a temp-file path, write the embedded library to it, then
@@ -111,10 +114,20 @@ static int ensure_library_loaded(void)
         remove(tmp_path);
         return -1;
     }
-    g_real_func = (jd_elf *(*)(const char *))
+    g_real_analysis = (jd_elf *(*)(const char *))
                     GetProcAddress(g_lib_handle, "jd_analysis_elf_from_path");
-    if (!g_real_func) {
+    if (!g_real_analysis) {
         fprintf(stderr, "[garlic] Symbol 'jd_analysis_elf_from_path' "
+                        "not found (error %lu)\n", GetLastError());
+        FreeLibrary(g_lib_handle);
+        g_lib_handle = NULL;
+        remove(tmp_path);
+        return -1;
+    }
+    g_real_dump_all = (void (*)(jd_elf *))
+                    GetProcAddress(g_lib_handle, "jd_dump_all_csv");
+    if (!g_real_dump_all) {
+        fprintf(stderr, "[garlic] Symbol 'jd_dump_all_csv' "
                         "not found (error %lu)\n", GetLastError());
         FreeLibrary(g_lib_handle);
         g_lib_handle = NULL;
@@ -129,10 +142,20 @@ static int ensure_library_loaded(void)
         remove(tmp_path);
         return -1;
     }
-    g_real_func = (jd_elf *(*)(const char *))
+    g_real_analysis = (jd_elf *(*)(const char *))
                     dlsym(g_lib_handle, "jd_analysis_elf_from_path");
-    if (!g_real_func) {
+    if (!g_real_analysis) {
         fprintf(stderr, "[garlic] Symbol 'jd_analysis_elf_from_path' "
+                        "not found: %s\n", dlerror());
+        dlclose(g_lib_handle);
+        g_lib_handle = NULL;
+        remove(tmp_path);
+        return -1;
+    }
+    g_real_dump_all = (void (*)(jd_elf *))
+                    dlsym(g_lib_handle, "jd_dump_all_csv");
+    if (!g_real_dump_all) {
+        fprintf(stderr, "[garlic] Symbol 'jd_dump_all_csv' "
                         "not found: %s\n", dlerror());
         dlclose(g_lib_handle);
         g_lib_handle = NULL;
@@ -154,5 +177,12 @@ jd_elf* jd_analysis_elf_from_path(const char *path)
 {
     if (ensure_library_loaded() != 0)
         return NULL;
-    return g_real_func(path);
+    return g_real_analysis(path);
+}
+
+void jd_dump_all_csv(jd_elf *elf)
+{
+    if (!g_real_dump_all)
+        return;
+    g_real_dump_all(elf);
 }

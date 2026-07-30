@@ -21,6 +21,27 @@ typedef struct jd_elf jd_elf;
  */
 jd_elf* jd_analysis_elf_from_path(const char *path);
 
+/**
+ * Dump ALL analysis data for a previously-analysed ELF/ Mach-O
+ * binary to CSV / text files alongside the original binary.
+ *
+ * Produces per-analysis files at <path>.<suffix>:
+ *   .cfg_nodes   — control-flow-graph node list
+ *   .cfg_edges   — control-flow-graph edges
+ *   .dissembly   — disassembly listing
+ *   .entries     — entry points
+ *   .exports     — exported symbols
+ *   .func_xref   — function cross-references
+ *   .strings     — string constants with metadata
+ *   .pc_xrefs    — string / PC cross-references
+ *   .imports     — imported symbols
+ *
+ * These files can be imported into DuckDB for SQL analysis.
+ *
+ * @param elf  The jd_elf handle returned by jd_analysis_elf_from_path().
+ */
+void jd_dump_all_csv(jd_elf *elf);
+
 #ifdef __cplusplus
 }
 #endif

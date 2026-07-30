@@ -45,6 +45,7 @@ include_directories(src/libs/str)
 include_directories(src/libs/zip)
 include_directories(src/libs/threadpool)
 include_directories(src/libs/cjson)
+include_directories(src/libs/md4c)
 include_directories(libs/include)
 include_directories(src/ai)
 include_directories(src/jar)
@@ -73,6 +74,19 @@ aux_source_directory(src/dalvik DEX)
 aux_source_directory(src/libs/trie TRIE)
 aux_source_directory(src/analyzer ANALYZER)
 aux_source_directory(src/ai AI)
+set(MD4C
+    src/libs/md4c/md4c.c
+    src/libs/md4c/md4c-html.c
+    src/libs/md4c/entity.c
+)
+
+set(REPORT
+    src/report/report.c
+)
+
+set(HTTP_SERVER
+    src/ai/http_server.c
+)
 
 set(JAVA_DEC
         ${COMMON}
@@ -96,6 +110,9 @@ set(JAVA_DEC
         ${CJSON}
         ${AI}
         ${ANALYZER}
+        ${MD4C}
+        ${REPORT}
+        ${HTTP_SERVER}
 )
 
 # ---------------------------------------------------------------------------
@@ -175,7 +192,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   target_link_libraries(garlic pthread)
 elseif (WIN32)
-  target_link_libraries(garlic ws2_32)
+  target_link_libraries(garlic ws2_32 advapi32)
 endif ()
 
 
@@ -207,9 +224,9 @@ if (RELEASE)
         endif()
     elseif (WIN32)
         if (DEFINED PLATFORM_NAME)
-            target_link_libraries(garlic-${PLATFORM_NAME} ws2_32)
+            target_link_libraries(garlic-${PLATFORM_NAME} ws2_32 advapi32)
         else()
-             target_link_libraries(garlic ws2_32)
+             target_link_libraries(garlic ws2_32 advapi32)
         endif()
     endif ()
 
