@@ -723,24 +723,40 @@ void dex_analyzer(jd_dumper_analyzer *analyzer, jd_meta_dex *meta)
     mark_field_strings(analyzer, meta);
 }
 
-/**
- * TODO: nested apk need support
- **/
-void apk_analyzer(string path, string out_dir)
+/* Process DEX entries from a ZIP, recursing into nested APK entries.
+ * Follows the same pattern as apk_process_dex_from_zip() in apk.c. */
+static void apk_analyzer_process_zip(struct zip_t *zip)
 {
-    initialize_analyzer(out_dir);
-
-    struct zip_t *zip = zip_open(path, 0, 'r');
-    if (zip == NULL)
-        return;
-
     int total = zip_entries_total(zip);
     for (int i = 0; i < total; ++i) {
         zip_entry_openbyindex(zip, i);
         string entry_name = (string)zip_entry_name(zip);
 
-        if (!str_end_with(entry_name, ".dex") ||
-            strchr(entry_name, '/') != NULL) {
+        /* Skip entries in subdirectories */
+        if (strchr(entry_name, '/') != NULL) {
+            zip_entry_close(zip);
+            continue;
+        }
+
+        /* Nested APK (split APK / App Bundle) — recurse into it */
+        if (str_end_with(entry_name, ".apk")) {
+            size_t buf_size = zip_entry_size(zip);
+            char *buf = malloc(buf_size);
+            if (buf) {
+                zip_entry_noallocread(zip, (void *)buf, buf_size);
+                struct zip_t *nested = zip_stream_open(buf, buf_size, 0, 'r');
+                if (nested) {
+                    apk_analyzer_process_zip(nested);
+                    zip_stream_close(nested);
+                }
+                free(buf);
+            }
+            zip_entry_close(zip);
+            continue;
+        }
+
+        /* Only process DEX files */
+        if (!str_end_with(entry_name, ".dex")) {
             zip_entry_close(zip);
             continue;
         }
@@ -761,6 +777,18 @@ void apk_analyzer(string path, string out_dir)
         mem_pool_free(meta->pool);
         free(buf);
     }
+}
+
+void apk_analyzer(string path, string out_dir)
+{
+    initialize_analyzer(out_dir);
+
+    struct zip_t *zip = zip_open(path, 0, 'r');
+    if (zip == NULL)
+        return;
+
+    apk_analyzer_process_zip(zip);
+
     write_all_graph_node(g_dumpper_analyer);
     write_all_string(g_dumpper_analyer);
 
