@@ -315,6 +315,19 @@ void jd_mcp_server_init(jd_mcp_server *server)
     server->shutdown    = false;
 }
 
+jd_mcp_server* jd_init_mcp_server()
+{
+    mem_pool *pool = mem_create_pool();
+    jd_mcp_server *server = make_obj_in(jd_mcp_server, pool);
+    if (server == NULL)
+        return NULL;
+    server->pool = pool;
+    server->initialized = false;
+    server->shutdown = false;
+    return server;
+}
+
+
 void jd_mcp_server_run(jd_mcp_server *server)
 {
     jd_mcp_log("MCP server starting");
