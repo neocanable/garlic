@@ -12,6 +12,7 @@
 #include <fcntl.h>
 #include "cJSON.h"
 #include "types.h"
+#include "mem_pool.h"
 
 #define JD_MCP_PROTOCOL_VERSION         "2024-11-05"
 #define JD_MCP_SERVER_NAME              "garlic-mcp"
@@ -55,8 +56,9 @@ typedef struct {
     bool shutdown;
     const jd_mcp_tool *tools;
     int tool_count;
+    mem_pool *pool;
 } jd_mcp_server;
-
+jd_mcp_server* jd_init_mcp_server();
 void  jd_mcp_server_init(jd_mcp_server *server);
 void  jd_mcp_server_run(jd_mcp_server *server);
 void  jd_mcp_server_cleanup(jd_mcp_server *server);

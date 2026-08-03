@@ -6,7 +6,7 @@ set(CMAKE_SYSTEM_PROCESSOR aarch64)
 set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)
 
 set(STRIP_COMMAND aarch64-linux-gnu-strip)
-set(PLATFORM_NAME aarch64-linux)
+set(PLATFORM_NAME linux-aarch64)
 set(RELEASE TRUE)
 
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)

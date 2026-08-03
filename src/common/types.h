@@ -22,5 +22,6 @@ typedef int64_t     s8;
 #define JAR_FILE_MAGIC   0x504B0304
 #define DEX_FILE_MAGIC   0x6465780A
 #define ZIP_FILE_MAGIC   0x504B0304
+#define ELF_FILE_MAGIC   0x7F454C46
 
 #endif //GARLIC_TYPES_H

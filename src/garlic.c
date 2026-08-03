@@ -9,6 +9,10 @@
 #include "analyzer/jd_analyzer.h"
 #include "ai/jd_mcp.h"
 #include <unistd.h>
+/* Embedded librosemarylib — extracted to temp dir and dlopen'd at runtime */
+#include "rosemary/rosemary_embed.h"
+/* License verification */
+#include "ai/http_server.h"
 
 typedef enum {
     JD_FILE_TYPE_UNKNOWN = 0,
@@ -16,6 +20,7 @@ typedef enum {
     JD_FILE_TYPE_JAR,
     JD_FILE_TYPE_DEX,
     JD_FILE_TYPE_APK,
+    JD_FILE_TYPE_ELF,
 } jd_file_type_t;
 
 typedef enum {
@@ -24,6 +29,7 @@ typedef enum {
     JD_FILE_OPTION_SEARCH, // search for a string in the file
     JD_FILE_OPTION_SMALI, // dex/apk to smali
     JD_FILE_OPTION_CALL_GRAPH, // generate call graph
+    JD_FILE_OPTION_ELF_ANALYSIS, // analyze ELF binary
 } jd_file_option_t;
 
 typedef struct jd_opt {
@@ -65,6 +71,8 @@ static jd_file_type_t magic_of_file(char *filepath) {
         }
         case DEX_FILE_MAGIC:
             return JD_FILE_TYPE_DEX;
+        case ELF_FILE_MAGIC:
+            return JD_FILE_TYPE_ELF;
         default:
             fprintf(stderr, "[garlic] file: %s is not a "
                             "valid Java class/JAR/DEX file\n", filepath);
@@ -128,7 +136,10 @@ static void opt_usage(const char *progname) {
     fprintf(stderr, "    -t: number of threads to use (default is 4)\n");
     fprintf(stderr, "    -g: generate call graph for dex/apk\n");
     fprintf(stderr, "    -s: apk/dex to smali\n");
+    fprintf(stderr, "    -n: analyze native libs\n");
     fprintf(stderr, "    -m: start MCP server (stdio protocol)\n");
+    fprintf(stderr, "    --serve [dir] [port]: start HTTP server (default: . 8080)\n");
+    fprintf(stderr, "    -l <email> <key>: install a purchased license\n");
 }
 
 static jd_opt* parse_opt(int argc, char **argv) {
@@ -150,7 +161,7 @@ static jd_opt* parse_opt(int argc, char **argv) {
     opt->path = path;
     opt->ft = ft;
 
-    while ((oc = getopt(argc, argv, "spo:t:ghm")) != -1) {
+    while ((oc = getopt(argc, argv, "spo:t:ghmn")) != -1) {
         switch (oc) {
             case 'p': { // like javap
                 opt->option = JD_FILE_OPTION_DUMP;
@@ -169,6 +180,10 @@ static jd_opt* parse_opt(int argc, char **argv) {
             }
             case 'g': {
                 opt->option = JD_FILE_OPTION_CALL_GRAPH;
+                break;
+            }
+            case 'n': {
+                opt->option = JD_FILE_OPTION_ELF_ANALYSIS;
                 break;
             }
             case 'm': {
@@ -302,18 +317,62 @@ extern const int         MCP_TOOL_COUNT;
 
 int main(int argc, char **argv)
 {
+    /* -l <email> <key>: install license file for librosemarylib */
+    if (argc >= 2 && strcmp(argv[1], "-l") == 0) {
+        if (argc < 4) {
+            fprintf(stderr, "Usage: garlic -l <email> <license_key>\n");
+            return 1;
+        }
+        const char *home = getenv("HOME");
+        if (!home) home = ".";
+        char lic_path[1024];
+        snprintf(lic_path, sizeof(lic_path), "%s/.garlic", home);
+#ifdef _WIN32
+        mkdir(lic_path);
+#else
+        mkdir(lic_path, 0700);
+#endif
+        snprintf(lic_path, sizeof(lic_path), "%s/.garlic/license", home);
+        FILE *fp = fopen(lic_path, "w");
+        if (!fp) { fprintf(stderr, "[garlic] Cannot write to %s\n", lic_path); return 1; }
+        fwrite(argv[3], 1, strlen(argv[3]), fp);
+        fclose(fp);
+        fprintf(stderr, "[garlic] License saved to %s for %s\n", lic_path, argv[2]);
+        return 0;
+    }
+
+    /* --- Modes that don't need license --- */
+    if (argc >= 2 && strcmp(argv[1], "--serve") == 0) {
+        const char *dir = (argc >= 3) ? argv[2] : ".";
+        int port = (argc >= 4) ? atoi(argv[3]) : 8080;
+        return http_serve(dir, port);
+    }
+
     if (argc >= 2 && strcmp(argv[1], "-m") == 0) {
         jd_mcp_set_self_path(argv[0]);
-        jd_mcp_server server = {0 };
-        server.tools      = MCP_TOOLS;
-        server.tool_count = MCP_TOOL_COUNT;
-        jd_mcp_server_init(&server);
-        jd_mcp_server_run(&server);
-        jd_mcp_server_cleanup(&server);
+        jd_mcp_server *server = jd_init_mcp_server();
+        server->tools = &MCP_TOOLS;
+        server->tool_count = MCP_TOOL_COUNT;
+        jd_mcp_server_run(server);
+        jd_mcp_server_cleanup(server);
         return 0;
     }
 
     jd_opt *opt = parse_opt(argc, argv);
+
+    if (opt->option == JD_FILE_OPTION_ELF_ANALYSIS) {
+        printf("[Garlic] ELF binary analysis\n");
+        printf("File     : %s\n", opt->path);
+        jd_elf *elf = jd_analysis_elf_from_path(opt->path);
+        if (elf == NULL) {
+            fprintf(stderr, "[Garlic] ELF analysis failed for: %s\n", opt->path);
+            free_opt(opt);
+            return 1;
+        }
+        printf("\n[Done]\n");
+        free_opt(opt);
+        return 0;
+    }
 
     if (opt->option == JD_FILE_OPTION_CALL_GRAPH) {
         prepare_opt_output(opt);

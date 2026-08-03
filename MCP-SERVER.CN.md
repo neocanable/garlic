@@ -119,74 +119,155 @@ zig build --release=fast
 你也可以直接通过管道与 MCP 服务器交互：
 
 ```sh
-# 列出可用工具
+# 列出可用工具（显示所有工具的名称、描述和 JSON Schema）
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | garlic -m
+
+# 测试反编译/结构查看
+echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"dump_info","arguments":{"path":"/path/to/Hello.class"}}}' | garlic -m
 ```
 
 ---
 
 ## 工具参考
 
-Garlic MCP 提供 **7 个工具**：
+Garlic MCP 提供 **7 个工具**。以下按典型工作流顺序排列 —— **大多数逆向任务从 `analyze` 开始**，再根据需要深入使用其他工具。
 
 ### 1. `analyze`（一键分析）
 
-一站式分析：反编译 + 生成调用图 + 导入 DuckDB。  
-大多数场景下默认使用此工具。
+**推荐入口。** 一站式完成反编译 + 调用图生成 + DuckDB 导入三个步骤。
 
-必填参数 `path`（string）—— `.dex` 或 `.apk` 文件路径，以及 `output_dir`（string）—— 工作目录。会在其中创建 `decompiled/`、`cg/` 和 `analysis.duckdb`。
-
-需要系统安装 `duckdb` CLI。
+- **参数**：`path`（string）—— `.dex` 或 `.apk` 文件路径；`output_dir`（string）—— 工作目录。
+- **输出**：在 `output_dir` 下创建三项内容：
+  - `decompiled/` — Java 源文件（保留包目录结构）
+  - `cg/` — 调用图 CSV 文件（`call_graph_node.csv`、`call_graph_edge.csv`）
+  - `analysis.duckdb` — 带索引的 DuckDB 数据库（含 `java_cg_nodes` / `java_cg_edges` 表）
+- **返回**：包含 Java 文件数、CG 节点数、CG 边数的摘要，以及可直接使用的 `cg_query(...)` 示例。
+- **前置依赖**：需要系统安装 `duckdb` CLI 并加入 PATH。
+- **典型用法**：大多数逆向任务首选此工具。完成后可接着使用：
+  - `android_manifest` 查看应用权限和入口点
+  - `cg_query` 通过 SQL 分析调用图
+- **示例**：
+  ```
+  analyze(path="/path/to/app.apk", output_dir="./app_analysis")
+  ```
 
 ### 2. `decompile`（反编译）
 
-将 `.class` / `.jar` / `.dex` / `.apk` 文件反编译为 Java 源代码。
+将编译后的 Java/Android 二进制文件还原为可读的 Java 源代码。
 
-必填参数 `path`（string）—— 目标文件路径。  
-可选参数 `output_dir`（string）—— 输出目录，省略时结果内联返回，临时文件自动清理。
+- **参数**：`path`（string）—— `.class`、`.jar`、`.dex` 或 `.apk` 文件路径。
+  - 可选 `output_dir`（string）—— 省略时结果内联返回，临时文件自动清理。
+- **输出**：保留包目录结构的 Java 源文件。对于 APK 输入，还会一并提取 `AndroidManifest.xml`。
+- **前置依赖**：无（独立运行，不依赖 DuckDB）。
+- **典型用法**：只需要还原 Java 源码，不需要调用图或 SQL 分析时使用。如需完整分析，建议使用 `analyze`。
+- **示例**：
+  ```
+  decompile(path="/path/to/app.apk", output_dir="./sources")
+  ```
 
 ### 3. `dump_info`（结构信息）
 
-显示类或 DEX 文件结构（类似 `javap` / `dexdump`）。
+快速查看类/DEX 文件内部结构 —— 方法、字段、常量、注解和签名，无需完整反编译。类似 `javap` 或 `dexdump`。
 
-必填参数 `path`（string）—— `.class` 或 `.dex` 文件路径。
+- **参数**：`path`（string）—— `.class` 或 `.dex` 文件路径。
+- **输出**：展示类/字节码结构的格式化文本。
+- **前置依赖**：无。
+- **典型用法**：快速验证文件类型、检查 API 接口、检测混淆模式。
+- **示例**：
+  ```
+  dump_info(path="/path/to/classes.dex")
+  ```
 
 ### 4. `call_graph`（调用图）
 
-为 `.dex` 或 `.apk` 文件生成调用图。
+为 `.dex` 或 `.apk` 文件生成完整的调用图。
 
-必填参数 `path`（string）—— `.dex` 或 `.apk` 文件路径。  
-可选参数 `output_dir`（string）—— CSV 文件输出目录，省略时使用临时目录。生成 `call_graph_node.csv` 和 `call_graph_edge.csv`。
+- **参数**：`path`（string）—— `.dex` 或 `.apk` 文件路径。
+  - 可选 `output_dir`（string）—— 省略时使用临时目录。
+- **输出**：两个（或四个）CSV 文件：
+  - `call_graph_node.csv` — 每个方法一行，包含 `node_id`、`method_raw`、`node_type`、`api_type` 列
+  - `call_graph_edge.csv` — 每个调用关系一行（`src_id`、`dst_id`）
+  - `string_node.csv` / `string_edge.csv` — 字符串引用分析数据（存在时生成）
+- **前置依赖**：无（独立运行，不依赖 DuckDB）。
+- **典型用法**：理解方法依赖关系、寻找入口点、追踪数据流、检测未使用的代码。CSV 输出专为通过 `cg_import` 导入 DuckDB 而设计。
+- **示例**：
+  ```
+  call_graph(path="/path/to/app.apk", output_dir="./cg_output")
+  ```
 
 ### 5. `cg_import`（导入调用图到 DuckDB）
 
-将调用图 CSV 文件导入 DuckDB 数据库。
+将调用图 CSV 文件导入 DuckDB 数据库，建立索引以便快速 SQL 查询。
 
-必填参数 `cg_dir`（string）—— 包含 `call_graph_node.csv` 和 `call_graph_edge.csv` 的目录，以及 `db_path`（string）—— `.duckdb` 数据库文件输出路径。
-
-需要系统安装 `duckdb` CLI。
+- **参数**：
+  - `cg_dir`（string）—— `call_graph` 的输出目录，需包含 `call_graph_node.csv` 和 `call_graph_edge.csv`
+  - `db_path`（string）—— `.duckdb` 数据库文件的输出路径
+- **输出**：在 `db_path` 位置创建 DuckDB 数据库，包含：
+  - `java_cg_nodes(node_id, method_raw, node_type, api_type)` — 方法元数据（已建索引）
+  - `java_cg_edges(src_id, dst_id)` — 调用关系（两端均已建索引）
+  - `string_nodes` / `string_edges` — 仅当对应的 CSV 文件存在时创建
+- **前置依赖**：需要系统安装 `duckdb` CLI 并加入 PATH。
+- **典型用法**：介于 `call_graph` 和 `cg_query` 之间的中间步骤。先运行 `call_graph`，再用此工具导入，最后用 `cg_query` 分析。
+- **示例**：
+  ```
+  cg_import(cg_dir="./cg_output", db_path="./analysis.duckdb")
+  ```
 
 ### 6. `cg_query`（SQL 查询调用图）
 
-对调用图 DuckDB 数据库执行 SQL 查询。
+对 `cg_import` 创建的 DuckDB 数据库执行 SQL 查询。
 
-必填参数 `db_path`（string）—— `.duckdb` 数据库文件路径，以及 `sql`（string）—— 要执行的 SQL 查询。
-
-需要系统安装 `duckdb` CLI。
+- **参数**：
+  - `db_path`（string）—— `cg_import` 创建的 `.duckdb` 数据库文件路径
+  - `sql`（string）—— 要执行的 SQL 查询
+- **输出**：CSV 格式的查询结果。
+- **前置依赖**：需要系统安装 `duckdb` CLI 并加入 PATH。
+- **数据库结构**：
+  - `java_cg_nodes` — `node_id BIGINT, method_raw VARCHAR, node_type BIGINT, api_type BIGINT`
+  - `java_cg_edges` — `src_id BIGINT, dst_id BIGINT`
+  - `string_nodes` — 字符串常量元数据（如已导入）
+  - `string_edges` — 字符串到方法的引用（如已导入）
+- **典型查询场景**：
+  - 查找某个方法调用了哪些方法：`SELECT * FROM java_cg_edges WHERE src_id = ?`
+  - 查找哪些方法调用了某方法：`SELECT * FROM java_cg_edges WHERE dst_id = ?`
+  - 发现应用入口点：`SELECT * FROM java_cg_nodes WHERE api_type > 0`
+  - 查找未被调用的方法：`SELECT n.* FROM java_cg_nodes n LEFT JOIN java_cg_edges e ON n.node_id = e.dst_id WHERE e.dst_id IS NULL`
+  - 按类型统计 API 调用：`SELECT node_type, COUNT(*) FROM java_cg_nodes GROUP BY node_type`
+- **重要提示**：查询以只读模式运行，不会修改数据库。
+- **示例**：
+  ```
+  cg_query(db_path="./analysis.duckdb", sql="SELECT method_raw, node_type FROM java_cg_nodes LIMIT 20")
+  ```
 
 ### 7. `android_manifest`（读取 AndroidManifest）
 
-从之前 analyze/decompile 的输出目录中读取 AndroidManifest.xml。
+从之前的 `decompile` 或 `analyze` 输出目录中读取 AndroidManifest.xml。
 
-必填参数 `output_dir`（string）—— 与 `analyze` 或 `decompile` 工具使用的输出目录。返回 AndroidManifest.xml 的完整内容。
+- **参数**：`output_dir`（string）—— 与 `decompile` 或 `analyze` 工具使用的输出目录。
+- **输出**：AndroidManifest.xml 的完整 XML 内容，包括：
+  - 应用权限（`<uses-permission>`）
+  - Activity、Service、BroadcastReceiver、ContentProvider 声明
+  - Intent 过滤器和组件导出标志
+- **前置依赖**：无。
+- **典型用法**：反编译 APK 后，使用此工具了解应用的攻击面、入口点、声明的权限和组件间通信（ICC）接口。
+- **示例**：
+  ```
+  android_manifest(output_dir="./app_analysis")
+  ```
 
-在 Claude Desktop 中询问：
+---
 
-> "help me analysis apk at '/path/to/apk'"
+### 工作流总结
 
-Garlic MCP 会自动反编译 APK、生成调用图并将数据导入 DuckDB 以供进一步分析。之后你可以问：
-
-> "read the AndroidManifest.xml"
+```
+analyze(path, output_dir)          ← 大多数任务从此开始
+  ├─ decompile(path, output_dir?)   ← 或单独使用
+  ├─ dump_info(path)                ← 快速查看结构
+  └─ call_graph(path, output_dir?)  ← 生成调用图 CSV
+       └─ cg_import(cg_dir, db_path)  ← 导入 DuckDB
+             └─ cg_query(db_path, sql) ← SQL 分析
+ android_manifest(output_dir)      ← 读取应用权限（在 decompile/analyze 之后）
+```
 
 ---
 

@@ -87,6 +87,25 @@ pub fn build(b: *std.Build) void {
         std.process.exit(1);
     }
 
+    const include_dirs = [_][]const u8{
+        "src",
+        "src/common",
+        "src/libs/memory",
+        "src/libs/hashmap",
+        "src/libs/list",
+        "src/libs/bitset",
+        "src/libs/queue",
+        "src/libs/str",
+        "src/libs/zip",
+        "src/libs/threadpool",
+        "src/libs/cjson",
+        "libs/include",
+        "src/ai",
+        "src/jar",
+        "src/dalvik",
+    };
+
+
     var c_flags_list = std.ArrayList([]const u8).empty;
     defer c_flags_list.deinit(b.allocator);
 
@@ -152,6 +171,10 @@ pub fn build(b: *std.Build) void {
     });
 
     exe.root_module.linkLibrary(lib);
+
+    // Link pre-built librosemary from libs/
+    exe.root_module.addLibraryPath(b.path("libs"));
+    exe.root_module.linkSystemLibrary("rosemary", .{});
 
     if (optimize != .Debug) {
         exe.root_module.strip = true;

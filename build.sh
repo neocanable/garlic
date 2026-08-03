@@ -53,7 +53,7 @@ if [ ! -f "${TOOLCHAIN_FILE}" ]; then
 fi
 
 echo "Running CMake with toolchain: ${TOOLCHAIN_FILE}"
-cmake -DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN_FILE}" -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=../ ../../
+cmake -DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN_FILE}" -DPLATFORM_NAME="${PLATFORM}" -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=../ ../../
 
 echo "Building..."
 cmake --build .
