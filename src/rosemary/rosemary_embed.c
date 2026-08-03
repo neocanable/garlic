@@ -9,6 +9,7 @@
 #ifdef _WIN32
   #include <windows.h>
   #include <io.h>
+  #include <fcntl.h>
   /* mkstemp / unlink equivalents */
   static int mkstemp_win(char *template)
   {

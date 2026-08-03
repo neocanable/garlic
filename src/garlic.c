@@ -327,7 +327,11 @@ int main(int argc, char **argv)
         if (!home) home = ".";
         char lic_path[1024];
         snprintf(lic_path, sizeof(lic_path), "%s/.garlic", home);
+#ifdef _WIN32
+        mkdir(lic_path);
+#else
         mkdir(lic_path, 0700);
+#endif
         snprintf(lic_path, sizeof(lic_path), "%s/.garlic/license", home);
         FILE *fp = fopen(lic_path, "w");
         if (!fp) { fprintf(stderr, "[garlic] Cannot write to %s\n", lic_path); return 1; }
