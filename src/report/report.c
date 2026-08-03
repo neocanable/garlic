@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 
 #ifdef _WIN32
+  #include <windows.h>
   #include <io.h>
   #define popen  _popen
   #define pclose _pclose

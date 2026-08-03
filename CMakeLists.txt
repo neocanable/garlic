@@ -19,7 +19,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-unused-but-set-variable")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-unknown-warning-option")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-unused-variable")
 
-if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,--gc-sections")
 endif ()
@@ -29,6 +29,11 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
 if(NOT WIN32)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-ignored-optimization-argument")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -flto")
+else()
+    # MinGW ld needs --enable-stdcall-fixup to resolve Win32 API calls
+    # (e.g. CreateDirectoryA -> CreateDirectoryA@8) without discarding
+    # the import-stub sections from libkernel32.a.
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,--enable-stdcall-fixup")
 endif ()
 
 if (UNIX)
