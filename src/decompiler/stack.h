@@ -126,7 +126,11 @@ static inline bool stack_val_is_wide(jd_val *val)
 {
     if (val == NULL || val->data == NULL)
         return false;
-    return STR_EQL(val->data->cname, g_str_long) ||
-           STR_EQL(val->data->cname, g_str_double);
+
+    if (val->type == JD_VAR_LONG_T || val->type == JD_VAR_DOUBLE_T) {
+        return STR_EQL(val->data->cname, g_str_long) ||
+               STR_EQL(val->data->cname, g_str_double);
+    }
+    return false;
 }
 #endif //GARLIC_STACK_H

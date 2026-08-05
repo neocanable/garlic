@@ -19,6 +19,9 @@ const core_source_dirs = [_][]const u8{
     "apk",
     "dalvik",
     "analyzer",
+    "report",
+    "parser/pe",
+    "libs/md4c",
 };
 
 const cli_source_dirs = [_][]const u8{
@@ -39,6 +42,8 @@ const core_include_dirs = [_][]const u8{
     "src/libs/threadpool",
     "src/jar",
     "src/dalvik",
+    "src/libs/md4c",
+    "libs/include",
 };
 
 const cli_include_dirs = [_][]const u8{
@@ -78,6 +83,61 @@ fn addIncludeDirs(
         module.addIncludePath(b.path(dir));
 }
 
+fn determineRosemaryLib(target: std.Target) []const u8 {
+    return switch (target.os.tag) {
+        .linux => switch (target.cpu.arch) {
+            .aarch64 => "libs/linux-aarch64/librosemarylib.so",
+            .x86 => "libs/linux-i686/librosemarylib.so",
+            .x86_64 => "libs/linux-x64/librosemarylib.so",
+            else => @panic("Unsupported Linux architecture for rosemary"),
+        },
+        .macos => switch (target.cpu.arch) {
+            .aarch64 => "libs/macos-aarch64/librosemarylib.dylib",
+            .x86_64 => "libs/macos-x64/librosemarylib.dylib",
+            else => @panic("Unsupported macOS architecture for rosemary"),
+        },
+        .windows => switch (target.cpu.arch) {
+            .x86_64 => "libs/win64/librosemarylib.dll",
+            .x86 => "libs/win32/librosemarylib.dll",
+            else => @panic("Unsupported Windows architecture for rosemary"),
+        },
+        else => @panic("Unsupported OS for rosemary"),
+    };
+}
+
+fn embedRosemaryLib(b: *std.Build, rosemary_path: []const u8) std.Build.LazyPath {
+    const data = b.build_root.handle.readFileAlloc(
+        b.graph.io, rosemary_path, b.allocator, @enumFromInt(std.math.maxInt(usize)),
+    ) catch |err| {
+        std.debug.panic("Failed to read {s}: {}", .{ rosemary_path, err });
+    };
+    defer b.allocator.free(data);
+    const file_size = data.len;
+
+    var c_source = std.ArrayList(u8).initCapacity(b.allocator, file_size * 6) catch @panic("OOM");
+    c_source.appendSliceAssumeCapacity("/* Auto-generated from ");
+    c_source.appendSliceAssumeCapacity(rosemary_path);
+    c_source.appendSliceAssumeCapacity(" */\n");
+    c_source.appendSliceAssumeCapacity("#include <stddef.h>\n");
+    c_source.appendSliceAssumeCapacity("const unsigned char rosemarylib_data[] = {\n  ");
+
+    for (data, 0..) |byte, i| {
+        if (i > 0) {
+            if (i % 16 == 0) {
+                c_source.appendSliceAssumeCapacity(",\n  ");
+            } else {
+                c_source.appendSliceAssumeCapacity(",");
+            }
+        }
+        c_source.print(b.allocator, "0x{X:0>2}", .{byte}) catch @panic("OOM");
+    }
+
+    c_source.print(b.allocator, "\n}};\nconst size_t rosemarylib_data_len = {d};\n", .{file_size}) catch @panic("OOM");
+
+    const write_files = b.addWriteFiles();
+    return write_files.add("rosemarylib_data.c", c_source.items);
+}
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -86,25 +146,6 @@ pub fn build(b: *std.Build) void {
         std.log.err("MSVC ABI is not supported", .{});
         std.process.exit(1);
     }
-
-    const include_dirs = [_][]const u8{
-        "src",
-        "src/common",
-        "src/libs/memory",
-        "src/libs/hashmap",
-        "src/libs/list",
-        "src/libs/bitset",
-        "src/libs/queue",
-        "src/libs/str",
-        "src/libs/zip",
-        "src/libs/threadpool",
-        "src/libs/cjson",
-        "libs/include",
-        "src/ai",
-        "src/jar",
-        "src/dalvik",
-    };
-
 
     var c_flags_list = std.ArrayList([]const u8).empty;
     defer c_flags_list.deinit(b.allocator);
@@ -131,6 +172,7 @@ pub fn build(b: *std.Build) void {
 
     collectCFiles(b, &lib_c_files, &core_source_dirs);
     cli_c_files.append(b.allocator, "garlic.c") catch @panic("OOM");
+    cli_c_files.append(b.allocator, "rosemary/rosemary_embed.c") catch @panic("OOM");
     collectCFiles(b, &cli_c_files, &cli_source_dirs);
 
     const lib = b.addLibrary(.{
@@ -163,6 +205,10 @@ pub fn build(b: *std.Build) void {
         .files = lib_c_files.items,
     });
 
+    // Embed rosemary native analysis library as a C byte array
+    const rosemary_src_path = determineRosemaryLib(target.result);
+    const rosemary_data_lazy_path = embedRosemaryLib(b, rosemary_src_path);
+
     exe.root_module.addCSourceFiles(.{
         .root = b.path("src"),
         .language = .c,
@@ -170,11 +216,14 @@ pub fn build(b: *std.Build) void {
         .files = cli_c_files.items,
     });
 
-    exe.root_module.linkLibrary(lib);
+    // Add the generated rosemarylib_data.c
+    exe.root_module.addCSourceFile(.{
+        .file = rosemary_data_lazy_path,
+        .flags = c_flags_list.items,
+    });
+    exe.root_module.addCMacro("ROSEMARYLIB_EMBEDDED", "1");
 
-    // Link pre-built librosemary from libs/
-    exe.root_module.addLibraryPath(b.path("libs"));
-    exe.root_module.linkSystemLibrary("rosemary", .{});
+    exe.root_module.linkLibrary(lib);
 
     if (optimize != .Debug) {
         exe.root_module.strip = true;
