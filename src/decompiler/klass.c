@@ -320,8 +320,11 @@ static void class_fields_defination(jsource_file *jf)
         string signature = field->signature;
         if (signature != NULL)
             fts = parse_field_signature(signature);
-        if (fts != NULL)
-            str_concat(list, field_type_sig_to_s(fts));
+        if (fts != NULL) {
+            string fts_str = field_type_sig_to_s(fts);
+            if (fts_str != NULL)
+                str_concat(list, fts_str);
+        }
         else {
             string type = class_simple_name(field->type);
             str_concat(list, type);
