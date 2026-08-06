@@ -36,6 +36,8 @@ string field_type_sig_to_s(field_type_sig *fts)
 {
     switch (fts->tag) {
         case BASE_TYPE_SIGNATURE: {
+            if (fts->type->base_type == NULL)
+                return str_dup(g_str_unknown);
             switch (fts->type->base_type->tag) {
                 case 0:     return str_dup(g_str_byte);
                 case 1:     return str_dup(g_str_char);

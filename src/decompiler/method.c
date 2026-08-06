@@ -32,7 +32,8 @@ static void create_method_defination_with_signature(jd_method *m,
     }
     if (sig->return_type != NULL) {
         string ret = field_type_sig_to_s(sig->return_type);
-        strs_concat(list, 2, ret, " ");
+        if (ret != NULL)
+            strs_concat(list, 2, ret, " ");
     }
 
     if (method_is_init(m)) {
@@ -82,7 +83,8 @@ static void create_method_defination_with_signature(jd_method *m,
             if (annotation != NULL) {
                 strs_concat(list, 2, annotation, (" "));
             }
-            strs_concat(list, 3, parameter_type, (" "), param_name);
+            if (parameter_type != NULL)
+                strs_concat(list, 3, parameter_type, (" "), param_name);
             if (!is_list_last(parameter_types, i))
                 str_concat(list, (", "));
         }
