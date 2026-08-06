@@ -47,9 +47,9 @@ static inline string dex_method_class_descriptor(jd_meta_dex *meta,
 
 static inline string dex_field_desc(jd_meta_dex *meta, encoded_field *efield)
 {
-    // field's class desc
+    // field's type descriptor
     dex_field_id *field_id = &meta->field_ids[efield->field_id];
-    dex_type_id *type_id = &meta->type_ids[field_id->class_idx];
+    dex_type_id *type_id = &meta->type_ids[field_id->type_idx];
     return meta->strings[type_id->descriptor_idx].data;
 }
 
