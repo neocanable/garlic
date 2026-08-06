@@ -18,19 +18,19 @@ int read_unsigned_leb128(jd_meta_dex *dex)
     u1 uleb = 0;
     int result = 0;
 
-    jdex_read1(dex, &uleb);
+    if (jdex_read1(dex, &uleb) == 0) return 0;
     result = uleb;
     if (result > 0x7f) {
-        jdex_read1(dex, &uleb);
+        uleb = 0; if (jdex_read1(dex, &uleb) == 0) return result;
         result = (result & 0x7f) | ((uleb & 0x7f) << 7);
         if (uleb > 0x7f) {
-            jdex_read1(dex, &uleb);
+            uleb = 0; if (jdex_read1(dex, &uleb) == 0) return result;
             result |= (uleb & 0x7f) << 14;
             if (uleb > 0x7f) {
-                jdex_read1(dex, &uleb);
+                uleb = 0; if (jdex_read1(dex, &uleb) == 0) return result;
                 result |= (uleb & 0x7f) << 21;
                 if (uleb > 0x7f) {
-                    jdex_read1(dex, &uleb);
+                    uleb = 0; if (jdex_read1(dex, &uleb) == 0) return result;
                     result |= uleb << 28;
                 }
             }
@@ -42,27 +42,27 @@ int read_unsigned_leb128(jd_meta_dex *dex)
 int read_signed_leb128(jd_meta_dex *dex)
 {
     s1 leb = 0;
-    jdex_read1(dex, &leb);
+    if (jdex_read1(dex, &leb) == 0) return 0;
     int result = leb;
     if(result <= 0x7f)
         result = (result << 25) >> 25;
     else {
-        jdex_read1(dex, &leb);
+        leb = 0; if (jdex_read1(dex, &leb) == 0) return result;
         result = (result & 0x7f) | ((leb & 0x7f) << 7);
         if(leb <= 0x7f)
             result = (result << 18) >> 18;
         else {
-            jdex_read1(dex, &leb);
+            leb = 0; if (jdex_read1(dex, &leb) == 0) return result;
             result |= (leb & 0x7f) << 14;
             if(leb <= 0x7f)
                 result = (result << 11) >> 11;
             else {
-                jdex_read1(dex, &leb);
+                leb = 0; if (jdex_read1(dex, &leb) == 0) return result;
                 result |= (leb & 0x7f) << 21;
                 if(leb <= 0x7f)
                     result = (result << 4) >> 4;
                 else {
-                    jdex_read1(dex, &leb);
+                    leb = 0; if (jdex_read1(dex, &leb) == 0) return result;
                     result |= leb << 28;
                 }
             }
