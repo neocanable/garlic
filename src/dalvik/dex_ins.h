@@ -180,7 +180,18 @@ static inline void dex_setup_if_offset(jd_dex_ins *ins, uint32_t offset)
 
 static inline u4 dex_goto_offset(jd_dex_ins *ins)
 {
-    return ins->param[0] << 16 | ins->param[1];
+    /*
+     * After dex_setup_goto_offset() has been called (which happens during
+     * optimize_share_suffix_v2), param[0] and param[1] store the absolute
+     * target offset as (param[0] << 16 | param[1]).
+     *
+     * For original / unmodified DEX instructions, the params still have
+     * their original encoding, so we must use dex_original_goto_offset()
+     * which decodes according to the instruction format.
+     */
+    if (ins_is_copy_block(ins))
+        return ins->param[0] << 16 | ins->param[1];
+    return dex_original_goto_offset(ins);
 }
 
 static inline bool dex_ins_is_goto_back(jd_dex_ins *ins)
@@ -320,6 +331,13 @@ static inline bool dex_ins_is_jump_destination(jd_dex_ins *ins)
 static inline jd_dex_ins* dex_ins_of_offset(jd_method *m, u4 offset)
 {
     int idx = hget_i2i(m->offset2id_map, offset);
+    if (idx < 0) {
+        fprintf(stderr, "[ERROR] dex_ins_of_offset: offset 0x%x not in map for %s%s (insn_count=%d)\n",
+                offset, m->name ? m->name : "?", m->signature ? m->signature : "",
+                m->instructions->size);
+        fflush(stderr);
+        return NULL;
+    }
     return lget_obj(m->instructions, idx);
 }
 
