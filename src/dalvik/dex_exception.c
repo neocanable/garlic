@@ -16,6 +16,8 @@ static jd_dex_ins *try_item_end_ins(jd_method *m, dex_try_item *try)
         return dex_ins_of_offset(m, try->start_addr);
 
     jd_dex_ins *end_next_ins = dex_ins_of_offset(m, end_next_off);
+    if (!end_next_ins)
+        return NULL;
     jd_dex_ins *end_ins = end_next_ins->prev;
     return end_ins;
 }
@@ -25,6 +27,13 @@ static void dex_handler_pair(jd_method *m, dex_try_item *try, encoded_tp *pair)
     jd_dex_ins *sins = dex_ins_of_offset(m, try->start_addr);
     jd_dex_ins *end_ins = try_item_end_ins(m, try);
     jd_dex_ins *hs_ins = dex_ins_of_offset(m, pair->addr);
+
+    if (!sins || !end_ins || !hs_ins) {
+//        fprintf(stderr, "[WARN] dex_handler_pair: skipping handler with bad offset(s) "
+//                "try_start=%#x pair_addr=%#x in %s\n",
+//                try->start_addr, pair->addr, m->name ? m->name : "?");
+        return;
+    }
 
     jd_exc *e = make_obj(jd_exc);
 
@@ -54,6 +63,13 @@ static void dex_handler_of_catch_all(jd_method *m,
     jd_dex_ins *tstart_ins = dex_ins_of_offset(m, try->start_addr);
     jd_dex_ins *te_ins = try_item_end_ins(m, try);
     jd_dex_ins *hstart_ins = dex_ins_of_offset(m, ch->catch_all_addr);
+
+    if (!tstart_ins || !te_ins || !hstart_ins) {
+//        fprintf(stderr, "[WARN] dex_handler_of_catch_all: skipping handler with bad offset(s) "
+//                "try_start=%#x catch_all=%#x in %s\n",
+//                try->start_addr, ch->catch_all_addr, m->name ? m->name : "?");
+        return;
+    }
 
     jd_exc *e = make_obj(jd_exc);
     e->try_start = tstart_ins->offset;
