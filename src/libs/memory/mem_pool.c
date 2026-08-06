@@ -24,7 +24,6 @@ void* x_alloc(size_t size)
         return mem_pool_alloc(tls->pool, size);
     }
     return mem_pool_alloc(global_pool, size);
-//    return malloc(size);
 }
 
 void* x_alloc_in(mem_pool *pool, size_t size)

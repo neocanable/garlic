@@ -12,12 +12,14 @@ static int apk_progress_len = 0;
 
 void apk_status(jd_apk *apk)
 {
-    pthread_mutex_lock(apk->threadpool->lock);
+    if (apk->threadpool)
+        pthread_mutex_lock(apk->threadpool->lock);
     apk->done++;
     for (int i = 0; i < apk_progress_len; i++) putchar('\b');
     apk_progress_len = printf("Progress : %d (%d)", apk->done, apk->added);
     fflush(stdout);
-    pthread_mutex_unlock(apk->threadpool->lock);
+    if (apk->threadpool)
+        pthread_mutex_unlock(apk->threadpool->lock);
 }
 
 void apk_entry_thread_task(jd_meta_dex *meta)
@@ -28,6 +30,7 @@ void apk_entry_thread_task(jd_meta_dex *meta)
     dex_analyse_in_apk_task(meta);
 
     mem_pool_free(tls->pool);
+    tls->pool = NULL;
 }
 
 void apk_decompile_thread_task(jd_dex_task *task)
@@ -47,6 +50,7 @@ void apk_decompile_thread_task(jd_dex_task *task)
     }
 
     mem_pool_free(tls->pool);
+    tls->pool = NULL;
 
     apk_status(apk);
 }
@@ -68,6 +72,7 @@ void apk_smali_thread_task(jd_dex_task *task)
         fclose(stream);
 
     mem_pool_free(tls->pool);
+    tls->pool = NULL;
 
     apk_status(apk);
 }
@@ -122,24 +127,39 @@ static void apk_process_dex_from_zip(jd_apk *apk, struct zip_t *zip)
                     continue;
             }
 
-            jd_dex_task *t = make_obj(jd_dex_task);
-            t->dex = dex;
-            t->cf = cf;
-            t->apk = apk;
-            t->type = apk->type;
-            if (t->type == JD_DEX_TASK_SMALI) {
-                threadpool_add(apk->threadpool,
-                               &apk_smali_thread_task,
-                               t,
-                               0);
+            if (apk->threadpool) {
+                jd_dex_task *t = make_obj(jd_dex_task);
+                t->dex = dex;
+                t->cf = cf;
+                t->apk = apk;
+                t->type = apk->type;
+                int ret;
+                if (t->type == JD_DEX_TASK_SMALI) {
+                    ret = threadpool_add(apk->threadpool,
+                                   &apk_smali_thread_task,
+                                   t,
+                                   0);
+                }
+                else {
+                    ret = threadpool_add(apk->threadpool,
+                                   &apk_decompile_thread_task,
+                                   t,
+                                   0);
+                }
+                if (ret != 0) {
+                    fprintf(stderr, "[garlic] Warning: threadpool_add failed with %d\n", ret);
+                }
+                apk->added++;
+            } else {
+                /* Single-threaded: process synchronously */
+                if (apk->type == JD_DEX_TASK_SMALI) {
+                    dex_smali_class(dex, cf);
+                } else {
+                    dex_decompile_class(dex, cf);
+                }
+                apk->done++;
+                apk_status(apk);
             }
-            else {
-                threadpool_add(apk->threadpool,
-                               &apk_decompile_thread_task,
-                               t,
-                               0);
-            }
-            apk->added++;
         }
     }
 }

@@ -102,10 +102,14 @@ static void optimize_goto_to_return(jd_method *m)
 
         s4 offset = (s4)dex_goto_offset(end_ins);
         jd_dex_ins *target_ins = dex_ins_of_offset(m, offset);
-        while (dex_ins_is_goto_jump(target_ins)) {
+        if (target_ins == NULL) continue;
+        int goto_chain_limit = 1000;
+        while (dex_ins_is_goto_jump(target_ins) && --goto_chain_limit > 0) {
             offset = dex_goto_offset(target_ins);
             target_ins = dex_ins_of_offset(m, offset);
+            if (target_ins == NULL) break;
         }
+        if (target_ins == NULL) continue;
         if (!dex_ins_is_return_op(target_ins))
             continue;
 
@@ -150,7 +154,9 @@ void optimize_move_exception_goto(jd_method *m)
 static void optimize_share_suffix_v2(jd_method *m)
 {
     bool changed = false;
+    int max_iter = 1000;
     do {
+        if (--max_iter <= 0) break;
         changed = false;
         DEBUG_PRINT("start optimize share suffix\n");
         for (int i = 0; i < m->basic_blocks->size; ++i) {
@@ -165,6 +171,9 @@ static void optimize_share_suffix_v2(jd_method *m)
             jd_edge *out_edge = lget_obj_first(b->out);
             jd_bblock *out_block = out_edge->target_block;
             if (out_block->type != JD_BB_NORMAL) continue;
+
+            /* Self-loop guard: redirecting to self causes infinite loop */
+            if (out_block == b) continue;
 
             jd_nblock *nb = b->ub->nblock;
             jd_dex_ins *start_ins = nb->start_ins;

@@ -25,12 +25,14 @@ static int dex_progress_len = 0;
 
 void dex_status(jd_dex *dex)
 {
-    pthread_mutex_lock(dex->threadpool->lock);
+    if (dex->threadpool)
+        pthread_mutex_lock(dex->threadpool->lock);
     dex->done++;
     for (int i = 0; i < dex_progress_len; i++) putchar('\b');
     dex_progress_len = printf("Progress : %d (%d)", dex->done, dex->added);
     fflush(stdout);
-    pthread_mutex_unlock(dex->threadpool->lock);
+    if (dex->threadpool)
+        pthread_mutex_unlock(dex->threadpool->lock);
 }
 
 void dex_main_thread_status(jd_dex *dex)
@@ -366,6 +368,7 @@ void dex_decompile_thread_task(jd_dex_task *task)
         fclose(jf->source);
     }
     mem_pool_free(tls->pool);
+    tls->pool = NULL;
 
     dex_status(dex);
 }
@@ -386,6 +389,7 @@ void dex_smali_thread_task(jd_dex_task *task)
         fclose(stream);
 
     mem_pool_free(tls->pool);
+    tls->pool = NULL;
 
     dex_status(dex);
 }
@@ -399,11 +403,21 @@ void dex_decompile_threadpool_start(jd_dex *dex)
             dex_class_is_anonymous_class(dex->meta, cf))
             continue;
 
-        jd_dex_task *t = make_obj(jd_dex_task);
-        t->dex = dex;
-        t->cf = cf;
-        threadpool_add(dex->threadpool, &dex_decompile_thread_task, t, 0);
-        dex->added++;
+        if (dex->threadpool) {
+            jd_dex_task *t = make_obj(jd_dex_task);
+            t->dex = dex;
+            t->cf = cf;
+            int ret = threadpool_add(dex->threadpool, &dex_decompile_thread_task, t, 0);
+            if (ret != 0) {
+                fprintf(stderr, "[garlic] Warning: threadpool_add failed with %d\n", ret);
+            }
+            dex->added++;
+        } else {
+            /* Single-threaded: process synchronously */
+            dex_decompile_class(dex, cf);
+            dex->done++;
+            dex_main_thread_status(dex);
+        }
     }
 }
 

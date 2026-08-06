@@ -29,6 +29,7 @@ static inline jd_exp* get_exp(jd_method *m, uint32_t id)
 static inline jd_ins* ins_of_offset(jd_method *m, uint32_t offset)
 {
     int idx = hget_i2i(m->offset2id_map, offset);
+    if (idx < 0) return NULL;
     return get_ins(m, idx);
 }
 
