@@ -369,8 +369,35 @@ static int sform_local_variable_new_name(int counter[], queue_object *stack, int
 static void sform_local_variable_renames(jd_method *m,
                                          jd_bblock *block,
                                          int counter[],
-                                         list_object *stacks)
+                                         list_object *stacks,
+                                         bitset_t *visited,
+                                         int depth)
 {
+    // maybe dom tree too deep
+    if (bitset_get(visited, block->block_id)) {
+        fprintf(stderr, "[ERROR] sform_local_variable_renames: cycle detected in dominator tree!\n");
+        fprintf(stderr, "  method : %s\n", m->name ? m->name : "?");
+        fprintf(stderr, "  sig    : %s\n", m->signature ? m->signature : "?");
+        fprintf(stderr, "  block  : %zu (revisited)\n", block->block_id);
+        fprintf(stderr, "  depth  : %d\n", depth);
+        fprintf(stderr, "  bb count: %d\n", m->basic_blocks->size);
+        fflush(stderr);
+        return;
+    }
+
+    if (depth > 10000) {
+        fprintf(stderr, "[ERROR] sform_local_variable_renames: max depth exceeded!\n");
+        fprintf(stderr, "  method : %s\n", m->name ? m->name : "?");
+        fprintf(stderr, "  sig    : %s\n", m->signature ? m->signature : "?");
+        fprintf(stderr, "  block  : %zu\n", block->block_id);
+        fprintf(stderr, "  depth  : %d\n", depth);
+        fprintf(stderr, "  bb count: %d\n", m->basic_blocks->size);
+        fflush(stderr);
+        return;
+    }
+
+    bitset_set(visited, block->block_id);
+
     m->ssa_vars = linit_object();
     jd_nblock *nblock = block->ub->nblock;
 
@@ -443,7 +470,7 @@ static void sform_local_variable_renames(jd_method *m,
         jd_bblock *b = lget_obj(block->dom_children, i);
         if (b->type != JD_BB_NORMAL)
             continue;
-        sform_local_variable_renames(m, b, counter, stacks);
+        sform_local_variable_renames(m, b, counter, stacks, visited, depth + 1);
     }
 
     for (int i = 0; i < m->local_phi_list->size; ++i) {
@@ -495,7 +522,9 @@ void sform_local_variable_rename(jd_method *m)
     }
     sform_init_enter_state(m, counter, stacks);
     jd_bblock *enter = lget_obj(m->basic_blocks, 3);
-    sform_local_variable_renames(m, enter, counter, stacks);
+
+    bitset_t *visited = bitset_create_with_capacity(m->basic_blocks->size);
+    sform_local_variable_renames(m, enter, counter, stacks, visited, 0);
 }
 
 void sform_local_variable_phi_node_dfs_copies(jd_method *m, jd_bblock *b)
