@@ -29,7 +29,12 @@ static inline jd_exp* get_exp(jd_method *m, uint32_t id)
 static inline jd_ins* ins_of_offset(jd_method *m, uint32_t offset)
 {
     int idx = hget_i2i(m->offset2id_map, offset);
-    if (idx < 0) return NULL;
+    if (idx < 0) {
+        fprintf(stderr, "[ERROR] ins_of_offset: offset 0x%x not in map for %s (insn=%d)\n",
+                offset, m->name ? m->name : "?", m->instructions->size);
+        fflush(stderr);
+        return NULL;
+    }
     return get_ins(m, idx);
 }
 
