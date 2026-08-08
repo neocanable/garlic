@@ -20,7 +20,7 @@ static inline string descriptor_item_class_name(string arr_cname)
 {
     char c = '[';
     int index = 0;
-    char *ptr = strrchr(arr_cname, c);
+    char *ptr = strchr(arr_cname, c);
     if (ptr == NULL)
         return arr_cname;
 

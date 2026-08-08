@@ -139,6 +139,28 @@ static inline void build_dex_ins_move_result_act(jd_dex_ins *ins)
     jd_dex_ins *prev = ins->prev;
     s8 meth_idx = 0;
     jd_meta_dex *meta = dex_ins_meta(ins);
+
+    while (prev != NULL &&
+           (dex_ins_is_move_result(prev) ||
+            dex_ins_is_move_result_wide(prev) ||
+            dex_ins_is_move_result_object(prev))) {
+        prev = prev->prev;
+    }
+
+    if (prev == NULL) {
+        // create a fake object
+        u1 u_a = dex_ins_parameter(ins, 0);
+        jd_val *val = stack_create_empty_val();
+        val->type = JD_VAR_REFERENCE_T;
+        val->data->cname = class_simple_name_without_primitive("Ljava/lang/Object;");
+        val->ins = ins;
+        val->slot = u_a;
+        save_stack_val(ins, val, u_a);
+        if (dex_ins_is_move_result_wide(ins))
+            save_stack_val(ins, val, u_a + 1);
+        return;
+    }
+
     switch (prev->code) {
         case DEX_INS_INVOKE_VIRTUAL:
         case DEX_INS_INVOKE_SUPER:
@@ -154,7 +176,9 @@ static inline void build_dex_ins_move_result_act(jd_dex_ins *ins)
             break;
         }
         case DEX_INS_INVOKE_POLYMORPHIC:
-        case DEX_INS_INVOKE_POLYMORPHIC_RANGE: {
+        case DEX_INS_INVOKE_POLYMORPHIC_RANGE:
+        case DEX_INS_INVOKE_CUSTOM:
+        case DEX_INS_INVOKE_CUSTOM_RANGE: {
             meth_idx = dex_ins_parameter(prev, 1);
             break;
         }
@@ -165,8 +189,20 @@ static inline void build_dex_ins_move_result_act(jd_dex_ins *ins)
     }
     if (meth_idx == -1) {
         // prev is fill_new_array or fill_new_array_range
-        assert(dex_ins_is_filled_new_array(prev) ||
-                dex_ins_is_filled_new_array_range(prev));
+        if (!dex_ins_is_filled_new_array(prev) &&
+                !dex_ins_is_filled_new_array_range(prev)) {
+            // Unknown prev instruction — create a generic Object ref.
+            u1 u_a = dex_ins_parameter(ins, 0);
+            jd_val *val = stack_create_empty_val();
+            val->type = JD_VAR_REFERENCE_T;
+            val->data->cname = class_simple_name_without_primitive("Ljava/lang/Object;");
+            val->ins = ins;
+            val->slot = u_a;
+            save_stack_val(ins, val, u_a);
+            if (dex_ins_is_move_result_wide(ins))
+                save_stack_val(ins, val, u_a + 1);
+            return;
+        }
         u1 u_a = dex_ins_parameter(ins, 0);
         u2 type_idx = dex_ins_parameter(prev, 1);
 
