@@ -5,7 +5,10 @@
 
 string exp_anonymous_to_s(jd_exp *expression)
 {
-    return NULL;
+    jd_exp_anonymous *anon = expression->data;
+    if (anon == NULL || anon->cname == NULL)
+        return str_dup(g_str_unknown);
+    return str_create("new %s(/* ... */)", anon->cname);
 }
 
 void exp_anonymous_to_stream(FILE *stream, jd_node *node, jd_exp *expression)

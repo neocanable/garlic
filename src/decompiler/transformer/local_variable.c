@@ -18,18 +18,10 @@ static jd_ssa_var* get_ssa_var(jd_method *m,
 string exp_local_variable_to_s(jd_exp *expression)
 {
     jd_val *val = expression->data;
-//    jd_ins *ins = val->ins;
-//    if (ins != NULL && ins->m != NULL) {
-//        jd_method *m = ins->m;
-//        jd_ssa_var *var = get_ssa_var(m, ins, val);
-//        if (var == NULL)
-//            return val->name;
-//        else
-//            return str_create("ssa_%d_%d", var->slot, var->version);
-//    }
-//
-//    if (ins == NULL)
-//        return val->name;
+    if (val->name == NULL) {
+        // val->name may not be set yet during intermediate stages
+        return str_create("var_%d", val->slot);
+    }
     return val->name;
 }
 

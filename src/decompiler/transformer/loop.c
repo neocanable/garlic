@@ -63,7 +63,7 @@ static string exp_loop_to_s(jd_exp *expression, string loop_name)
             return str_create("for(%s)[%d -> %d]",
                               s, exp_loop->start_offset, exp_loop->end_offset);
         default:
-            return NULL;
+            return str_dup(g_str_unknown);
     }
 
 }

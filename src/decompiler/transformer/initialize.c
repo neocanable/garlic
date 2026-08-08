@@ -13,6 +13,8 @@ string exp_initialize_to_s(jd_exp *expression)
         size_t old_size = size;
         for (int i = 0; i < initialize->list->len; ++i) {
             string s = exp_to_s(&initialize->list->args[i]);
+            if (s == NULL)
+                s = (string)g_str_Object;
             size = size + strlen(s) + 2;
             result = x_realloc(result, old_size, size);
             strcat(result, s);

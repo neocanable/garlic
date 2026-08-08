@@ -3,6 +3,8 @@
 string exp_stack_var_to_s(jd_exp *expression)
 {
     jd_var *var = expression->data;
+    if (var->name == NULL)
+        return str_create("svar_%d", var->idx);
     return var->name;
 }
 

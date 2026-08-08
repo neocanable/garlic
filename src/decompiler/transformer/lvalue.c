@@ -4,6 +4,8 @@ string exp_lvalue_to_s(jd_exp *expression)
 {
     jd_exp_lvalue *lvalue = expression->data;
     jd_var *var = lvalue->stack_var;
+    if (var == NULL || var->name == NULL)
+        return str_dup(g_str_unknown);
     return var->name;
 }
 
