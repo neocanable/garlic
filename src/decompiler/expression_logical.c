@@ -63,6 +63,9 @@ bool identify_logical_operations(jd_method *m)
                 continue;
 
             jd_exp *exp = get_exp(m, child->end_idx);
+            if (exp == NULL)
+                continue;
+
             if (!exp_is_if(exp) ||
                 exp_is_nopped(exp) ||
                 if_expression_is_assert(exp))
@@ -305,6 +308,8 @@ void identify_cmp_after_if(jd_method *m)
             continue;
         }
         jd_exp_operator *right_exp = right->data;
+        if (operator_exp->list->len < 2 || right_exp->list->len < 2)
+            continue;
         operator_exp->list->args[0] = right_exp->list->args[0];
         operator_exp->list->args[1] = right_exp->list->args[1];
         exp_mark_nopped(exp);

@@ -49,6 +49,7 @@ void* x_realloc_in(mem_pool *pool, void *ptr, size_t old_size, size_t new_size)
 void mem_free_pool() {
     // memset(global_pool, 0, sizeof(mem_pool));
     mem_pool_free(global_pool);
+    global_pool = NULL;
 }
 
 mem_pool* mem_pool_init(size_t capacity)
