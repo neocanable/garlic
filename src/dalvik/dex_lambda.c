@@ -20,7 +20,7 @@ jd_exp_lambda* dex_lambda(jsource_file *jf, jd_exp_invoke *invoke)
             break;
         }
     }
-    if (not_synthetic == NULL)
+    if (not_synthetic == NULL || not_synthetic->instructions == NULL)
         return NULL;
 
     jd_exp *last_invoke = NULL;
