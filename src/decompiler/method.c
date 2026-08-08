@@ -156,13 +156,16 @@ string create_method_defination(jd_method *m)
 
     if (method_is_enum_constructor(m)) {
         if (sig != NULL &&
+            sig->parameter_types != NULL &&
             sig->parameter_types->size == desc->list->size - 2) {
             create_method_defination_with_signature(m, sig, list);
         }
         else
             create_method_defination_without_signature(m, list);
     } else {
-        if (sig != NULL && sig->parameter_types->size == desc->list->size)
+        if (sig != NULL &&
+            sig->parameter_types != NULL &&
+            sig->parameter_types->size == desc->list->size)
             create_method_defination_with_signature(m, sig, list);
         else
             create_method_defination_without_signature(m, list);
