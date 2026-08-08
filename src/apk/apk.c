@@ -173,6 +173,9 @@ static void apk_decompile_task_start(jd_apk *apk)
     for (int i = 0; i < apk->entries_size; ++i) {
         zip_entry_openbyindex(zip, i);
         string path_in_zip = (string)zip_entry_name(zip);
+        if (path_in_zip == NULL) {
+            continue;
+        }
 
         if (str_end_with(path_in_zip, "AndroidManifest.xml")) {
             apk_parse_manifest_from_zip(apk);
