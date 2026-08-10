@@ -79,6 +79,7 @@ void apk_smali_thread_task(jd_dex_task *task)
 
 static void apk_process_dex_from_zip(jd_apk *apk, struct zip_t *zip)
 {
+    if (zip == NULL) return;
     int total = zip_entries_total(zip);
     for (int i = 0; i < total; ++i) {
         zip_entry_openbyindex(zip, i);
@@ -167,6 +168,10 @@ static void apk_process_dex_from_zip(jd_apk *apk, struct zip_t *zip)
 static void apk_decompile_task_start(jd_apk *apk)
 {
     struct zip_t *zip = zip_open(apk->path, 0, 'r');
+    if (zip == NULL) {
+        fprintf(stderr, "[garlic] Failed to open APK: %s (invalid zip?)\n", apk->path);
+        return;
+    }
     apk->zip = zip;
     apk->entries_size = zip_entries_total(zip);
 
