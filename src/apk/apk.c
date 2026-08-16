@@ -169,7 +169,7 @@ static void apk_decompile_task_start(jd_apk *apk)
 {
     struct zip_t *zip = zip_open(apk->path, 0, 'r');
     if (zip == NULL) {
-        fprintf(stderr, "[garlic] Failed to open APK: %s (invalid zip?)\n", apk->path);
+        fprintf(stderr, "\n[garlic] Failed to open APK: %s (invalid zip?)\n", apk->path);
         return;
     }
     apk->zip = zip;
