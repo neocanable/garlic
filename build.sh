@@ -1,20 +1,5 @@
 #!/bin/bash
 
-if [ -z "$1" ]; then
-  echo "Usage: $0 <platform_name>"
-  echo "    Supported platforms:"
-  echo "      linux-aarch64"
-  echo "      linux-i686"
-  echo "      linux-x64"
-  echo "      macos-aarch64"
-  echo "      macos-x64"
-  echo "      win32"
-  echo "      win64"
-  exit 1
-fi
-
-PLATFORM="$1"
-
 SUPPORTED_PLATFORMS=(
   "linux-aarch64"
   "linux-i686"
@@ -25,37 +10,61 @@ SUPPORTED_PLATFORMS=(
   "win64"
 )
 
-if [[ ! " ${SUPPORTED_PLATFORMS[@]} " =~ " ${PLATFORM} " ]]; then
-  echo "Error: Unsupported platform '$PLATFORM'"
+if [ -z "$1" ]; then
+  echo "Usage: $0 <platform_name|all>"
   echo "    Supported platforms:"
-  echo "      linux-aarch64"
-  echo "      linux-i686"
-  echo "      linux-x64"
-  echo "      macos-aarch64"
-  echo "      macos-x64"
-  echo "      win32"
-  echo "      win64"
+  echo "      all"
+  for p in "${SUPPORTED_PLATFORMS[@]}"; do
+    echo "      ${p}"
+  done
   exit 1
 fi
 
-BUILD_DIR="build/build-${PLATFORM}"
+TARGET="$1"
 
-mkdir -p "${BUILD_DIR}"
-
-cd "${BUILD_DIR}" || exit 1
-
-TOOLCHAIN_FILE="../../toolchains/toolchain-${PLATFORM}.cmake"
-
-if [ ! -f "${TOOLCHAIN_FILE}" ]; then
-  echo "Error: Toolchain file '${TOOLCHAIN_FILE}' not found!"
-  echo "Please make sure the toolchain file exists for platform: ${PLATFORM}"
-  exit 1
+if [ "$TARGET" = "all" ]; then
+  PLATFORMS=("${SUPPORTED_PLATFORMS[@]}")
+else
+  if [[ ! " ${SUPPORTED_PLATFORMS[@]} " =~ " ${TARGET} " ]]; then
+    echo "Error: Unsupported platform '${TARGET}'"
+    echo "    Supported platforms:"
+    echo "      all"
+    for p in "${SUPPORTED_PLATFORMS[@]}"; do
+      echo "      ${p}"
+    done
+    exit 1
+  fi
+  PLATFORMS=("${TARGET}")
 fi
 
-echo "Running CMake with toolchain: ${TOOLCHAIN_FILE}"
-cmake -DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN_FILE}" -DPLATFORM_NAME="${PLATFORM}" -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=../ ../../
+build_platform() {
+  local PLATFORM="$1"
 
-echo "Building..."
-cmake --build .
+  local BUILD_DIR="build/build-${PLATFORM}"
 
-echo "Build directory for platform '${PLATFORM}' is ready: ${BUILD_DIR}"
+  mkdir -p "${BUILD_DIR}"
+
+  cd "${BUILD_DIR}" || exit 1
+
+  local TOOLCHAIN_FILE="../../toolchains/toolchain-${PLATFORM}.cmake"
+
+  if [ ! -f "${TOOLCHAIN_FILE}" ]; then
+    echo "Error: Toolchain file '${TOOLCHAIN_FILE}' not found!"
+    echo "Please make sure the toolchain file exists for platform: ${PLATFORM}"
+    exit 1
+  fi
+
+  echo "Running CMake with toolchain: ${TOOLCHAIN_FILE}"
+  cmake -DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN_FILE}" -DPLATFORM_NAME="${PLATFORM}" -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=../ ../../
+
+  echo "Building..."
+  cmake --build .
+
+  echo "Build directory for platform '${PLATFORM}' is ready: ${BUILD_DIR}"
+
+  cd ../.. || exit 1
+}
+
+for platform in "${PLATFORMS[@]}"; do
+  build_platform "${platform}"
+done

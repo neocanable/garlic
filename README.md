@@ -6,7 +6,7 @@
 
 English | [Chinese](README.CN.md)
 
-The world's fastest apk (android)/java open source decompiler
+The world's fastest apk (android)/java open source decompiler/elf analyzer
 
 Android/Java decompiler written in C
 
@@ -19,13 +19,13 @@ Tool for produces java source code from class/jar/dex/apk file
 * decompile class file
 * decompile jar file
 * decompile war file
-
-### Install
-
-* macos/linux
-``` shell
-brew install neocanable/decompiler/garlic
-```
+* analysis aarch64 elf
+  * control flow
+  * IR
+  * imports
+  * exports
+  * strings
+  * function call graph
 
 
 ### Build

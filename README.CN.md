@@ -6,11 +6,22 @@
 
 中文 | [English](README.md)
 
-世界最快的 APK (Android)/Java 开源反编译器
+世界最快的 APK (Android)/Java 开源反编译器/ELF全量分析器
 
 用 C 语言实现的 Android/Java 反编译器
 
 从 class/jar/dex/apk 文件生成 Java 源码的工具
+
+
+
+### 定制服务
+
+**邮件:** neocanable#gmail.com (替换 # 为 @)
+
+**微信:** neocanable
+
+
+![author](shell/images/qrcode.jpg)
 
 
 ### 功能
@@ -20,13 +31,13 @@
 * 反编译class文件
 * 反编译jar文件
 * 反编译war文件
-
-### 安装
-
-* macos/linux
-``` shell
-brew install neocanable/decompiler/garlic
-```
+* 分析aarch64的elf
+  * control flow
+  * IR
+  * imports
+  * exports
+  * strings
+  * function call graph
 
 ### 编译
 
@@ -200,14 +211,7 @@ Progress : 192538 (192538)
 [视频](https://youtu.be/I_cwuW4UKOs?si=eTCFuC1XzHuBi5a0)
 
 
-### 定制服务
 
-**邮件:** neocanable#gmail.com (替换 # 为 @)
-
-**微信:** neocanable
-
-
-![author](shell/images/qrcode.jpg)
 
 
 
