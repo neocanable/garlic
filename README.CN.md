@@ -104,6 +104,31 @@ zig build --release=fast -Dtarget=aarch64-macos
 
 Zig 自带交叉链接器和 libc，**无需安装任何交叉编译工具链**，开箱即用。产物输出到 `zig-out/bin/`。
 
+##### 4. 使用 Android NDK 交叉编译
+
+​	**编译环境**: Android NDK (>= r21, 已在 r28 验证)
+
+​	NDK 的定位方式（按优先级）：`-DANDROID_NDK=/path/to/ndk` → `ANDROID_NDK_HOME` /
+	`ANDROID_NDK_ROOT` 环境变量 → `ANDROID_HOME`/`ANDROID_SDK_ROOT`（`<sdk>/ndk/<version>`），
+	macOS / Android Studio 的默认安装路径也会自动探测。
+
+```sh
+./build.sh android-arm64-v8a
+```
+
+​	或手动调用 CMake：
+
+```sh
+cmake -B build/build-android-arm64-v8a \
+      -DCMAKE_TOOLCHAIN_FILE=toolchains/toolchain-android-arm64-v8a.cmake \
+      -DPLATFORM_NAME=android-arm64-v8a
+cmake --build build/build-android-arm64-v8a
+```
+
+​	产物为 `build/garlic-android-arm64-v8a`（arm64-v8a，minSdkVersion 23）。
+
+​	注意：Android 平台暂无预编译的 `librosemarylib`（ELF 分析库），该平台编译时会
+	自动跳过 ELF 分析功能（`-n`），其余反编译功能不受影响。
 
 
 ### 使用方法

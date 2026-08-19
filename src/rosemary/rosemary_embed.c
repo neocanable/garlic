@@ -31,6 +31,7 @@
   #define PATHSEP   "/"
 #endif
 
+#ifdef ROSEMARYLIB_EMBEDDED
 /* ---------------------------------------------------------------
  * Embedded dynamic-library data
  * (generated at build time by: xxd -i -n rosemarylib_data)
@@ -170,20 +171,30 @@ static int ensure_library_loaded(void)
      * delete it after dlopen, but keeping it is safe everywhere. */
     return 0;
 }
+#endif /* ROSEMARYLIB_EMBEDDED */
 
 /* ---------------------------------------------------------------
  * Public API
  * --------------------------------------------------------------- */
 jd_elf* jd_analysis_elf_from_path(const char *path)
 {
+#ifdef ROSEMARYLIB_EMBEDDED
     if (ensure_library_loaded() != 0)
         return NULL;
     return g_real_analysis(path);
+#else
+    (void)path;
+    return NULL; /* ELF analysis unavailable (no embedded library) */
+#endif
 }
 
 void jd_dump_all_csv(jd_elf *elf)
 {
+#ifdef ROSEMARYLIB_EMBEDDED
     if (!g_real_dump_all)
         return;
     g_real_dump_all(elf);
+#else
+    (void)elf;
+#endif
 }

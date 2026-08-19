@@ -164,7 +164,7 @@ else()
     message(FATAL_ERROR "Unsupported operating system: ${CMAKE_SYSTEM_NAME}")
 endif()
 
-if(ROSEMARYLIB_FILE)
+if(ROSEMARYLIB_FILE AND EXISTS "${ROSEMARYLIB_FILE}")
     # Convert the shared library to a C source file using a pure-CMake
     # script so that no external tool (xxd, Python, etc.) is needed.
     set(EMBED_SRC ${CMAKE_BINARY_DIR}/rosemarylib_data.c)
@@ -182,7 +182,7 @@ if(ROSEMARYLIB_FILE)
     message(STATUS "Embedding librosemarylib: ${ROSEMARYLIB_FILE}")
 else()
     # Without a pre-built library the ELF-analysis (-n) feature is disabled
-    message(STATUS "librosemarylib embedding disabled (library not found)")
+    message(STATUS "librosemarylib embedding disabled (library not found: ${ROSEMARYLIB_FILE})")
 endif()
 
 # -------------------------------------------------------------------------
@@ -193,7 +193,7 @@ add_executable(garlic
         src/rosemary/rosemary_embed.c
 )
 
-if(ROSEMARYLIB_FILE)
+if(ROSEMARYLIB_FILE AND EXISTS "${ROSEMARYLIB_FILE}")
     target_sources(garlic PRIVATE ${CMAKE_BINARY_DIR}/rosemarylib_data.c)
 endif()
 
@@ -202,6 +202,10 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_libraries(garlic pthread dl)
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   target_link_libraries(garlic pthread)
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Android")
+  # pthread is part of bionic libc (no libpthread stub since NDK r27);
+  # libdl is only needed when the embedded ELF analyzer is present.
+  target_link_libraries(garlic dl)
 elseif (WIN32)
   target_link_libraries(garlic ws2_32 advapi32)
 endif ()
@@ -215,7 +219,7 @@ if (RELEASE)
             src/rosemary/rosemary_embed.c
     )
 
-    if(ROSEMARYLIB_FILE)
+    if(ROSEMARYLIB_FILE AND EXISTS "${ROSEMARYLIB_FILE}")
         target_sources(garlic-${PLATFORM_NAME} PRIVATE ${CMAKE_BINARY_DIR}/rosemarylib_data.c)
     endif()
     endif()
@@ -232,6 +236,14 @@ if (RELEASE)
             target_link_libraries(garlic-${PLATFORM_NAME} pthread)
         else()
             target_link_libraries(garlic pthread)
+        endif()
+    elseif (CMAKE_SYSTEM_NAME STREQUAL "Android")
+        # pthread is part of bionic libc (no libpthread stub since NDK r27);
+        # libdl is only needed when the embedded ELF analyzer is present.
+        if(DEFINED PLATFORM_NAME)
+            target_link_libraries(garlic-${PLATFORM_NAME} dl)
+        else()
+            target_link_libraries(garlic dl)
         endif()
     elseif (WIN32)
         if (DEFINED PLATFORM_NAME)

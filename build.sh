@@ -1,6 +1,7 @@
 #!/bin/bash
 
 SUPPORTED_PLATFORMS=(
+  "android-arm64-v8a"
   "linux-aarch64"
   "linux-i686"
   "linux-x64"

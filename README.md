@@ -94,6 +94,34 @@ zig build --release=fast -Dtarget=aarch64-macos
 
 Zig bundles its own cross-linkers and libc, so **no cross-toolchain needs to be installed** — everything works out of the box. The output goes to `zig-out/bin/`.
 
+##### 4. Cross-compile with the Android NDK
+
+​	**Environment**: Android NDK (>= r21, verified on r28)
+
+​	The NDK is located (in priority order) via `-DANDROID_NDK=/path/to/ndk`, the
+	`ANDROID_NDK_HOME` / `ANDROID_NDK_ROOT` environment variables, or
+	`ANDROID_HOME`/`ANDROID_SDK_ROOT` (`<sdk>/ndk/<version>`). The default
+	macOS / Android Studio install path is auto-detected as a fallback.
+
+```sh
+./build.sh android-arm64-v8a
+```
+
+​	Or invoke CMake directly:
+
+```sh
+cmake -B build/build-android-arm64-v8a \
+      -DCMAKE_TOOLCHAIN_FILE=toolchains/toolchain-android-arm64-v8a.cmake \
+      -DPLATFORM_NAME=android-arm64-v8a
+cmake --build build/build-android-arm64-v8a
+```
+
+​	The output is `build/garlic-android-arm64-v8a` (arm64-v8a, minSdkVersion 23).
+
+​	Note: no prebuilt `librosemarylib` (ELF analyzer) is shipped for Android yet, so
+	that platform is built with the ELF-analysis (`-n`) feature disabled. All other
+	decompilation features work unchanged.
+
 
 ### Usage
 
