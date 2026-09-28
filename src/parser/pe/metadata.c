@@ -10,7 +10,7 @@
 
 static pe_dos_header* init_pe_content(mem_pool *pool, string path)
 {
-    FILE *file = fopen(path, "r");
+    FILE *file = fopen(path, "rb");
     fseek(file, 0, SEEK_END);
     size_t file_size = ftell(file);
     fseek(file, 0, SEEK_SET);
