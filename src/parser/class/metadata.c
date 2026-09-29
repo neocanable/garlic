@@ -27,7 +27,7 @@ jsource_file* init_java_source_file(jclass_file *jc)
 
 void init_java_class_content(jclass_file *jc, const char *path)
 {
-    FILE *file = fopen(path, "r");
+    FILE *file = fopen(path, "rb");
     fseek(file, 0, SEEK_END);
     size_t file_size = ftell(file);
     fseek(file, 0, SEEK_SET);
