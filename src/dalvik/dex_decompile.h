@@ -10,7 +10,9 @@ void dex_decompile_main_thread_start(jd_dex *dex);
 
 void dex_file_analyse(string path, string save_dir, int thread_num, jd_dex_task_type type);
 
-jd_dex* dex_init_without_thread(jd_meta_dex *meta);
+jd_dex* dex_init_without_thread(jd_meta_dex *meta,
+                                hashmap *output_path_counts,
+                                pthread_mutex_t *output_path_counts_lock);
 
 void dex_decompile_thread_task(jd_dex_task *task);
 
