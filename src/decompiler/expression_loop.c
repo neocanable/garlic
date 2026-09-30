@@ -22,7 +22,8 @@ static bool basic_block_has_back_edge(jd_bblock *header)
     for (int i = 0; i < header->in->size; ++i) {
         jd_edge *edge = lget_obj(header->in, i);
         jd_bblock *source = edge->source_block;
-        if (basic_block_is_normal_live(source) && dominates(header, source))
+        if (basic_block_is_normal_live(source) &&
+            lcontains_obj(header->dominates, source))
             return true;
     }
     return false;
@@ -481,12 +482,14 @@ static void identify_loops_recursive(jd_method *m,
         if (
                 !basic_block_is_normal_live(block) ||
                 (node_is_loop(node) && exclude_head && i == 0) ||
-                !basic_block_has_back_edge(block)
+                !lcontains_obj(block->frontier, block)
 //                is_loop_exist(m, block)
                 )
             continue;
 
         compute_dominates_block(m, block);
+        if (!basic_block_has_back_edge(block))
+            continue;
 
         jd_loop *loop = make_obj(jd_loop);
         loop->header = block;
