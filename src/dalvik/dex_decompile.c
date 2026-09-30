@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <errno.h>
 #include "dalvik/dex_decompile.h"
 #include "dalvik/dex_structure.h"
@@ -20,8 +21,51 @@
 #include "dex_annotation.h"
 #include "dex_dump.h"
 #include "dex_smali.h"
+#include "libs/hashmap/hashmap_tools.h"
 
 static int dex_progress_len = 0;
+
+#ifdef _WIN32
+static string dex_class_output_key(jd_meta_dex *meta, dex_class_def *cf)
+{
+    string desc = dex_str_of_type_id(meta, cf->class_idx);
+    string key = str_create_in(meta->pool, "%s", desc);
+    for (char *p = key; *p; ++p)
+        *p = (char)tolower((unsigned char)*p);
+    return key;
+}
+
+static void dex_prepare_output_names(jd_dex *dex, hashmap *output_path_counts)
+{
+    jd_meta_dex *meta = dex->meta;
+    if (output_path_counts == NULL)
+        output_path_counts = hashmap_init_in(meta->pool, s2i_cmp, meta->header->class_defs_size);
+
+    for (int i = 0; i < meta->header->class_defs_size; ++i) {
+        dex_class_def *cf = &meta->class_defs[i];
+        string key = dex_class_output_key(meta, cf);
+        int suffix = hget_s2i(output_path_counts, key);
+        if (suffix < 0) {
+            hset_s2i(output_path_counts, key, 1);
+            continue;
+        }
+
+        int candidate_suffix;
+        string candidate_key;
+        do {
+            candidate_suffix = suffix++;
+            candidate_key = str_create_in(meta->pool, "%.*s__case_%d;", (int)strlen(key) - 1, key, candidate_suffix);
+        } while (hget_s2i(output_path_counts, candidate_key) >= 0);
+
+        string desc = dex_str_of_type_id(meta, cf->class_idx);
+        string fname = class_full_name(desc);
+        string sname = class_simple_name_without_primitive(fname);
+        cf->output_basename = str_create_in(meta->pool, "%s__case_%d", sname, candidate_suffix);
+        hset_s2i(output_path_counts, key, suffix);
+        hset_s2i(output_path_counts, candidate_key, 1);
+    }
+}
+#endif
 
 void dex_status(jd_dex *dex)
 {
@@ -136,7 +180,9 @@ static void dex_class_source_save_dir(jd_dex *dex, jsource_file *jf)
     string full_dir = str_create("%s/%s", meta->source_dir, jf->pname);
     mkdir_p(full_dir);
 
-    string path = str_create("%s/%s.java", full_dir, jf->sname);
+    dex_class_def *cf = jf->jclass;
+    string output_basename = cf->output_basename == NULL ? jf->sname : cf->output_basename;
+    string path = str_create("%s/%s.java", full_dir, output_basename);
     FILE *stream = fopen(path, "wb");
     if (stream == NULL) {
         fprintf(stdout, "[error]: open file %s failed: %d\n", path, errno);
@@ -156,7 +202,8 @@ FILE* dex_class_smali_save_dir(jd_dex *dex, dex_class_def *cf)
     string full_dir = str_create("%s/%s", meta->source_dir, pname);
     mkdir_p(full_dir);
 
-    string path = str_create("%s/%s.smali", full_dir, sname);
+    string output_basename = cf->output_basename == NULL ? sname : cf->output_basename;
+    string path = str_create("%s/%s.smali", full_dir, output_basename);
     FILE *stream = fopen(path, "wb");
     if (stream == NULL) {
         fprintf(stdout, "[error]: open file %s failed: %d\n", path, errno);
@@ -335,6 +382,9 @@ jd_dex* dex_init(jd_meta_dex *meta, int thread_num)
     dex_init_ins_fn(dex);
     dex_init_method_fn(dex);
     dex_inner_and_anonymous_class(dex);
+#ifdef _WIN32
+    dex_prepare_output_names(dex, NULL);
+#endif
 
     if (thread_num > 1) {
         dex->threadpool = threadpool_create_in(meta->pool, thread_num, 0);
@@ -343,7 +393,7 @@ jd_dex* dex_init(jd_meta_dex *meta, int thread_num)
     return dex;
 }
 
-jd_dex* dex_init_without_thread(jd_meta_dex *meta)
+jd_dex* dex_init_without_thread(jd_meta_dex *meta, hashmap *output_path_counts)
 {
     jd_dex *dex = make_obj(jd_dex);
     dex->meta = meta;
@@ -351,6 +401,9 @@ jd_dex* dex_init_without_thread(jd_meta_dex *meta)
     dex_init_ins_fn(dex);
     dex_init_method_fn(dex);
     dex_inner_and_anonymous_class(dex);
+#ifdef _WIN32
+    dex_prepare_output_names(dex, output_path_counts);
+#endif
     return dex;
 }
 
@@ -527,7 +580,7 @@ static bool dex_class_filter(jd_meta_dex *meta, dex_class_def *cf)
 
 void dex_analyse(jd_meta_dex *meta)
 {
-    jd_dex *dex = dex_init_without_thread(meta);
+    jd_dex *dex = dex_init_without_thread(meta, NULL);
     dex_header *header = meta->header;
 
     for (int i = 0; i < header->class_defs_size; ++i) {

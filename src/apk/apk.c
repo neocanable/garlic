@@ -7,6 +7,9 @@
 #include "decompiler/expression_writter.h"
 #include "dex_smali.h"
 #include "apk_manifest.h"
+#ifdef _WIN32
+#include "libs/hashmap/hashmap_tools.h"
+#endif
 
 static int apk_progress_len = 0;
 
@@ -117,7 +120,7 @@ static void apk_process_dex_from_zip(jd_apk *apk, struct zip_t *zip)
         zip_entry_close(zip);
 
         jd_meta_dex *meta = parse_dex_from_buffer(buf, buf_size);
-        jd_dex *dex = dex_init_without_thread(meta);
+        jd_dex *dex = dex_init_without_thread(meta, apk->output_path_counts);
         meta->source_dir = apk->save_dir;
 
         for (int j = 0; j < meta->header->class_defs_size; ++j) {
@@ -218,6 +221,10 @@ void apk_decompile_analyse(string path,
     apk->save_dir = save_dir;
     apk->thread_num = thread_num;
     apk->type = type;
+    apk->output_path_counts = NULL;
+#ifdef _WIN32
+    apk->output_path_counts = hashmap_init_in(pool, s2i_cmp, 0);
+#endif
 
     if (thread_num > 1) {
         apk->threadpool = threadpool_create_in(apk->pool, thread_num, 0);

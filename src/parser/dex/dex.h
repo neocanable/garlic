@@ -375,6 +375,8 @@ typedef struct dex_class_def {
     bool is_inner;
     bool is_anonymous;
 
+    string output_basename;
+
     list_object *inner_classes;
     list_object *anonymous_classes;
 } dex_class_def;
