@@ -35,11 +35,16 @@ static string dex_class_output_key(jd_meta_dex *meta, dex_class_def *cf)
     return key;
 }
 
-static void dex_prepare_output_names(jd_dex *dex, hashmap *output_path_counts)
+static void dex_prepare_output_names(jd_dex *dex,
+                                     hashmap *output_path_counts,
+                                     pthread_mutex_t *output_path_counts_lock)
 {
     jd_meta_dex *meta = dex->meta;
     if (output_path_counts == NULL)
         output_path_counts = hashmap_init_in(meta->pool, s2i_cmp, meta->header->class_defs_size);
+
+    if (output_path_counts_lock != NULL)
+        pthread_mutex_lock(output_path_counts_lock);
 
     for (int i = 0; i < meta->header->class_defs_size; ++i) {
         dex_class_def *cf = &meta->class_defs[i];
@@ -64,6 +69,9 @@ static void dex_prepare_output_names(jd_dex *dex, hashmap *output_path_counts)
         hset_s2i(output_path_counts, key, suffix);
         hset_s2i(output_path_counts, candidate_key, 1);
     }
+
+    if (output_path_counts_lock != NULL)
+        pthread_mutex_unlock(output_path_counts_lock);
 }
 #endif
 
@@ -383,7 +391,7 @@ jd_dex* dex_init(jd_meta_dex *meta, int thread_num)
     dex_init_method_fn(dex);
     dex_inner_and_anonymous_class(dex);
 #ifdef _WIN32
-    dex_prepare_output_names(dex, NULL);
+    dex_prepare_output_names(dex, NULL, NULL);
 #endif
 
     if (thread_num > 1) {
@@ -393,7 +401,9 @@ jd_dex* dex_init(jd_meta_dex *meta, int thread_num)
     return dex;
 }
 
-jd_dex* dex_init_without_thread(jd_meta_dex *meta, hashmap *output_path_counts)
+jd_dex* dex_init_without_thread(jd_meta_dex *meta,
+                                hashmap *output_path_counts,
+                                pthread_mutex_t *output_path_counts_lock)
 {
     jd_dex *dex = make_obj(jd_dex);
     dex->meta = meta;
@@ -402,7 +412,9 @@ jd_dex* dex_init_without_thread(jd_meta_dex *meta, hashmap *output_path_counts)
     dex_init_method_fn(dex);
     dex_inner_and_anonymous_class(dex);
 #ifdef _WIN32
-    dex_prepare_output_names(dex, output_path_counts);
+    dex_prepare_output_names(dex,
+                             output_path_counts,
+                             output_path_counts_lock);
 #endif
     return dex;
 }
@@ -580,7 +592,7 @@ static bool dex_class_filter(jd_meta_dex *meta, dex_class_def *cf)
 
 void dex_analyse(jd_meta_dex *meta)
 {
-    jd_dex *dex = dex_init_without_thread(meta, NULL);
+    jd_dex *dex = dex_init_without_thread(meta, NULL, NULL);
     dex_header *header = meta->header;
 
     for (int i = 0; i < header->class_defs_size; ++i) {

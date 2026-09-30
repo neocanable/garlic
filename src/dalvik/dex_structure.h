@@ -91,6 +91,7 @@ typedef struct jd_apk {
     size_t              entries_size;
     mem_pool            *pool;
     hashmap             *output_path_counts;
+    pthread_mutex_t     output_path_counts_lock;
     threadpool_t        *threadpool;
     jd_dex_task_type    type;
     int                 added;

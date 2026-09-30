@@ -120,7 +120,9 @@ static void apk_process_dex_from_zip(jd_apk *apk, struct zip_t *zip)
         zip_entry_close(zip);
 
         jd_meta_dex *meta = parse_dex_from_buffer(buf, buf_size);
-        jd_dex *dex = dex_init_without_thread(meta, apk->output_path_counts);
+        jd_dex *dex = dex_init_without_thread(meta,
+                                              apk->output_path_counts,
+                                              &apk->output_path_counts_lock);
         meta->source_dir = apk->save_dir;
 
         for (int j = 0; j < meta->header->class_defs_size; ++j) {
@@ -203,6 +205,9 @@ static void apk_release(jd_apk *apk)
     if (apk->threadpool)
         threadpool_destroy(apk->threadpool, 1);
 
+#ifdef _WIN32
+    pthread_mutex_destroy(&apk->output_path_counts_lock);
+#endif
     mem_pool_free(apk->pool);
     mem_free_pool();
 }
@@ -224,6 +229,7 @@ void apk_decompile_analyse(string path,
     apk->output_path_counts = NULL;
 #ifdef _WIN32
     apk->output_path_counts = hashmap_init_in(pool, s2i_cmp, 0);
+    pthread_mutex_init(&apk->output_path_counts_lock, NULL);
 #endif
 
     if (thread_num > 1) {
