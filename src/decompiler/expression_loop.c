@@ -17,6 +17,17 @@ static bool loop_already_exist(jd_method *m, jd_loop *loop)
     return false;
 }
 
+static bool basic_block_has_back_edge(jd_bblock *header)
+{
+    for (int i = 0; i < header->in->size; ++i) {
+        jd_edge *edge = lget_obj(header->in, i);
+        jd_bblock *source = edge->source_block;
+        if (basic_block_is_normal_live(source) && dominates(header, source))
+            return true;
+    }
+    return false;
+}
+
 static jd_range* basic_block_to_range(jd_bblock *block)
 {
     jd_nblock *nblock = block->ub->nblock;
@@ -470,7 +481,7 @@ static void identify_loops_recursive(jd_method *m,
         if (
                 !basic_block_is_normal_live(block) ||
                 (node_is_loop(node) && exclude_head && i == 0) ||
-                !lcontains_obj(block->frontier, block)
+                !basic_block_has_back_edge(block)
 //                is_loop_exist(m, block)
                 )
             continue;
