@@ -219,11 +219,7 @@ void apk_decompile_analyse(string path,
     apk->thread_num = thread_num;
     apk->type = type;
 
-    if (thread_num > 1) {
-        apk->threadpool = threadpool_create_in(apk->pool, thread_num, 0);
-    } else {
-        apk->threadpool = NULL;
-    }
+    apk->threadpool = threadpool_create_in(apk->pool, thread_num, 0);
 
     apk_decompile_task_start(apk);
 
