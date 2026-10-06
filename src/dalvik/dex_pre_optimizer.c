@@ -3,7 +3,28 @@
 
 #include "decompiler/dominator_tree.h"
 #include "decompiler/control_flow.h"
+#include "decompiler/exception.h"
 #include "jvm/jvm_ins.h"
+
+#include <pthread.h>
+
+static int share_suffix_copies;
+static pthread_mutex_t share_suffix_lock = PTHREAD_MUTEX_INITIALIZER;
+
+void share_suffix_count_one(void)
+{
+    pthread_mutex_lock(&share_suffix_lock);
+    share_suffix_copies++;
+    pthread_mutex_unlock(&share_suffix_lock);
+}
+
+int share_suffix_copy_count(void)
+{
+    pthread_mutex_lock(&share_suffix_lock);
+    int count = share_suffix_copies;
+    pthread_mutex_unlock(&share_suffix_lock);
+    return count;
+}
 
 static inline bool is_goto_edge(jd_edge *edge)
 {
@@ -13,6 +34,19 @@ static inline bool is_goto_edge(jd_edge *edge)
     jd_nblock *source_nb = source->ub->nblock;
     jd_dex_ins *ins = ins_of_offset(source->method, source_nb->end_offset);
     return dex_ins_is_goto_jump(ins);
+}
+
+static bool basic_block_all_in_edges_are_goto(jd_bblock *block)
+{
+    if (block->in == NULL || block->in->size == 0)
+        return false;
+
+    for (int i = 0; i < block->in->size; ++i) {
+        jd_edge *edge = lget_obj(block->in, i);
+        if (!is_goto_edge(edge))
+            return false;
+    }
+    return true;
 }
 
 static bool basic_block_has_live_jump_in_goto(jd_bblock *block)
@@ -167,12 +201,13 @@ static void optimize_share_suffix_v2(jd_method *m)
             if (lcontains_obj(b->frontier, b)) continue;
 
             if (!basic_block_has_live_jump_in_goto(b)) continue;
+            if (!basic_block_all_in_edges_are_goto(b)) continue;
 
             jd_edge *out_edge = lget_obj_first(b->out);
             jd_bblock *out_block = out_edge->target_block;
             if (out_block->type != JD_BB_NORMAL) continue;
 
-            /* Self-loop guard: redirecting to self causes infinite loop */
+            // self loop guard
             if (out_block == b) continue;
 
             jd_nblock *nb = b->ub->nblock;
@@ -197,13 +232,45 @@ static void optimize_share_suffix_v2(jd_method *m)
                 cfg_unlink_blocks(sb, b);
                 create_link_edge(sb, out_block);
 
+                jd_dex_ins *copy_prev = NULL;
                 for (int k = nb->start_idx; k <= nb->end_idx ; ++k) {
                     jd_dex_ins *ins = get_dex_ins(m, k);
                     if (dex_ins_is_goto_jump(ins) && ins == nb->end_ins)
                         continue;
-                    ladd_obj(goto_ins->extra, ins);
+
+                    jd_dex_ins *copy = dup_dex_ins(ins);
+                    copy->state_flag = ins->state_flag & INS_STATE_UNREACHED;
+                    ins_mark_duplicate(copy);
+                    copy->extra = NULL;
+                    copy->prev = copy_prev;
+                    copy->next = NULL;
+                    if (copy_prev != NULL)
+                        copy_prev->next = copy;
+                    copy_prev = copy;
+
+                    ladd_obj(goto_ins->extra, copy);
                 }
                 dex_setup_goto_offset(goto_ins, out_start_ins->offset);
+
+                lclear_object(goto_ins->jumps);
+                lclear_object(goto_ins->targets);
+                ladd_obj_no_dup(goto_ins->jumps, out_start_ins);
+                ladd_obj_no_dup(goto_ins->targets, out_start_ins);
+                ldel_object(start_ins->comings, goto_ins);
+                ladd_obj_no_dup(out_start_ins->comings, goto_ins);
+
+                jd_dex_ins *goto_copy = dup_dex_ins(goto_ins);
+                goto_copy->state_flag = 0;
+                ins_mark_duplicate(goto_copy);
+                goto_copy->extra = NULL;
+                goto_copy->block = sb;
+                goto_copy->prev = copy_prev;
+                goto_copy->next = NULL;
+                if (copy_prev != NULL)
+                    copy_prev->next = goto_copy;
+                ladd_obj(goto_ins->extra, goto_copy);
+
+                share_suffix_count_one();
 
                 --j;
                 changed = true;
