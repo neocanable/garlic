@@ -6,10 +6,13 @@
 
 #define EXTRACT_BASIC_DESCRIPTOR_MARCOS(param_type) do {                \
         if (_from_length == 0) _from_length = i;                        \
-        size_t _obj_total_length = i-_from_length+1+1;                  \
+        size_t _name_len = strlen(param_type);                          \
+        size_t _obj_total_length = _name_len + _is_arr*2 + 1;           \
         string substring = x_alloc(_obj_total_length);                  \
-        memcpy(substring, &str[_from_length], _obj_total_length-1);     \
-        substring[_obj_total_length] = '\0';                            \
+        memcpy(substring, param_type, _name_len);                       \
+        substring[_name_len] = '\0';                                    \
+        for (int j = 0; j < _is_arr; ++j)                               \
+            strcat(substring, "[]");                                    \
         ladd_string(descriptor->list, substring);                       \
         cur_parameter += 1;                                             \
         _is_obj = 0;                                                    \
@@ -107,7 +110,50 @@ string descriptor_to_s(string str)
                 break;
         }
     }
-    return NULL;
+    return str_dup(str);
+}
+
+string descriptor_type_name(string descriptor)
+{
+    if (descriptor == NULL)
+        return NULL;
+
+    switch (descriptor[0]) {
+        case 'I': return (string) g_str_int;
+        case 'J': return (string) g_str_long;
+        case 'F': return (string) g_str_float;
+        case 'D': return (string) g_str_double;
+        case 'B': return (string) g_str_byte;
+        case 'C': return (string) g_str_char;
+        case 'S': return (string) g_str_short;
+        case 'Z': return (string) g_str_boolean;
+        case 'V': return (string) g_str_void;
+        default:
+            return class_simple_name_without_primitive(
+                    descriptor_to_s(descriptor));
+    }
+}
+
+jd_var_types descriptor_name_data_type(string name)
+{
+    if (name == NULL)
+        return JD_VAR_REFERENCE_T;
+
+    if (STR_EQL(name, g_str_long))
+        return JD_VAR_LONG_T;
+    if (STR_EQL(name, g_str_float))
+        return JD_VAR_FLOAT_T;
+    if (STR_EQL(name, g_str_double))
+        return JD_VAR_DOUBLE_T;
+
+    if (STR_EQL(name, g_str_int) ||
+        STR_EQL(name, g_str_boolean) ||
+        STR_EQL(name, g_str_byte) ||
+        STR_EQL(name, g_str_char) ||
+        STR_EQL(name, g_str_short))
+        return JD_VAR_INT_T;
+
+    return JD_VAR_REFERENCE_T;
 }
 
 static void descriptor_tokenizer(jd_descriptor *descriptor)

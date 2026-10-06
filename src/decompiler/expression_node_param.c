@@ -1,5 +1,9 @@
 #include "decompiler/expression_node_param.h"
 #include "decompiler/expression_node.h"
+#include "decompiler/klass.h"
+#include "decompiler/stack.h"
+#include "dalvik/dex_ins.h"
+#include "dalvik/dex_simulator.h"
 
 static void setup_first_effective_to_node_param(jd_method *m, jd_node *node)
 {
@@ -16,33 +20,101 @@ static void setup_synchronized_node_param(jd_method *m, jd_node *node)
         return;
     if (!exp_is_monitor_enter(exp))
         return;
-//    assert(exp_is_monitor_enter(exp));
+
     jd_exp_monitorenter *monitorenter = exp->data;
-    jd_exp *first = &monitorenter->list->args[0];
-    if (exp_is_local_variable(first)) {
-        node->param_exp = first;
-        exp_mark_nopped(exp);
+    node->param_exp = &monitorenter->list->args[0];
+    exp_mark_nopped(exp);
+}
+
+static jd_exc* exception_of_handler(jd_method *m, jd_node *node)
+{
+    jd_ins *first = get_ins(m, node->start_idx);
+    if (first == NULL || m->cfg_exceptions == NULL)
+        return NULL;
+
+    for (int i = 0; i < m->cfg_exceptions->size; ++i) {
+        jd_exc *e = lget_obj(m->cfg_exceptions, i);
+        if (e->handler_start == first->offset)
+            return e;
     }
-    else if (exp_is_operator(first)) {
-        jd_exp_operator *op = first->data;
-        jd_exp *right = &op->list->args[1];
-        node->param_exp = right;
-        exp_mark_nopped(exp);
+    return NULL;
+}
+
+static void setup_catch_param_from_table(jd_method *m, jd_node *node)
+{
+    jd_exc *e = exception_of_handler(m, node);
+    if (e == NULL)
+        return;
+
+    jd_dex *dex = m->meta;
+    jd_meta_dex *meta = dex->meta;
+    string class_desc = e->catch_type_index == 0 ?
+                        "Ljava/lang/Throwable" :
+                        meta->strings[meta->type_ids[e->catch_type_index]
+                                      .descriptor_idx].data;
+
+    jd_val *val = stack_create_empty_val();
+    val->type = JD_VAR_REFERENCE_T;
+    val->data->cname = class_simple_name(class_full_name(class_desc));
+    val->ins = NULL;
+
+    jd_ins *first = get_ins(m, node->start_idx);
+    int reg = first == NULL ? 0 : (int) dex_ins_parameter((jd_dex_ins *) first, 0);
+    val->slot = reg;
+
+    jd_val *in_reg = (first != NULL && first->stack_out != NULL &&
+                      reg < first->stack_out->local_vars_count)
+                     ? first->stack_out->local_vars[reg] : NULL;
+    bool name_free = in_reg != NULL && in_reg->name != NULL &&
+                     strcmp(in_reg->name, "this") != 0 &&
+                     (m->var_name_taken == NULL ||
+                      hget_s2i(m->var_name_taken, in_reg->name) == -1);
+
+    if (name_free)
+        val->name = in_reg->name;
+    else {
+        dex_variable_name(m, NULL, val, reg);
+        if (val->name == NULL)
+            stack_val_name(m, NULL, val, reg);
     }
+
+    jd_exp *param = make_obj_zero(jd_exp);
+    param->type = JD_EXPRESSION_LOCAL_VARIABLE;
+    param->data = val;
+    node->param_exp = param;
 }
 
 static void setup_catch_node_param(jd_method *m, jd_node *node)
 {
     jd_exp *exp = get_exp(m, node->start_idx);
-    if (exp_is_store(exp)) {
+
+    if (exp_is_store(exp) && m->type != JD_TYPE_DALVIK) {
         jd_exp_store *exp_store = exp->data;
         jd_exp *left = &exp_store->list->args[0];
         node->param_exp = left;
         exp_mark_nopped(exp);
-    } else {
-        DEBUG_PRINT("[error]: no catch parameters: %s, node_id: %d\n",
-                m->name, node->node_id);
+        return;
     }
+
+    jd_ins *ins = exp == NULL ? NULL : exp->ins;
+    if (ins != NULL && ins->type == JD_TYPE_DALVIK && ins->stack_in != NULL &&
+        dex_ins_is_move_exception((jd_dex_ins *) ins)) {
+        int reg = move_exception_reg_num((jd_dex_ins *) ins);
+        if (reg < 0 || reg >= ins->stack_in->local_vars_count)
+            return;
+        jd_val *val = ins->stack_in->local_vars[reg];
+        if (val == NULL || val->data == NULL)
+            return;
+
+        exp->type = JD_EXPRESSION_LOCAL_VARIABLE;
+        exp->data = val;
+        node->param_exp = exp;
+        exp_mark_nopped(exp);
+        return;
+    }
+
+    if (m->type == JD_TYPE_DALVIK)
+        setup_catch_param_from_table(m, node);
 }
 
 static void setup_for_loop_node_param(jd_method *m, jd_node *node)

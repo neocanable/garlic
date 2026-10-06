@@ -3,6 +3,7 @@
 
 #include "decompiler/structure.h"
 #include "common/endian_x.h"
+#include "parser/dex/dex.h"
 
 #define CONCAT_ACCESS_FLAG(access_flag, flag, list, str)        \
     if (access_flags_contains(access_flag, flag)) {             \
@@ -15,9 +16,35 @@ bool is_inner_class(string class_name);
 
 bool is_anonymous_class(string class_name);
 
+bool is_synthetic_lambda_class(string class_name);
+
 static inline bool class_has_flag(jclass_file *jc, uint16_t flag)
 {
     return access_flags_contains(be16toh(jc->access_flags), flag);
+}
+
+static inline bool class_is_enum(jsource_file *jf)
+{
+    if (jf == NULL || jf->jclass == NULL)
+        return false;
+
+    if (jf->type == JD_TYPE_DALVIK)
+        return access_flags_contains(((dex_class_def *)jf->jclass)->access_flags,
+                                     ACC_DEX_ENUM);
+
+    return class_has_flag((jclass_file *)jf->jclass, CLASS_ACC_ENUM);
+}
+
+static inline bool class_is_interface(jsource_file *jf)
+{
+    if (jf == NULL || jf->jclass == NULL)
+        return false;
+
+    if (jf->type == JD_TYPE_DALVIK)
+        return access_flags_contains(((dex_class_def *)jf->jclass)->access_flags,
+                                     ACC_DEX_INTERFACE);
+
+    return class_has_flag((jclass_file *)jf->jclass, CLASS_ACC_INTERFACE);
 }
 
 string class_path_to_short(string class_name);

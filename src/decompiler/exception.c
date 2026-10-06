@@ -1,4 +1,8 @@
 #include <assert.h>
+#include <time.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include "parser/class/class_structure.h"
 #include "decompiler/structure.h"
 #include "decompiler/control_flow.h"
@@ -6,6 +10,7 @@
 #include "decompiler/dominator_tree.h"
 #include "decompiler/method.h"
 #include "dex_ins_helper.h"
+#include "dalvik/dex_ins.h"
 
 static void print_cfg_exception_table(jd_method *m)
 {
@@ -660,6 +665,8 @@ static void make_sure_same_try_handler_consequent(jd_method *m)
             continue;
         jd_range range = init_try_block_range(exception);
         jd_exc *other = find_next_sibling(m, &range, 0);
+        if (other == NULL)
+            continue;
         uint32_t _end_offset = other->handler_end;
         while (other != NULL) {
             jd_exc *next = find_next_sibling(m,
@@ -670,10 +677,10 @@ static void make_sure_same_try_handler_consequent(jd_method *m)
             jd_ins *other_handler_end = get_ins(m,other->handler_end_idx);
             jd_ins *next_handler_start = get_ins(m,next->handler_start_idx);
             if (next_handler_start->prev != other_handler_end) {
-                // other->try_end = next_handler_start->prev->goto_offset;
-                // other->try_end_idx = next_handler_start->prev->idx;
-                other->handler_end = next_handler_start->prev->offset;
-                other->handler_end_idx = next_handler_start->prev->idx;
+                if (next_handler_start->prev->idx >= other->handler_start_idx) {
+                    other->handler_end = next_handler_start->prev->offset;
+                    other->handler_end_idx = next_handler_start->prev->idx;
+                }
                 _end_offset = next->handler_end;
             }
             else {
@@ -1057,8 +1064,143 @@ static void expand_exception_with_jump(jd_method *m)
     }
 }
 
+/* The register a monitor instruction works on, or -1 for anything else. */
+static int monitor_ins_register(jd_ins *ins)
+{
+    if (ins == NULL || ins->type != JD_TYPE_DALVIK)
+        return -1;
+    if (!dex_ins_is_monitor_enter(ins) && !dex_ins_is_monitor_exit(ins))
+        return -1;
+
+    return (int) dex_ins_parameter((jd_dex_ins *) ins, 0);
+}
+
+static int exception_handler_monitor_register(jd_method *m, jd_exc *exc)
+{
+    if (exc->catch_type_index != 0)
+        return -1;
+
+    for (int i = exc->handler_start_idx; i <= exc->handler_end_idx; ++i) {
+        jd_ins *ins = get_ins(m, i);
+        if (ins == NULL || ins->type != JD_TYPE_DALVIK)
+            continue;
+        if (dex_ins_is_monitor_exit(ins))
+            return monitor_ins_register(ins);
+    }
+
+    jd_bblock *block = block_start_offset(m, exc->handler_start);
+    for (int step = 0; block != NULL && step < 8; ++step) {
+        if (block->type != JD_BB_NORMAL)
+            break;
+
+        jd_nblock *nb = block->ub->nblock;
+        for (int k = nb->start_idx; k <= nb->end_idx; ++k) {
+            jd_ins *ins = get_ins(m, k);
+            if (ins == NULL || ins->type != JD_TYPE_DALVIK)
+                continue;
+            if (dex_ins_is_monitor_exit(ins))
+                return monitor_ins_register(ins);
+            /* A handler that takes a monitor of its own is a synchronized
+             * written inside the catch, not the one around it. */
+            if (dex_ins_is_monitor_enter(ins))
+                return -1;
+        }
+
+        if (block->out == NULL || block->out->size != 1)
+            break;
+        jd_edge *edge = lget_obj_first(block->out);
+        block = edge == NULL ? NULL : edge->target_block;
+    }
+    return -1;
+}
+
+static jd_ins* idom_chain_monitor_enter(jd_method *m, jd_exc *exc, int reg)
+{
+    jd_bblock *start_bb = block_start_offset(m, exc->try_start);
+    if (start_bb == NULL)
+        return NULL;
+
+    for (jd_bblock *b = start_bb->idom; b != NULL; b = b->idom) {
+        if (b->type != JD_BB_NORMAL)
+            break;
+
+        jd_nblock *nb = b->ub->nblock;
+        if (nb->end_idx >= exc->try_start_idx)
+            break;
+
+        for (int k = nb->end_idx; k >= nb->start_idx; --k) {
+            jd_ins *ins = get_ins(m, k);
+            if (ins == NULL || !dex_ins_is_monitor_enter(ins))
+                continue;
+            if (reg >= 0 && monitor_ins_register(ins) != reg)
+                continue;
+            return ins;
+        }
+    }
+    return NULL;
+}
+
+enum {
+    EXPAND_OK,
+    EXPAND_NO_BLOCK,
+    EXPAND_NO_MONITOR_HANDLER,
+    EXPAND_IN_HANDLER,
+    EXPAND_NO_MONITOR_INS,
+    EXPAND_WHY_N,
+};
+
+static pthread_mutex_t expand_stat_lock = PTHREAD_MUTEX_INITIALIZER;
+static int expand_stat[EXPAND_WHY_N];
+
+static void expand_stat_add(int slot)
+{
+    if (getenv("GARLIC_SYNC_STAT") == NULL)
+        return;
+    pthread_mutex_lock(&expand_stat_lock);
+    expand_stat[slot]++;
+    pthread_mutex_unlock(&expand_stat_lock);
+}
+
+void expand_stat_report(void)
+{
+    static const char *why[EXPAND_WHY_N] = {
+        "range pulled back to the monitor-enter",
+        "no block for the try start",
+        "handler does not release a monitor",
+        "range is inside another handler",
+        "no monitor-enter up the idom chain",
+    };
+    if (getenv("GARLIC_SYNC_STAT") == NULL)
+        return;
+    for (int i = 0; i < EXPAND_WHY_N; ++i)
+        fprintf(stderr, "[garlic] sync expand: %-42s %d\n", why[i], expand_stat[i]);
+}
+
+static bool inside_another_handler(jd_method *m, jd_exc *exc)
+{
+    jd_bblock *start_bb = block_start_offset(m, exc->try_start);
+    if (start_bb == NULL || start_bb->in == NULL)
+        return false;
+
+    for (int i = 0; i < start_bb->in->size; ++i) {
+        jd_edge *edge = lget_obj(start_bb->in, i);
+        jd_bblock *from = edge == NULL ? NULL : edge->source_block;
+        if (from == NULL || from->type != JD_BB_NORMAL)
+            continue;
+
+        uint32_t from_offset = from->ub->nblock->start_offset;
+        for (int j = 0; j < m->closed_exceptions->size; ++j) {
+            jd_exc *other = lget_obj(m->closed_exceptions, j);
+            if (other != exc && other->handler_start == from_offset)
+                return true;
+        }
+    }
+    return false;
+}
+
 static void expand_synchronized_exception_block_range(jd_method *m)
 {
+
     /**
       *   0000: monitor-enter v2
       *   0001: if-eqz v3, 0019 // +0018
@@ -1081,84 +1223,345 @@ static void expand_synchronized_exception_block_range(jd_method *m)
         jd_exc *exc = lget_obj(m->closed_exceptions, i);
         jd_ins *start = get_ins(m, exc->try_start_idx);
         jd_bblock *start_bb = block_start_offset(m, start->offset);
-        if (start_bb == NULL)
+        if (start_bb == NULL) {
+            expand_stat_add(EXPAND_NO_BLOCK);
             continue;
-        jd_bblock *idom = start_bb->idom;
-        if (idom == NULL)
-            continue;
+        }
 
-        if (idom->type == JD_BB_NORMAL) {
-            jd_ins *in_start_ins = get_ins(m, idom->ub->nblock->start_idx);
-            if (in_start_ins->type != JD_TYPE_DALVIK)
+        if (inside_another_handler(m, exc)) {
+            expand_stat_add(EXPAND_IN_HANDLER);
+            continue;
+        }
+        int reg = exception_handler_monitor_register(m, exc);
+        if (reg < 0) {
+            expand_stat_add(EXPAND_NO_MONITOR_HANDLER);
+            continue;
+        }
+
+        jd_ins *enter = idom_chain_monitor_enter(m, exc, reg);
+        if (enter == NULL) {
+            expand_stat_add(EXPAND_NO_MONITOR_INS);
+            continue;
+        }
+
+        jd_ins *after = get_ins(m, enter->idx + 1);
+        if (after == NULL) {
+            expand_stat_add(EXPAND_NO_MONITOR_INS);
+            continue;
+        }
+
+        if (getenv("GARLIC_SYNC_TRACE") != NULL) {
+            fprintf(stderr, "[garlic] sync expand: %s%s try[%d,%d] "
+                    "handler[%d,%d] enter@%d -> %d type=%d\n",
+                    m->name, m->signature == NULL ? "" : m->signature,
+                    exc->try_start_idx, exc->try_end_idx,
+                    exc->handler_start_idx, exc->handler_end_idx,
+                    enter->idx, after->idx, exc->catch_type_index);
+        }
+
+        uint32_t old_start = exc->try_start;
+        uint32_t old_end = exc->try_end;
+        exc->try_start = after->offset;
+        exc->try_start_idx = after->idx;
+        expand_stat_add(EXPAND_OK);
+
+        for (int j = 0; j < m->closed_exceptions->size; ++j) {
+            jd_exc *sib = lget_obj(m->closed_exceptions, j);
+            if (sib == exc)
+                continue;
+            if (sib->try_start != old_start || sib->try_end != old_end)
                 continue;
 
-            if (dex_ins_is_monitor_enter(in_start_ins)) {
-                jd_ins *monitor_next = get_ins(m, in_start_ins->idx+1);
-                exc->try_start = monitor_next->offset;
-                exc->try_start_idx = monitor_next->idx;
+            if (sib->handler_start_idx < exc->handler_start_idx ||
+                sib->handler_end_idx > exc->handler_end_idx)
+                continue;
+
+            if (getenv("GARLIC_SYNC_TRACE") != NULL) {
+                int a = exc->handler_start_idx, b = exc->handler_end_idx;
+                int c = sib->handler_start_idx, d = sib->handler_end_idx;
+                const char *rel = "disjoint";
+                if (c >= a && d <= b) rel = "sib-inside-exc";
+                else if (a >= c && b <= d) rel = "exc-inside-sib";
+                else if (c <= b && a <= d) rel = "overlap";
+                else if (c > b) rel = "sib-after";
+                else rel = "sib-before";
+                fprintf(stderr, "[garlic] sync widen-along: %s%s "
+                        "try[%d,%d] exc h[%d,%d] sib h[%d,%d] %s type=%d\n",
+                        m->name, m->signature == NULL ? "" : m->signature,
+                        sib->try_start_idx, sib->try_end_idx,
+                        a, b, c, d, rel, sib->catch_type_index);
             }
+            sib->try_start = after->offset;
+            sib->try_start_idx = after->idx;
         }
     }
 }
+
+typedef void (*exc_pass_fn)(jd_method *);
+static double exc_now_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec * 1000.0 + ts.tv_nsec / 1e6;
+}
+static pthread_mutex_t exc_time_lock = PTHREAD_MUTEX_INITIALIZER;
+static double exc_time_ms[24];
+static const char *exc_time_name[24];
+static int exc_time_n;
+static void exc_time_add(const char *name, double ms)
+{
+    pthread_mutex_lock(&exc_time_lock);
+    for (int i = 0; i < exc_time_n; ++i) {
+        if (exc_time_name[i] == name) { exc_time_ms[i] += ms; pthread_mutex_unlock(&exc_time_lock); return; }
+    }
+    if (exc_time_n < 24) { exc_time_name[exc_time_n] = name; exc_time_ms[exc_time_n] = ms; exc_time_n++; }
+    pthread_mutex_unlock(&exc_time_lock);
+}
+void exc_time_report(void)
+{
+    if (getenv("GARLIC_EXC_TIME") == NULL)
+        return;
+    for (int i = 0; i < exc_time_n; ++i)
+        fprintf(stderr, "[garlic] exc pass %-52s %10.1f ms\n", exc_time_name[i], exc_time_ms[i]);
+}
+
+#define EXC_WATCH_MAX 512
+static int exc_watch_old[EXC_WATCH_MAX];
+static int exc_watch_n;
+
+static bool exc_watch_on(jd_method *m)
+{
+    const char *want = getenv("GARLIC_EXC_WATCH");
+    return want != NULL && m->name != NULL && strcmp(m->name, want) == 0;
+}
+
+static void exc_watch_before(jd_method *m)
+{
+    if (!exc_watch_on(m))
+        return;
+
+    exc_watch_n = 0;
+    for (int i = 0; i < m->closed_exceptions->size && i < EXC_WATCH_MAX; ++i) {
+        jd_exc *e = lget_obj(m->closed_exceptions, i);
+        exc_watch_old[i] = e->handler_end_idx;
+        exc_watch_n = i + 1;
+    }
+}
+
+static void exc_watch_after(jd_method *m, const char *pass)
+{
+    if (!exc_watch_on(m))
+        return;
+
+    int n = (int) m->closed_exceptions->size;
+    if (n != exc_watch_n) {
+        fprintf(stderr, "[garlic] exc watch: %s after %s: entries %d -> %d\n",
+                m->name, pass, exc_watch_n, n);
+        return;
+    }
+    for (int i = 0; i < n; ++i) {
+        jd_exc *e = lget_obj(m->closed_exceptions, i);
+        if (e->handler_end_idx == exc_watch_old[i])
+            continue;
+        fprintf(stderr, "[garlic] exc watch: %s after %s: entry %d "
+                        "hstart %d handler_end %d -> %d\n",
+                m->name, pass, i, e->handler_start_idx,
+                exc_watch_old[i], e->handler_end_idx);
+    }
+}
+
+#define EXC_PASS(name, call) do { \
+        exc_watch_before(m); \
+        if (exc_on) { double t0 = exc_now_ms(); call; exc_time_add(name, exc_now_ms() - t0); } \
+        else call; \
+        exc_watch_after(m, name); } while (0)
 
 void cleanup_full_exception_table(jd_method *m)
 {
     if (m->closed_exceptions->size == 0)
         return;
+
+    static int exc_on = -1;
+    if (exc_on < 0)
+        exc_on = getenv("GARLIC_EXC_TIME") != NULL;
     DEBUG_EXCEPTION_PRINT("\n1 ----------->\n");
     print_full_exception_table(m);
-    remove_useless_finally_exception(m);
+    EXC_PASS("remove_useless_finally_exception", remove_useless_finally_exception(m));
 
-    remove_empty_catch_body_exception(m);
+    EXC_PASS("remove_empty_catch_body_exception", remove_empty_catch_body_exception(m));
 
     DEBUG_EXCEPTION_PRINT("\n2 ----------->\n");
     print_full_exception_table(m);
-    expand_exception_with_jump(m);
+    EXC_PASS("expand_exception_with_jump", expand_exception_with_jump(m));
 
     DEBUG_EXCEPTION_PRINT("\n2.1 ----------->\n");
     print_full_exception_table(m);
-    remove_share_handler_finally(m);
-    remove_share_hanlder_catch(m);
-    expand_synchronized_exception_block_range(m);
+    EXC_PASS("remove_share_handler_finally", remove_share_handler_finally(m));
+    EXC_PASS("remove_share_hanlder_catch", remove_share_hanlder_catch(m));
+    EXC_PASS("expand_synchronized_exception_block_range", expand_synchronized_exception_block_range(m));
 
 
     DEBUG_EXCEPTION_PRINT("\n3 ----------->\n");
     print_full_exception_table(m);
-    merge_exception_split_by_branch_without_finally(m);
+    EXC_PASS("merge_exception_split_by_branch_without_finally", merge_exception_split_by_branch_without_finally(m));
 
     DEBUG_EXCEPTION_PRINT("\n4 ----------->\n");
     print_full_exception_table(m);
-    merge_exception_split_by_branch_with_finally(m);
+    EXC_PASS("merge_exception_split_by_branch_with_finally", merge_exception_split_by_branch_with_finally(m));
 
     DEBUG_EXCEPTION_PRINT("\n5 ----------->\n");
     print_full_exception_table(m);
-    narrow_finally_block_near_catch_exception(m);
+    EXC_PASS("narrow_finally_block_near_catch_exception", narrow_finally_block_near_catch_exception(m));
 
     DEBUG_EXCEPTION_PRINT("\n6 ----------->\n");
     print_full_exception_table(m);
-    fix_overlapping_try_with_handler_exception(m);
+    EXC_PASS("fix_overlapping_try_with_handler_exception", fix_overlapping_try_with_handler_exception(m));
 
     DEBUG_EXCEPTION_PRINT("\n7 ----------->\n");
     print_full_exception_table(m);
-    fix_same_try_end_offset(m);
+    EXC_PASS("fix_same_try_end_offset", fix_same_try_end_offset(m));
 
     DEBUG_EXCEPTION_PRINT("\n8 ----------->\n");
     print_full_exception_table(m);
-    make_sure_same_try_handler_consequent(m);
+    EXC_PASS("make_sure_same_try_handler_consequent", make_sure_same_try_handler_consequent(m));
 
     DEBUG_EXCEPTION_PRINT("\n9 ----------->\n");
     print_full_exception_table(m);
-    remove_duplicate_finally_for_catch_block(m);
+    EXC_PASS("remove_duplicate_finally_for_catch_block", remove_duplicate_finally_for_catch_block(m));
 
     DEBUG_EXCEPTION_PRINT("\n10 ----------->\n");
     print_full_exception_table(m);
-    remove_duplicate_finally_for_try_block(m);
+    EXC_PASS("remove_duplicate_finally_for_try_block", remove_duplicate_finally_for_try_block(m));
 
     DEBUG_EXCEPTION_PRINT("\n11 ----------->\n");
     print_full_exception_table(m);
-    fix_same_try_edge(m);
+    EXC_PASS("fix_same_try_edge", fix_same_try_edge(m));
 
-    remove_crossed_finally_handler(m);
+    EXC_PASS("remove_crossed_finally_handler", remove_crossed_finally_handler(m));
+}
+
+static jd_dex_ins* exception_ins_at(jd_method *m, int idx)
+{
+    if (m == NULL || idx < 0 || idx >= (int) m->instructions->size)
+        return NULL;
+    return (jd_dex_ins *) get_ins(m, idx);
+}
+
+static bool handler_is_continuation(jd_method *m, jd_exc *exception,
+                                    jd_exc *next)
+{
+    if (m == NULL || m->type != JD_TYPE_DALVIK)
+        return false;
+    if (next == NULL)
+        return false;
+    if (exception->handler_start != next->try_start ||
+        exception->handler_end != next->try_end)
+        return false;
+
+    jd_dex_ins *f = exception_ins_at(m, exception->handler_start_idx);
+    return f != NULL && !dex_ins_is_move_exception(f);
+}
+
+static jd_range* exception_catch_range(jd_method *m, jd_exc *exception,
+                                       jd_exc *next)
+{
+    jd_range *catch = make_obj(jd_range);
+    catch->start_offset = exception->handler_start;
+    catch->start_idx = exception->handler_start_idx;
+    catch->end_offset = exception->handler_end;
+    catch->end_idx = exception->handler_end_idx;
+
+    if (handler_is_continuation(m, exception, next))
+        catch->end_idx = catch->start_idx - 1;
+
+    return catch;
+}
+
+static bool handler_is_finally(jd_method *m, jd_exc *exception)
+{
+    if (m == NULL || m->type != JD_TYPE_DALVIK)
+        return true;
+
+    jd_dex_ins *f = exception_ins_at(m, exception->handler_start_idx);
+    jd_dex_ins *l = exception_ins_at(m, exception->handler_end_idx);
+    if (f == NULL || l == NULL)
+        return true;
+
+    if (dex_ins_is_move_exception(f) && dex_ins_is_goto_jump(l))
+        return true;
+
+    if (!dex_ins_is_move_exception(f) || !dex_ins_is_throw(l))
+        return false;
+
+    return dex_ins_parameter(f, 0) == dex_ins_parameter(l, 0);
+}
+
+static void exc_trace_entry(jd_method *m, jd_exc *exception)
+{
+    if (getenv("GARLIC_EXC_TRACE") == NULL)
+        return;
+    if (m == NULL || m->type != JD_TYPE_DALVIK)
+        return;
+    if (exception->handler_start_idx < 0)
+        return;
+
+    jd_dex_ins *f = exception_ins_at(m, exception->handler_start_idx);
+    if (f == NULL)
+        return;
+
+    int move_exc = dex_ins_is_move_exception(f);
+
+    jd_dex_ins *last_in = exception_ins_at(m, exception->try_end_idx - 1);
+    jd_dex_ins *last_at = exception_ins_at(m, exception->try_end_idx);
+
+    fprintf(stderr,
+            "[garlic] exc %s: typed=%d try %#x..%#x handler %#x..%#x "
+            "first=%s move_exception=%d last_in=%d last_at=%d catch_span=%d\n",
+            m->name, exception->catch_type_index > 0,
+            exception->try_start, exception->try_end,
+            exception->handler_start, exception->handler_end,
+            dex_opcode_name(f->code), move_exc,
+            last_in == NULL ? -1 : (int) last_in->code,
+            last_at == NULL ? -1 : (int) last_at->code,
+            (int) (exception->handler_start - exception->try_end));
+}
+
+static void exc_trace_catchall(jd_method *m, jd_exc *exception)
+{
+    if (getenv("GARLIC_EXC_TRACE") == NULL)
+        return;
+    if (m == NULL || m->type != JD_TYPE_DALVIK)
+        return;
+    if (exception->handler_start_idx < 0 || exception->handler_end_idx < 0)
+        return;
+
+    jd_dex_ins *f = exception_ins_at(m, exception->handler_start_idx);
+    jd_dex_ins *l = exception_ins_at(m, exception->handler_end_idx);
+    if (f == NULL || l == NULL)
+        return;
+
+    int stores = dex_ins_is_move_exception(f);
+    int throws = dex_ins_is_throw(l);
+    int rethrow = stores && throws &&
+                  dex_ins_parameter(f, 0) == dex_ins_parameter(l, 0);
+
+    fprintf(stderr,
+            "[garlic] catchall %s: try %#x..%#x handler %#x..%#x "
+            "first=%s last=%s stores=%d throws=%d rethrow=%d read as %s\n",
+            m->name, exception->try_start, exception->try_end,
+            exception->handler_start, exception->handler_end,
+            dex_opcode_name(f->code), dex_opcode_name(l->code),
+            stores, throws, rethrow, rethrow ? "finally" : "catch");
+
+    if (!rethrow && m->instructions->size < 2000) {
+        fprintf(stderr, "[garlic]   %s ins:", m->name);
+        for (int i = 0; i < m->instructions->size; ++i) {
+            jd_dex_ins *ins = (jd_dex_ins *) get_ins(m, i);
+            fprintf(stderr, " %d:%#x:%s", i, ins->offset,
+                    dex_opcode_name(ins->code));
+        }
+        fprintf(stderr, "\n");
+    }
 }
 
 void flatten_exceptions(jd_method *m)
@@ -1185,6 +1588,8 @@ void flatten_exceptions(jd_method *m)
             current->catches = linit_object();
         }
 
+        exc_trace_entry(m, exception);
+
         if (exception->catch_type_index > 0) {
             jd_range *try = make_obj(jd_range);
             try->start_offset = exception->try_start;
@@ -1194,14 +1599,12 @@ void flatten_exceptions(jd_method *m)
             if (current->try == NULL)
                 current->try = try;
 
-            jd_range *catch = make_obj(jd_range);
-            catch->start_offset = exception->handler_start;
-            catch->start_idx = exception->handler_start_idx;
-            catch->end_offset = exception->handler_end;
-            catch->end_idx = exception->handler_end_idx;
-            ladd_obj(current->catches, catch);
+            ladd_obj(current->catches,
+                     exception_catch_range(m, exception, next_exception));
         }
         else {
+            exc_trace_catchall(m, exception);
+
             jd_range *try = make_obj(jd_range);
             try->start_offset = exception->try_start;
             try->end_offset = exception->try_end;
@@ -1210,12 +1613,13 @@ void flatten_exceptions(jd_method *m)
             if (current->try == NULL)
                 current->try = try;
 
-            jd_range *finally = make_obj(jd_range);
-            finally->start_offset = exception->handler_start;
-            finally->end_offset = exception->handler_end;
-            finally->start_idx = exception->handler_start_idx;
-            finally->end_idx = exception->handler_end_idx;
-            current->finally = finally;
+            jd_range *handler = exception_catch_range(m, exception,
+                                                     next_exception);
+
+            if (handler_is_finally(m, exception))
+                current->finally = handler;
+            else
+                ladd_obj(current->catches, handler);
         }
 
         if (

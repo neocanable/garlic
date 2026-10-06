@@ -1,9 +1,37 @@
 #include "decompiler/method.h"
 #include "decompiler/signature.h"
+#include "decompiler/descriptor.h"
 
 static void create_method_access_flag(jd_method *m, str_list *list)
 {
     m->fn->access_flags_fn(m, list);
+}
+
+static void method_access_flags_trim(str_list *list)
+{
+    if (list->count == 0)
+        return;
+
+    string last = list->last->buf;
+    size_t len = strlen(last);
+    size_t trimmed = len;
+    while (trimmed > 0 && last[trimmed - 1] == ' ')
+        trimmed--;
+
+    if (trimmed == len)
+        return;
+
+    string s = x_alloc(trimmed + 1);
+    memcpy(s, last, trimmed);
+    s[trimmed] = '\0';
+    list->last->buf = s;
+    list->len -= (len - trimmed);
+}
+
+static void method_defination_separator(str_list *list)
+{
+    if (list->count > 0)
+        str_concat(list, (" "));
 }
 
 static jd_val* method_parameter_val(jd_method *m, int index)
@@ -23,6 +51,8 @@ static void create_method_defination_with_signature(jd_method *m,
     if (STR_EQL(m->name, g_str_clinit))
         return;
 
+    method_defination_separator(list);
+
     list_object *ftps = sig->formal_type_parameters;
     list_object *exception_types = sig->exception_types;
     list_object *parameter_types = sig->parameter_types;
@@ -30,7 +60,7 @@ static void create_method_defination_with_signature(jd_method *m,
         string ftp = formal_type_parameters_to_s(ftps);
         strs_concat(list, 2, ftp, " ");
     }
-    if (sig->return_type != NULL) {
+    if (!method_is_init(m) && sig->return_type != NULL) {
         string ret = field_type_sig_to_s(sig->return_type);
         if (ret != NULL)
             strs_concat(list, 2, ret, " ");
@@ -44,21 +74,20 @@ static void create_method_defination_with_signature(jd_method *m,
         str_concat(list, m->name);
     str_concat(list, ("("));
 
+    int skip = method_synthetic_parameter_count(m);
+
     if (parameter_types->size != m->desc->list->size) {
         jd_descriptor *desc = m->desc;
-        int index;
-        for (int i = 0; i < desc->list->size; ++i) {
+        for (int i = skip; i < desc->list->size; ++i) {
             string parameter = lget_string(desc->list, i);
-            parameter = class_simple_name(parameter);
+            parameter = class_simple_name_without_primitive(parameter);
             string param_name = NULL;
             if (m->enter != NULL) {
-//                index = method_is_member(m) ? i+1 : i;
-//                jd_val *val = m->enter->local_vars[index];
                 jd_val *val = method_parameter_val(m, i);
                 param_name = val->name;
             }
             else
-                param_name = str_create("p%d", i);
+                param_name = str_create("p%d", i - skip);
 
             string annotation = method_parameter_annotation(m, i);
             if (annotation != NULL)
@@ -74,12 +103,12 @@ static void create_method_defination_with_signature(jd_method *m,
             string parameter_type = field_type_sig_to_s(fts);
             string param_name = NULL;
             if (m->enter != NULL) {
-                jd_val *val = method_parameter_val(m, i);
+                jd_val *val = method_parameter_val(m, i + skip);
                 param_name = val->name;
             } else
                 param_name = str_create("p%d", i);
 
-            string annotation = method_parameter_annotation(m, i);
+            string annotation = method_parameter_annotation(m, i + skip);
             if (annotation != NULL) {
                 strs_concat(list, 2, annotation, (" "));
             }
@@ -109,9 +138,12 @@ static void create_method_defination_without_signature(jd_method *m,
     if (method_is_clinit(m)) {
         return;
     }
+
+    method_defination_separator(list);
+
     string name = method_is_init(m) ? m->jfile->sname : m->name;
     jd_descriptor *desc = m->desc;
-    string method_return_type = class_simple_name(desc->str_return);
+    string method_return_type = class_simple_name_without_primitive(desc->str_return);
 
     if (!method_is_init(m) && !method_is_clinit(m)) {
         str_concat(list, method_return_type);
@@ -120,16 +152,18 @@ static void create_method_defination_without_signature(jd_method *m,
 
     strs_concat(list, 2, name, "(");
 
-    for (int i = 0; i < desc->list->size; ++i) {
+    int skip = method_synthetic_parameter_count(m);
+
+    for (int i = skip; i < desc->list->size; ++i) {
         string parameter = lget_string(desc->list, i);
-        parameter = class_simple_name(parameter);
+        parameter = class_simple_name_without_primitive(parameter);
         string param_name = NULL;
         if (m->enter != NULL) {
             jd_val *val = method_parameter_val(m, i);
             param_name = val->name;
         }
         else
-            param_name = str_create("p%d", i);
+            param_name = str_create("p%d", i - skip);
 
         string annotation = method_parameter_annotation(m, i);
         if (annotation != NULL) {
@@ -146,6 +180,7 @@ string create_method_defination(jd_method *m)
 {
     str_list *list = str_list_init();
     create_method_access_flag(m, list);
+    method_access_flags_trim(list);
     method_sig *sig = NULL;
 
     if (m->signature != NULL) {
@@ -177,12 +212,15 @@ string create_method_defination(jd_method *m)
     return defination;
 }
 
-string create_lambda_defination(jd_method *m)
+string create_lambda_defination(jd_method *m, int captures)
 {
     str_list *list = str_list_init();
     str_concat(list, "(");
     jd_descriptor *desc = m->desc;
-    for (int i = 0; i < desc->list->size; ++i) {
+    if (captures < 0 || captures > desc->list->size)
+        captures = 0;
+
+    for (int i = captures; i < desc->list->size; ++i) {
         string param_name = NULL;
         if (m->enter != NULL) {
             jd_val *val = m->parameters[i];

@@ -1,6 +1,30 @@
 #include "decompiler/transformer/transformer.h"
 #include "jvm/jvm_ins_helper.h"
 
+string lambda_receiver_to_s(jd_exp *exp)
+{
+    if (exp->type == JD_EXPRESSION_LAMBDA) {
+        jd_exp_lambda *l = exp->data;
+        if (l != NULL && l->interface_name != NULL)
+            return str_create("((%s) %s)", l->interface_name, exp_to_s(exp));
+    }
+    return exp_to_s(exp);
+}
+
+void lambda_receiver_to_stream(FILE *stream, jd_node *node, jd_exp *exp)
+{
+    if (exp->type == JD_EXPRESSION_LAMBDA) {
+        jd_exp_lambda *l = exp->data;
+        if (l != NULL && l->interface_name != NULL) {
+            fprintf(stream, "((%s) ", l->interface_name);
+            expression_to_stream(stream, node, exp);
+            fprintf(stream, ")");
+            return;
+        }
+    }
+    expression_to_stream(stream, node, exp);
+}
+
 string exp_to_s(jd_exp *expression)
 {
     switch(expression->type)

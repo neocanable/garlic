@@ -23,6 +23,24 @@ static inline bool const_exp_is_boolean(jd_exp_const *e)
     return stack_val_is_boolean(e->val);
 }
 
+static string char_literal(int value)
+{
+    switch (value) {
+        case '\0':  return str_dup("'\\0'");
+        case '\t':  return str_dup("'\\t'");
+        case '\n':  return str_dup("'\\n'");
+        case '\r':  return str_dup("'\\r'");
+        case '\'':  return str_dup("'\\''");
+        case '\\':  return str_dup("'\\\\'");
+        default:    break;
+    }
+
+    if (value >= 0x20 && value < 0x7F)
+        return str_create("'%c'", (char) value);
+
+    return str_create("'\\u%04x'", value & 0xFFFF);
+}
+
 static string get_const_value(jd_exp *expression)
 {
     jd_exp_const *const_exp = expression->data;
@@ -37,6 +55,8 @@ static string get_const_value(jd_exp *expression)
             else if (const_exp_is_boolean(const_exp) &&
                 primitive->int_val == 1)
                 return "true";
+            else if (stack_val_is_char(const_exp->val))
+                return char_literal(primitive->int_val);
             else
                 return str_create("%d", primitive->int_val);
         }
@@ -55,7 +75,7 @@ static string get_const_value(jd_exp *expression)
             }
             else if (const_exp_is_class(const_exp))
                 return str_create("%s.class",
-                                  class_simple_name(
+                                  class_simple_name_without_primitive(
                                           const_exp->val->data->val));
             else
                 return str_create("%s", const_exp->val->data->val);

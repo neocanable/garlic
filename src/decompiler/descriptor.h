@@ -5,6 +5,10 @@
 
 string descriptor_to_s(string str);
 
+string descriptor_type_name(string descriptor);
+
+jd_var_types descriptor_name_data_type(string name);
+
 void expand_descriptor(jd_descriptor *descriptor);
 
 
@@ -12,9 +16,29 @@ static inline bool descriptor_is_primitive(string descriptor) {
     return descriptor[0] != 'L';
 }
 
+static inline int descriptor_type_slot_width(string name) {
+    return (name != NULL &&
+            (STR_EQL(name, g_str_long) || STR_EQL(name, g_str_double))) ? 2 : 1;
+}
+
 jd_var_types descriptor_data_type_of_char(char c);
 
 jd_var_types descriptor_data_type(string descriptor);
+
+static inline string array_component_name(string arr_cname)
+{
+    if (arr_cname == NULL)
+        return NULL;
+
+    size_t len = strlen(arr_cname);
+    if (len < 2 || arr_cname[len - 1] != ']' || arr_cname[len - 2] != '[')
+        return arr_cname;
+
+    string component = x_alloc(len - 1);
+    memcpy(component, arr_cname, len - 2);
+    component[len - 2] = '\0';
+    return component;
+}
 
 static inline string descriptor_item_class_name(string arr_cname)
 {
@@ -26,34 +50,34 @@ static inline string descriptor_item_class_name(string arr_cname)
 
     index = ptr - arr_cname;
 
-    if (memcmp(arr_cname, g_str_int, index) == 0) {
+    if (strncmp(arr_cname, g_str_int, index) == 0) {
         return (string)g_str_int;
     }
-    else if (memcmp(arr_cname, g_str_long, index) == 0) {
+    else if (strncmp(arr_cname, g_str_long, index) == 0) {
         return (string)g_str_long;
     }
-    else if (memcmp(arr_cname, g_str_float, index) == 0) {
+    else if (strncmp(arr_cname, g_str_float, index) == 0) {
         return (string)g_str_float;
     }
-    else if (memcmp(arr_cname, g_str_double, index) == 0) {
+    else if (strncmp(arr_cname, g_str_double, index) == 0) {
         return (string)g_str_double;
     }
-    else if (memcmp(arr_cname, g_str_char, index) == 0) {
+    else if (strncmp(arr_cname, g_str_char, index) == 0) {
         return (string)g_str_char;
     }
-    else if (memcmp(arr_cname, g_str_byte, index) == 0) {
+    else if (strncmp(arr_cname, g_str_byte, index) == 0) {
         return (string)g_str_byte;
     }
-    else if (memcmp(arr_cname, g_str_short, index) == 0) {
+    else if (strncmp(arr_cname, g_str_short, index) == 0) {
         return (string)g_str_short;
     }
-    else if (memcmp(arr_cname, g_str_boolean, index) == 0) {
+    else if (strncmp(arr_cname, g_str_boolean, index) == 0) {
         return (string)g_str_boolean;
     }
-    else if (memcmp(arr_cname, g_str_String, index) == 0) {
+    else if (strncmp(arr_cname, g_str_String, index) == 0) {
         return (string)g_str_String;
     }
-    else if (memcmp(arr_cname, g_str_Object, index) == 0) {
+    else if (strncmp(arr_cname, g_str_Object, index) == 0) {
         return (string)g_str_Object;
     }
     else {

@@ -59,78 +59,64 @@ static inline void stack_clone_local_variables(jd_stack *dst, jd_stack *src)
     memcpy(dst->local_vars, src->local_vars, size);
 }
 
+static inline bool stack_val_type_is(jd_val *val, string name)
+{
+    return val != NULL && val->data != NULL &&
+           val->data->cname != NULL &&
+           STR_EQL(val->data->cname, name);
+}
+
 static inline bool stack_val_is_int(jd_val *val)
 {
-    if (val == NULL || val->data == NULL)
-        return false;
-    return STR_EQL(val->data->cname, g_str_int);
+    return stack_val_type_is(val, g_str_int);
 }
 
 static inline bool stack_val_is_long(jd_val *val)
 {
-    if (val == NULL || val->data == NULL)
-        return false;
-    return STR_EQL(val->data->cname, g_str_long);
+    return stack_val_type_is(val, g_str_long);
 }
 
 static inline bool stack_val_is_float(jd_val *val)
 {
-    if (val == NULL || val->data == NULL)
-        return false;
-    return STR_EQL(val->data->cname, g_str_float);
+    return stack_val_type_is(val, g_str_float);
 }
 
 static inline bool stack_val_is_double(jd_val *val)
 {
-    if (val == NULL || val->data == NULL)
-        return false;
-    return STR_EQL(val->data->cname, g_str_double);
+    return stack_val_type_is(val, g_str_double);
 }
 
 static inline bool stack_val_is_byte(jd_val *val)
 {
-    if (val == NULL || val->data == NULL)
-        return false;
-    return STR_EQL(val->data->cname, g_str_byte);
+    return stack_val_type_is(val, g_str_byte);
 }
 
 static inline bool stack_val_is_short(jd_val *val)
 {
-    if (val == NULL || val->data == NULL)
-        return false;
-    return STR_EQL(val->data->cname, g_str_short);
+    return stack_val_type_is(val, g_str_short);
 }
 
 static inline bool stack_val_is_char(jd_val *val)
 {
-    if (val == NULL || val->data == NULL)
-        return false;
-    return STR_EQL(val->data->cname, g_str_char);
+    return stack_val_type_is(val, g_str_char);
 }
 
 static inline bool stack_val_is_boolean(jd_val *val)
 {
-    if (val == NULL || val->data == NULL)
-        return false;
-    return STR_EQL(val->data->cname, g_str_boolean);
+    return stack_val_type_is(val, g_str_boolean);
 }
 
 static inline bool stack_val_is_string(jd_val *val)
 {
-    if (val == NULL || val->data == NULL)
-        return false;
-    return STR_EQL(val->data->cname, g_str_String);
+    return stack_val_type_is(val, g_str_String);
 }
 
 static inline bool stack_val_is_wide(jd_val *val)
 {
-    if (val == NULL || val->data == NULL)
+    if (val == NULL || val->type != JD_VAR_LONG_T && val->type != JD_VAR_DOUBLE_T)
         return false;
 
-    if (val->type == JD_VAR_LONG_T || val->type == JD_VAR_DOUBLE_T) {
-        return STR_EQL(val->data->cname, g_str_long) ||
-               STR_EQL(val->data->cname, g_str_double);
-    }
-    return false;
+    return stack_val_type_is(val, g_str_long) ||
+           stack_val_type_is(val, g_str_double);
 }
 #endif //GARLIC_STACK_H

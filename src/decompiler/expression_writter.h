@@ -74,6 +74,7 @@ static inline string node_name(jd_node *node) {
         case JD_NODE_DO_WHILE:     return "do_while";
         case JD_NODE_IF_TRUE:      return "if_true_block";
         case JD_NODE_IF_FALSE:     return "if_false_block";
+        case JD_NODE_IF_RETURN:    return "if_return";
         case JD_NODE_EXCEPTION:    return "exception";
         case JD_NODE_EXPRESSION:   return "expression";
         case JD_NODE_BASIC_BLOCK:  return "basic_block";

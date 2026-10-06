@@ -47,6 +47,12 @@ bool is_inner_class(string class_name)
     return result;
 }
 
+bool is_synthetic_lambda_class(string class_name)
+{
+    return strstr(class_name, "$$ExternalSyntheticLambda") != NULL ||
+           strstr(class_name, "$$Lambda$") != NULL;
+}
+
 bool is_anonymous_class(string class_name)
 {
     bool result = false;
@@ -276,6 +282,9 @@ string class_package_name(jsource_file *jf)
 
 void class_import(jsource_file *jf, string path)
 {
+    if (is_synthetic_lambda_class(path))
+        return;
+
     if (str_start_with(path, "java/lang") ||
         str_start_with(path, jf->fname) ||
         (jf->pname != NULL && str_start_with(path, jf->pname)) ||
@@ -326,7 +335,7 @@ static void class_fields_defination(jsource_file *jf)
                 str_concat(list, fts_str);
         }
         else {
-            string type = class_simple_name(field->type);
+            string type = class_simple_name_without_primitive(field->type);
             str_concat(list, type);
         }
         str_concat(list, " ");
@@ -350,19 +359,16 @@ static void class_methods_defination(jsource_file *jf)
 static void class_defination_with_signature(jsource_file *jf)
 {
     str_list *list = str_list_init();
-    jclass_file *jc = jf->jclass;
 
     create_class_access_flag(jf, list);
 
     list_object *ftps = NULL;
-    class_type_sig *bs = NULL;
 
     string signature = jf->signature;
     class_signature *cs = NULL;
     if (signature != NULL) {
         cs = parse_class_signature(signature);
         ftps = cs->formal_type_parameters;
-        bs = cs->base_class;
     }
 
     str_concat(list, jf->sname);
@@ -372,24 +378,20 @@ static void class_defination_with_signature(jsource_file *jf)
         str_concat(list, buf);
     }
 
-    // TODO:
-    if (cs != NULL) {
-        if (class_has_flag(jc, CLASS_ACC_ENUM)) {
-            if (cs->base_class->path->size > 1) {
-                str_concat(list, " extends ");
-                for (int i = 0; i < cs->base_class->path->size; ++i) {
-                    simple_class_type_sig *ss = lget_obj(bs->path, i);
-                    string sss = simple_class_signature_to_s(ss);
-                    str_concat(list, sss);
-                    if (i != cs->base_class->path->size - 1)
-                        str_concat(list, ", ");
-                }
-            }
+    if (cs != NULL && !is_list_empty(cs->base_class->path)) {
+        simple_class_type_sig *base_sig =
+                lget_obj(cs->base_class->path, cs->base_class->path->size - 1);
+        string base_name = class_path_to_short(base_sig->name);
+        if (base_name != NULL &&
+                !STR_EQL(base_name, g_str_Object) &&
+                !STR_EQL(base_name, "Enum")) {
+            str_concat(list, " extends ");
+            str_concat(list, simple_class_signature_to_s(base_sig));
         }
     }
 
     if (cs != NULL && !is_list_empty(cs->interfaces)) {
-        str_concat(list, " implements ");
+        str_concat(list, class_is_interface(jf) ? " extends " : " implements ");
         str_concat(list, interfaces_to_s(cs));
     }
 
@@ -404,13 +406,14 @@ static void class_defination_without_signature(jsource_file *jf)
 
     str_concat(list, jf->sname);
 
-    if (!STR_EQL(jf->super_cname, g_str_Object)) {
+    if (!STR_EQL(jf->super_cname, g_str_Object) &&
+            !STR_EQL(jf->super_cname, "Enum")) {
         str_concat(list, " extends ");
         str_concat(list, jf->super_cname);
     }
 
     if (!is_list_empty(jf->interfaces)) {
-        str_concat(list, " implements ");
+        str_concat(list, class_is_interface(jf) ? " extends " : " implements ");
         for (int i = 0; i < jf->interfaces->size; ++i) {
             string interface_name = lget_obj(jf->interfaces, i);
             str_concat(list, interface_name);
@@ -433,7 +436,7 @@ static void class_defination(jsource_file *jf)
 static void class_build_unsupport_method(jd_method *m)
 {
     m->nodes = linit_object();
-    jd_node *root = make_obj(jd_node);
+    jd_node *root = make_obj_zero(jd_node);
     root->node_id = 0;
     root->type = JD_NODE_METHOD_ROOT;
     root->start_idx = 0;
@@ -457,19 +460,19 @@ jd_node* class_body_block(jsource_file *jf)
 void class_create_blocks(jsource_file *jf)
 {
     jf->blocks = linit_object();
-    jd_node *root = make_obj(jd_node);
+    jd_node *root = make_obj_zero(jd_node);
     root->type = JD_NODE_CLASS_ROOT;
     root->data = jf;
     root->children = linit_object();
     ladd_obj(jf->blocks, root);
 
-    jd_node *package_import_block = make_obj(jd_node);
+    jd_node *package_import_block = make_obj_zero(jd_node);
     package_import_block->type = JD_NODE_PACKAGE_IMPORT;
     package_import_block->data = jf;
     package_import_block->parent = root;
     ladd_obj(root->children, package_import_block);
 
-    jd_node *class_block = make_obj(jd_node);
+    jd_node *class_block = make_obj_zero(jd_node);
     class_block->type = JD_NODE_CLASS;
     class_block->data = jf;
     class_block->parent = root;
@@ -477,7 +480,7 @@ void class_create_blocks(jsource_file *jf)
     ladd_obj(root->children, class_block);
 
 
-    jd_node *field_block = make_obj(jd_node);
+    jd_node *field_block = make_obj_zero(jd_node);
     field_block->type = JD_NODE_FIELD;
     field_block->data = jf;
     field_block->parent = class_block;
@@ -486,7 +489,7 @@ void class_create_blocks(jsource_file *jf)
     for (int i = 0; i < jf->methods->size; ++i) {
         jd_method *m = lget_obj(jf->methods, i);
 
-        jd_node *block = make_obj(jd_node);
+        jd_node *block = make_obj_zero(jd_node);
         block->type = JD_NODE_METHOD;
         block->data = m;
         block->parent = class_block;

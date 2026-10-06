@@ -1,12 +1,80 @@
+#include <pthread.h>
+
 #include "jvm/jvm_ins.h"
 #include "decompiler/control_flow.h"
 #include "decompiler/expression.h"
+#include "decompiler/expression_if.h"
+#include "dalvik/dex_ins.h"
 #include "decompiler/expression_node.h"
 #include "decompiler/dominator_tree.h"
+#include "decompiler/exception.h"
 #include "decompiler/expression_assert.h"
 #include "decompiler/expression_logical.h"
 #include "common/str_tools.h"
 #include "expression_writter.h"
+
+static int empty_if_promoted = 0;
+static int nested_if_merged = 0;
+static pthread_mutex_t if_branch_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static void empty_if_promoted_one(void)
+{
+    pthread_mutex_lock(&if_branch_lock);
+    empty_if_promoted++;
+    pthread_mutex_unlock(&if_branch_lock);
+}
+
+static void nested_if_merged_one(void)
+{
+    pthread_mutex_lock(&if_branch_lock);
+    nested_if_merged++;
+    pthread_mutex_unlock(&if_branch_lock);
+}
+
+static int branch_target_shared = 0;
+
+static void branch_target_shared_one(void)
+{
+    pthread_mutex_lock(&if_branch_lock);
+    branch_target_shared++;
+    pthread_mutex_unlock(&if_branch_lock);
+}
+
+void empty_if_branch_stat(int *promoted, int *merged, int *shared_target)
+{
+    pthread_mutex_lock(&if_branch_lock);
+    *promoted = empty_if_promoted;
+    *merged = nested_if_merged;
+    *shared_target = branch_target_shared;
+    pthread_mutex_unlock(&if_branch_lock);
+}
+
+static char dropped_side_class(jd_method *m, jd_bblock *block)
+{
+    if (block == NULL)
+        return '.';
+    if (m->type != JD_TYPE_DALVIK)
+        return '-';
+    if (block->ub == NULL || block->ub->nblock == NULL)
+        return '-';
+
+    jd_nblock *nb = block->ub->nblock;
+    jd_dex_ins *end = (jd_dex_ins *) nb->end_ins;
+    if (end == NULL)
+        return '-';
+
+    if (dex_ins_is_return_op(end) || dex_ins_is_throw(end))
+        return 'T';
+    if (dex_ins_is_switch(end))
+        return 'S';
+    if (dex_ins_is_conditional_jump(end))
+        return 'D';
+    if (block->frontier != NULL && lcontains_obj(block->frontier, block))
+        return 'H';
+    if (closest_exception_of(m, nb->start_offset) != NULL)
+        return 'X';
+    return '-';
+}
 
 static inline bool basic_block_is_single_enter(jd_bblock *block)
 {
@@ -288,6 +356,272 @@ void remove_empty_if_else_of_method(jd_method *m)
     }
 }
 
+static bool node_draws_nothing(jd_method *m, jd_node *node)
+{
+    if (node_is_expression(node)) {
+        jd_exp *exp = node->data;
+        return exp == NULL || exp_is_nopped(exp) || exp_is_empty(exp);
+    }
+
+    if (node->type == JD_NODE_BASIC_BLOCK) {
+        for (int i = node->start_idx; i <= node->end_idx; ++i) {
+            jd_exp *exp = get_exp(m, i);
+            if (exp == NULL || exp_is_nopped(exp) || exp_is_empty(exp))
+                continue;
+            return false;
+        }
+        return true;
+    }
+
+    return false;
+}
+
+static bool if_node_has_no_content(jd_method *m, jd_node *if_node)
+{
+    for (int i = 0; i < if_node->children->size; ++i) {
+        if (!node_draws_nothing(m, lget_obj(if_node->children, i)))
+            return false;
+    }
+    return true;
+}
+
+static bool negate_if_node_condition(jd_node *if_node)
+{
+    jd_exp *header = if_node->param_exp;
+    if (header == NULL || !exp_is_if(header))
+        return false;
+
+    jd_exp_if *if_exp = header->data;
+    if (if_exp->expression == NULL)
+        return false;
+
+    make_logic_not(if_exp->expression);
+    return true;
+}
+
+static jd_node* else_branch_of(jd_node *if_node)
+{
+    jd_node *parent = if_node->parent;
+    if (parent == NULL || parent->children == NULL)
+        return NULL;
+
+    int index = lfind_object(parent->children, if_node);
+    if (index < 0 || index + 1 >= (int) parent->children->size)
+        return NULL;
+
+    jd_node *next = lget_obj(parent->children, index + 1);
+    if (next->type == JD_NODE_ELSE || next->type == JD_NODE_ELSE_IF)
+        return next;
+    return NULL;
+}
+
+static bool promote_else_into_if(jd_method *m, jd_node *if_node)
+{
+    if (!node_is_if(if_node) && !node_is_else_if(if_node))
+        return false;
+    if (!if_node_has_no_content(m, if_node))
+        return false;
+
+    jd_node *else_node = else_branch_of(if_node);
+    if (else_node == NULL)
+        return false;
+
+    jd_node *parent = if_node->parent;
+    int index = lfind_object(parent->children, else_node);
+    if (index < 0)
+        return false;
+
+    if (!negate_if_node_condition(if_node))
+        return false;
+
+    ldel_obj(parent->children, else_node);
+
+    if (else_node->type == JD_NODE_ELSE_IF) {
+        else_node->type = JD_NODE_IF;
+        ladd_obj(if_node->children, else_node);
+        else_node->parent = if_node;
+
+        while (index >= 0 && index < (int) parent->children->size) {
+            jd_node *next = lget_obj(parent->children, index);
+            if (next->type != JD_NODE_ELSE_IF && next->type != JD_NODE_ELSE)
+                break;
+            ldel_obj(parent->children, next);
+            ladd_obj(if_node->children, next);
+            next->parent = if_node;
+            if (next->type == JD_NODE_ELSE)
+                break;
+        }
+    }
+    else {
+        for (int i = 0; i < else_node->children->size; ++i) {
+            jd_node *child = lget_obj(else_node->children, i);
+            ladd_obj(if_node->children, child);
+            child->parent = if_node;
+        }
+        ldel_obj(m->nodes, else_node);
+    }
+
+    empty_if_promoted_one();
+    return true;
+}
+
+static bool node_children_draw_nothing(jd_method *m, jd_node *node)
+{
+    for (int i = 0; i < node->children->size; ++i) {
+        if (!node_draws_nothing(m, lget_obj(node->children, i)))
+            return false;
+    }
+    return true;
+}
+
+static bool drop_empty_else(jd_method *m, jd_node *if_node)
+{
+    jd_node *else_node = else_branch_of(if_node);
+    if (else_node == NULL || else_node->type != JD_NODE_ELSE)
+        return false;
+    if (!node_children_draw_nothing(m, else_node))
+        return false;
+
+    ldel_obj(if_node->parent->children, else_node);
+    ldel_obj(m->nodes, else_node);
+    return true;
+}
+
+static bool merge_nested_if(jd_method *m, jd_node *if_node)
+{
+    if (!node_is_if(if_node) && !node_is_else_if(if_node))
+        return false;
+    if (if_node->param_exp == NULL || !exp_is_if(if_node->param_exp))
+        return false;
+    if (else_branch_of(if_node) != NULL)
+        return false;
+
+    jd_node *inner = NULL;
+    for (int i = 0; i < if_node->children->size; ++i) {
+        jd_node *child = lget_obj(if_node->children, i);
+        if (node_draws_nothing(m, child))
+            continue;
+        if (inner != NULL)
+            return false;
+        inner = child;
+    }
+
+    if (inner == NULL || inner->type != JD_NODE_IF)
+        return false;
+    if (inner->param_exp == NULL || !exp_is_if(inner->param_exp))
+        return false;
+
+    jd_exp_if *outer_if = if_node->param_exp->data;
+    jd_exp_if *inner_if = inner->param_exp->data;
+    if (outer_if->expression == NULL || inner_if->expression == NULL)
+        return false;
+
+    jd_exp_operator *op = make_obj(jd_exp_operator);
+    op->list = make_exp_list(2);
+    op->operator = JD_OP_LOGICAL_AND;
+
+    jd_exp *first = &op->list->args[0];
+    memcpy(first, outer_if->expression, sizeof(jd_exp));
+    first->state_flag &= ~EXP_STATE_NOPPED;
+
+    jd_exp *second = &op->list->args[1];
+    memcpy(second, inner_if->expression, sizeof(jd_exp));
+    second->state_flag &= ~EXP_STATE_NOPPED;
+
+    inner_if->expression->type = JD_EXPRESSION_OPERATOR;
+    inner_if->expression->data = op;
+    if_node->param_exp = inner->param_exp;
+
+    ldel_obj(if_node->children, inner);
+    for (int i = 0; i < inner->children->size; ++i) {
+        jd_node *child = lget_obj(inner->children, i);
+        ladd_obj(if_node->children, child);
+        child->parent = if_node;
+    }
+    ldel_obj(m->nodes, inner);
+
+    nested_if_merged_one();
+    return true;
+}
+
+static int empty_if_left[8];
+static const char *empty_if_left_name[8];
+
+static void count_empty_ifs(jd_method *m)
+{
+    for (int i = 0; i < m->nodes->size; ++i) {
+        jd_node *node = lget_obj(m->nodes, i);
+        if (!node_is_if(node) && !node_is_else_if(node))
+            continue;
+        if (!if_node_has_no_content(m, node))
+            continue;
+        if (else_branch_of(node) != NULL)
+            continue;
+
+        jd_if_branch *branch = NULL;
+        for (int j = 0; j < m->branches->size; ++j) {
+            jd_if_branch *b = lget_obj(m->branches, j);
+            if (b->node == node) {
+                branch = b;
+                break;
+            }
+        }
+
+        const char *key = "?no-branch";
+        if (branch != NULL) {
+            if (branch->dropped_true_block == NULL &&
+                branch->dropped_false_block == NULL)
+                key = "?nothing-dropped";
+            else if (dropped_side_class(m, branch->dropped_false_block) == 'T')
+                key = "T fall-through is a return";
+            else if (dropped_side_class(m, branch->dropped_true_block) == 'T')
+                key = "T target is a return";
+            else if (dropped_side_class(m, branch->dropped_false_block) == 'X' ||
+                     dropped_side_class(m, branch->dropped_true_block) == 'X')
+                key = "X in an exception range";
+            else
+                key = "other";
+        }
+        for (int j = 0; j < 8; ++j) {
+            if (empty_if_left_name[j] == NULL)
+                empty_if_left_name[j] = key;
+            if (empty_if_left_name[j] == key || strcmp(empty_if_left_name[j], key) == 0) {
+                empty_if_left[j]++;
+                break;
+            }
+        }
+    }
+}
+
+void empty_if_left_report(void)
+{
+    if (getenv("GARLIC_EMPTY_IF_STAT") == NULL)
+        return;
+    for (int i = 0; i < 8 && empty_if_left_name[i] != NULL; ++i)
+        fprintf(stderr, "[garlic] empty if left: %-28s %d\n",
+                empty_if_left_name[i], empty_if_left[i]);
+}
+
+void flatten_empty_if_branches(jd_method *m)
+{
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (int i = 0; i < m->nodes->size && !changed; ++i) {
+            jd_node *node = lget_obj(m->nodes, i);
+            if (!node_is_if(node) && !node_is_else_if(node))
+                continue;
+            changed = drop_empty_else(m, node);
+            if (!changed)
+                changed = promote_else_into_if(m, node);
+            if (!changed)
+                changed = merge_nested_if(m, node);
+        }
+    }
+
+    count_empty_ifs(m);
+}
+
 void identify_else_if_of_method(jd_method *m)
 {
     for (int i = 0; i < m->nodes->size; ++i) {
@@ -361,7 +695,7 @@ void identify_else_of_method(jd_method *m)
 
 static jd_node* basic_blocks_to_node(list_object *blocks)
 {
-    jd_node *node = make_obj(jd_node);
+    jd_node *node = make_obj_zero(jd_node);
     int32_t min_start_idx   = -1;
     int32_t max_end_idx     = -1;
     for (int i = 0; i < blocks->size; ++i) {
@@ -422,7 +756,7 @@ static jd_node* if_branch_to_node(jd_method *m,
                                   jd_if_branch *branch)
 {
 
-    jd_node *if_node = make_obj(jd_node);
+    jd_node *if_node = make_obj_zero(jd_node);
     if_node->type = JD_NODE_IF;
     if_node->children = linit_object();
     if_node->start_idx = branch->if_start_idx;
@@ -497,9 +831,70 @@ static jd_node* if_branch_to_node(jd_method *m,
     return if_node;
 }
 
+static bool block_falls_into(jd_bblock *pred, jd_bblock *target)
+{
+    if (pred == NULL || pred->ub == NULL || pred->ub->nblock == NULL)
+        return false;
+    if (target == NULL || target->ub == NULL || target->ub->nblock == NULL)
+        return false;
+
+    jd_ins *end = pred->ub->nblock->end_ins;
+    if (end == NULL || end->next == NULL)
+        return false;
+    return end->next == target->ub->nblock->start_ins;
+}
+
+static bool block_has_falling_predecessor(jd_bblock *target)
+{
+    for (int i = 0; i < target->in->size; ++i) {
+        jd_edge *edge = lget_obj(target->in, i);
+        jd_bblock *pred = edge->source_block;
+        if (!basic_block_is_normal_live(pred) || pred == target)
+            continue;
+        if (block_falls_into(pred, target))
+            return true;
+    }
+    return false;
+}
+
+void attach_dropped_terminals(jd_method *m)
+{
+    if (m->branches == NULL)
+        return;
+
+    for (int i = 0; i < m->branches->size; ++i) {
+        jd_if_branch *branch = lget_obj(m->branches, i);
+        jd_bblock *dropped = branch->dropped_true_block;
+        if (dropped == NULL || branch->node == NULL)
+            continue;
+        if (branch->node->type == JD_NODE_DELETED ||
+            branch->node->children == NULL)
+            continue;
+        if (dropped_side_class(m, dropped) != 'T')
+            continue;
+        if (dropped->ub == NULL || dropped->ub->nblock == NULL)
+            continue;
+        if (block_has_falling_predecessor(dropped))
+            continue;
+
+        jd_nblock *nb = dropped->ub->nblock;
+        jd_node *ret_node = make_obj_zero(jd_node);
+        ret_node->type = JD_NODE_IF_RETURN;
+        ret_node->children = linit_object();
+        ret_node->data = dropped;
+        ret_node->method = m;
+        ret_node->node_id = m->nodes->size;
+        ret_node->start_idx = nb->start_idx;
+        ret_node->end_idx = nb->end_idx;
+        ladd_obj(m->nodes, ret_node);
+        ladd_obj(branch->node->children, ret_node);
+        ret_node->parent = branch->node;
+    }
+}
+
 static jd_node* switch_to_node(jd_method *m, jd_node *parent, jd_switch *sw)
 {
-    jd_node *switch_node = make_obj(jd_node);
+    jd_node *switch_node = make_obj_zero(jd_node);
     switch_node->type = JD_NODE_SWITCH;
     switch_node->children = linit_object();
     switch_node->start_idx = sw->start_idx;
@@ -537,7 +932,7 @@ static jd_node* switch_to_node(jd_method *m, jd_node *parent, jd_switch *sw)
         if (c->blocks == NULL)
             continue;
 
-        jd_node *case_node = make_obj(jd_node);
+        jd_node *case_node = make_obj_zero(jd_node);
         case_node->type = JD_NODE_CASE;
         case_node->children = linit_object();
         case_node->start_idx = c->start_idx;
@@ -735,14 +1130,14 @@ static bool identify_if_branches(jd_method *m, jd_node *node, jd_bblock *block)
         }
     }
 
+    bool true_is_ours = true_block != NULL &&
+                        !node_is_continue_or_break(m, exp, true_node) &&
+                        !if_exp_is_copy_if_true_block(exp);
+
     if (true_block != NULL &&
         !node_is_continue_or_break(m, exp, true_node))
         compute_dominates_block(m, true_block);
-    if (true_block != NULL &&
-        basic_block_is_single_enter(true_block) &&
-        !node_is_continue_or_break(m, exp, true_node) &&
-        !if_exp_is_copy_if_true_block(exp)) {
-
+    if (true_is_ours && basic_block_is_single_enter(true_block)) {
         for (int j = 0; j < true_block->dominates->size; ++j) {
             dom_block = lget_obj(true_block->dominates, j);
             if (!basic_block_is_normal_live(dom_block))
@@ -751,6 +1146,24 @@ static bool identify_if_branches(jd_method *m, jd_node *node, jd_bblock *block)
                 ladd_obj_no_dup(branch->true_blocks, dom_block);
                 ladd_obj_no_dup(branch->blocks, dom_block);
             }
+        }
+    }
+    if (true_is_ours && is_list_empty(branch->true_blocks))
+        branch->dropped_true_block = true_block;
+    if (false_block != NULL && is_list_empty(branch->false_blocks))
+        branch->dropped_false_block = false_block;
+
+    if (branch->dropped_true_block != NULL ||
+        branch->dropped_false_block != NULL) {
+        branch_target_shared_one();
+        if (getenv("GARLIC_BRANCH_TRACE") != NULL) {
+            fprintf(stderr, "[garlic] branch dropped: %s ins %u "
+                            "-> offset %u, preds %zu/%zu, t=%c f=%c\n",
+                    m->name, end_ins->offset, jump_offset,
+                    true_block->in->size,
+                    false_block != NULL ? false_block->in->size : 0,
+                    dropped_side_class(m, branch->dropped_true_block),
+                    dropped_side_class(m, branch->dropped_false_block));
         }
     }
 

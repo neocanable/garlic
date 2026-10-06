@@ -51,19 +51,31 @@ void dominance_frontier(jd_method *m)
     }
 }
 
+static void add_dominated_blocks(jd_bblock *dominant, jd_bblock *block)
+{
+    ladd_obj(dominant->dominates, block);
+
+    for (int i = 0; i < block->dom_children->size; ++i)
+        add_dominated_blocks(dominant,
+                             lget_obj(block->dom_children, i));
+}
+
+static int compare_basic_block_id(const void *a, const void *b)
+{
+    const jd_bblock *left = *(const jd_bblock *const *) a;
+    const jd_bblock *right = *(const jd_bblock *const *) b;
+    if (left->block_id < right->block_id)
+        return -1;
+    return left->block_id > right->block_id;
+}
+
 void compute_dominates_block(jd_method *m, jd_bblock *block)
 {
+    (void) m;
     lclear_object(block->dominates);
-    for (int j = 0; j < m->basic_blocks->size; ++j) {
-        jd_bblock *other = lget_obj(m->basic_blocks, j);
-        // self dominates self
-        if (other->block_id == block->block_id) {
-            ladd_obj(block->dominates, other);
-            continue;
-        }
-        if (dominates(block, other))
-            ladd_obj(block->dominates, other);
-    }
+    add_dominated_blocks(block, block);
+
+    lsort_object(block->dominates, compare_basic_block_id);
 }
 
 static int pre_order_traversal(jd_bblock *block, traversal_cb callback)

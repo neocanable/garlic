@@ -9,6 +9,8 @@ jd_node* create_expression_node(jd_method *m, jd_exp *exp);
 
 void create_node_tree(jd_method *m);
 
+void expand_suffix_copy_nodes(jd_method *m);
+
 void print_node_tree(jd_method *m, jd_node *node);
 
 void node_children_sort(jd_node *node);
@@ -23,10 +25,6 @@ jd_node* node_of_offset(jd_method *m, uint32_t offset);
 
 bool node_contains_other(jd_node *node, jd_node *other);
 
-// it means that node have no children or perticular children
-// exception only have try/catch/finally and can not split
-// switch only have case and can't split
-// expression is atomic
 #define node_is_atomic(node) (node_is_exception(node) || \
                                 node_is_expression(node) || \
                                 node_is_switch(node) || \
@@ -43,8 +41,6 @@ static inline bool node_contains_block(jd_node *node, jd_bblock *block)
 
 static inline bool node_contains_block_v2(jd_node *node, jd_bblock *block)
 {
-//    if (block->is_dup)
-//        return true;
     jd_node *bnode = block->node;
     return node_is_ancestor_of(node, bnode);
 //    return node->start_idx <= block->ub->nblock->start_idx &&

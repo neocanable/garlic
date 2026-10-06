@@ -17,6 +17,30 @@ static jd_operator operator_logical_not(jd_operator op)
     }
 }
 
+void reverse_single_operand(jd_exp *condition)
+{
+    if (condition->type == JD_EXPRESSION_SINGLE_LIST) {
+        jd_exp_single_list *single_list = condition->data;
+        jd_exp_list *exp_list = single_list->list;
+
+        jd_exp_single_operator *sop = make_obj(jd_exp_single_operator);
+        sop->list = exp_list;
+        sop->operator = JD_OP_LOGICAL_NOT;
+
+        condition->type = JD_EXPRESSION_SINGLE_OPERATOR;
+        condition->data = sop;
+    }
+    else if (condition->type == JD_EXPRESSION_SINGLE_OPERATOR) {
+        jd_exp_single_operator *single_op = condition->data;
+        jd_exp_list *exp_list = single_op->list;
+
+        condition->type = JD_EXPRESSION_SINGLE_LIST;
+        jd_exp_single_list *single_list = make_obj(jd_exp_single_list);
+        single_list->list = exp_list;
+        condition->data = single_list;
+    }
+}
+
 void negative_if_expression(jd_method *m)
 {
     // java bytecode's if statement is negative, reverse logical operator
@@ -27,22 +51,9 @@ void negative_if_expression(jd_method *m)
         jd_exp_if *if_exp = exp->data;
         jd_exp *condition = if_exp->expression;
 
-        if (condition->type == JD_EXPRESSION_SINGLE_LIST) {
-            jd_exp_single_list *single_list = condition->data;
-            jd_exp_list *exp_list = single_list->list;
-
-            jd_exp_single_operator *sop = make_obj(jd_exp_single_operator);
-            sop->list = exp_list;
-            sop->operator = JD_OP_LOGICAL_NOT;
-        }
-        else if (condition->type == JD_EXPRESSION_SINGLE_OPERATOR) {
-            jd_exp_single_operator *single_op = condition->data;
-            jd_exp_list *exp_list = single_op->list;
-
-            condition->type = JD_EXPRESSION_SINGLE_LIST;
-            jd_exp_single_list *single_list = make_obj(jd_exp_single_list);
-            single_list->list = exp_list;
-            condition->data = single_list;
+        if (condition->type == JD_EXPRESSION_SINGLE_LIST ||
+            condition->type == JD_EXPRESSION_SINGLE_OPERATOR) {
+            reverse_single_operand(condition);
         }
         else {
             jd_exp_operator *op = condition->data;
