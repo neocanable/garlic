@@ -893,6 +893,11 @@ static void init_dex_extract_data(jd_meta_dex *dex)
 {
     dex->synthetic_classes_map = hashmap_init_in(dex->pool, u4obj_cmp, 0);
     dex->lambda_method_map = hashmap_init_in(dex->pool, u4obj_cmp, 0);
+    dex->rebuilt_lambda_bodies = hashmap_init_in(dex->pool, u4obj_cmp, 0);
+    dex->rebuilt_lambda_classes = hashmap_init_in(dex->pool, u4obj_cmp, 0);
+    dex->lambda_in_progress = hashmap_init((hcmp_fn) i2i_cmp, 0);
+    pthread_mutex_init(&dex->lambda_lock, NULL);
+    dex->lambda_facts = hashmap_init_in(dex->pool, u4obj_cmp, 0);
     dex->class_type_id_map = hashmap_init_in(dex->pool, u4obj_cmp, 0);
     dex->class_name_map = hashmap_init_in(dex->pool, s2o_cmp, 0);
 }

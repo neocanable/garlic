@@ -16,6 +16,10 @@ bool dex_class_is_inner_class(jd_meta_dex *meta, dex_class_def *cf);
 
 int dex_class_is_anonymous_class(jd_meta_dex *meta, dex_class_def *cf);
 
+bool dex_class_is_rebuilt_lambda_class(jd_meta_dex *meta, dex_class_def *cf);
+
+bool dex_class_is_lambda_shape(jd_meta_dex *meta, dex_class_def *cf);
+
 void dex_class_annotations(jsource_file *jf);
 
 void dex_class_import(jsource_file *jf);
