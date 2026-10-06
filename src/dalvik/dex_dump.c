@@ -227,17 +227,14 @@ static void dexdump_write_method(jd_meta_dex *dex,
             case DEX_INS_CONST: { // const vAA, #+BBBBBBBB
                 // const vAA, #+BBBBBBBB
                 u1 v_a = (*item >> 8);
-                u4 low = code->insns[i+1];
-                u4 high = code->insns[i+2];
-                u8 v_b = (u8)high << 32 | low;
-                printf("v%d, %lu\n", v_a, v_b);
+                s4 v_b = (s4) ((u4) code->insns[i + 2] << 16 | code->insns[i + 1]);
+                printf("v%d, %d\n", v_a, v_b);
                 break;
             }
             case DEX_INS_CONST_HIGH16: { // const/high16
                 // const/high16 vAA, #+BBBB0000
                 u1 v_a = (*item >> 8);
-                s2 v_b = code->insns[i + 1];
-                v_b = v_b << 16;
+                s4 v_b = (s4) ((u4) code->insns[i + 1] << 16);
                 printf("v%d %d\n", v_a, v_b);
                 break;
             }
@@ -251,20 +248,17 @@ static void dexdump_write_method(jd_meta_dex *dex,
             case DEX_INS_CONST_WIDE_32: { // const-wide/32
                 // const-wide/32 vAA, #+BBBBBBBB
                 u1 v_a = (*item >> 8);
-                s4 b1 = code->insns[i+1];
-                s4 b2 = code->insns[i+2];
-                s8 v_b = (s8)b1 << 32 | b2;
+                s8 v_b = (s8) (s4) ((u4) code->insns[i + 2] << 16 | code->insns[i + 1]);
                 printf("v%d, %ld\n", v_a, v_b);
                 break;
             }
             case DEX_INS_CONST_WIDE: { // const-wide vAA, #+BBBBBBBBBBBBBBBB
                 // const-wide vAA, #+BBBBBBBBBBBBBBBB
                 u1 v_a = (*item >> 8);
-                s4 b1 = code->insns[i+1];
-                s4 b2 = code->insns[i+2];
-                s4 b3 = code->insns[i+3];
-                s4 b4 = code->insns[i+4];
-                s8 v_b = (s8)b1 << 48 | (s8)b2 << 32 | (s8)b3 << 16 | b4;
+                s8 v_b = (s8) ((u8) code->insns[i + 1]
+                             | (u8) code->insns[i + 2] << 16
+                             | (u8) code->insns[i + 3] << 32
+                             | (u8) code->insns[i + 4] << 48);
                 printf("v%d, %ld\n", v_a, v_b);
                 break;
             }

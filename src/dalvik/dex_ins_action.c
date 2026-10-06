@@ -262,19 +262,19 @@ static inline void build_dex_ins_return_act(jd_dex_ins *ins)
 
     jd_method *m = ins->method;
     string return_type = m->desc->str_return;
-    if (STR_EQL(return_type, "Z")) {
+    if (STR_EQL(return_type, g_str_boolean)) {
         val->data->cname = (string)g_str_boolean;
         val->stack_var->cname = (string)g_str_boolean;
     }
-    else if (STR_EQL(return_type, "B")) {
+    else if (STR_EQL(return_type, g_str_byte)) {
         val->data->cname = (string)g_str_byte;
         val->stack_var->cname = (string)g_str_byte;
     }
-    else if (STR_EQL(return_type, "C")) {
+    else if (STR_EQL(return_type, g_str_char)) {
         val->data->cname = (string)g_str_char;
         val->stack_var->cname = (string)g_str_char;
     }
-    else if (STR_EQL(return_type, "S")) {
+    else if (STR_EQL(return_type, g_str_short)) {
         val->data->cname = (string)g_str_short;
         val->stack_var->cname = (string)g_str_short;
     }
@@ -520,7 +520,6 @@ static inline void build_dex_ins_arrayop_act(jd_dex_ins *ins)
 {
     u1 u_a = dex_ins_parameter(ins, 0);
     u1 u_b = dex_ins_parameter(ins, 1);
-    u1 u_c = dex_ins_parameter(ins, 2);
 
     if (dex_ins_is_aget(ins)) {
         jd_val *val = dex_stack_val(ins, u_a, 'I');
@@ -532,7 +531,7 @@ static inline void build_dex_ins_arrayop_act(jd_dex_ins *ins)
         save_stack_val(ins, val, u_a + 1);
     }
     else if (dex_ins_is_aget_object(ins)) {
-        jd_val *arr_val = ins->stack_in->local_vars[u_c];
+        jd_val *arr_val = ins->stack_in->local_vars[u_b];
         string arr_cname = arr_val->data->cname;
 
         jd_val *val = stack_create_empty_val();

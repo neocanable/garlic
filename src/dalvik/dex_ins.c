@@ -135,7 +135,6 @@ jd_bblock* dup_basic_block_and_ins(jd_method *m, jd_bblock *src_block)
     return new_b;
 }
 
-
 u8 dex_ins_parameter(jd_dex_ins *ins, int number);
 
 static inline u8 dex_ins_parameter_10x(jd_dex_ins *ins, int number)
@@ -390,8 +389,8 @@ static inline u8 dex_ins_parameter_23x(jd_dex_ins *ins, int number)
     u2 item = ins->param[0];
     u1 v_a = (item >> 8);
     u2 second = ins->param[1];
-    u1 v_b = second >> 8;
-    u1 v_c = second & 0xFF;
+    u1 v_b = second & 0xFF;
+    u1 v_c = second >> 8;
 
     switch (number) {
         case 0:
@@ -467,8 +466,8 @@ static inline void dex_ins_use_def_22b(jd_dex_ins *ins)
 static inline u8 dex_ins_parameter_22t(jd_dex_ins *ins, int number)
 {
     u2 item = ins->param[0];
-    u1 v_a = item >> 12;
-    u1 v_b = (item >> 8) & 0x0F;
+    u1 v_a = (item >> 8) & 0x0F;
+    u1 v_b = item >> 12;
     s2 v_c = ins->param[1];
 
     switch (number) {
@@ -485,14 +484,6 @@ static inline u8 dex_ins_parameter_22t(jd_dex_ins *ins, int number)
 
 static inline void dex_ins_use_def_22t(jd_dex_ins *ins)
 {
-    // 22t
-    // B|A|op CCCC
-    // vA, vB, +CCCC
-    //    u2 item = ins->param[0];
-    //    u1 v_a = item >> 12;
-    //    u1 v_b = (item >> 8) & 0x0F;
-    //    s2 v_c = ins->param[1];
-
     u1 v_a = dex_ins_parameter(ins, 0);
     u1 v_b = dex_ins_parameter(ins, 1);
     s2 v_c = (s2)dex_ins_parameter(ins, 2);

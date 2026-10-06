@@ -183,53 +183,63 @@ static void dex_fill_watch_successors(jd_method *m, jd_dex_ins *ins)
     }
 }
 
-static void merge_stack_to_handler_start(jd_method *m,
-                                         jd_dex_ins *ins,
-                                         jd_dex_ins *start_ins)
+static jd_mix_exception* exception_of_handler(jd_method *m, jd_ins *handler)
 {
-    if (start_ins->stack_in == NULL) return;
-    if (ins->stack_in == NULL) {
-        dex_exception_stack(m, ins, start_ins->stack_in);
-    } else {
-        for (int k = 0; k < start_ins->stack_in->local_vars_count; ++k) {
-            jd_val *val = start_ins->stack_in->local_vars[k];
-            if (val == NULL) continue;
-            ins->stack_in->local_vars[k] = val;
-        }
-    }
-}
-
-static void merge_all_try_start_block(jd_method *m, jd_ins *ins)
-{
-    /*
-     * if ins is handler's start instruction
-     * find the handler's try start instructions
-     * then merge all try start instructions stack_in's variables
-     * try {
-     *  // try first instruction
-     * }
-     * catch(Exception e) {
-     * // handler first instruction
-     * }
-     *
-     **/
     for (int i = 0; i < m->mix_exceptions->size; ++i) {
         jd_mix_exception *e = lget_obj(m->mix_exceptions, i);
         if (!is_list_empty(e->catches)) {
             for (int j = 0; j < e->catches->size; ++j) {
                 jd_range *range = lget_obj(e->catches, j);
-                if (range->start_offset != ins->offset)
-                    continue;
-
-                jd_ins *start_ins = get_ins(m, e->try->start_idx);
-                merge_stack_to_handler_start(m, ins, start_ins);
+                if (range->start_offset == handler->offset)
+                    return e;
             }
         }
-        if (e->finally != NULL && e->finally->start_offset == ins->offset) {
-            jd_ins *start_ins = get_ins(m, e->try->start_idx);
-            merge_stack_to_handler_start(m, ins, start_ins);
-        }
+        if (e->finally != NULL && e->finally->start_offset == handler->offset)
+            return e;
     }
+    return NULL;
+}
+
+// Give a handler start the registers it runs with, so that its body is 
+// simulated like any other code and its expressions are built.
+static bool seed_exception_handler(jd_method *m, jd_dex_ins *handler)
+{
+    jd_mix_exception *e = exception_of_handler(m, handler);
+    if (e == NULL || e->try == NULL)
+        return false;
+
+    jd_stack *base = NULL;
+    for (int i = e->try->start_idx;
+         base == NULL && i <= e->try->end_idx; ++i) {
+        jd_ins *ins = get_ins(m, i);
+        if (ins != NULL)
+            base = ins->stack_out;
+    }
+    if (base == NULL)
+        return false;
+
+    jd_stack *stack = dex_exception_stack(m, handler, base);
+
+    for (size_t k = 0; k < stack->local_vars_count; ++k) {
+        if (stack->local_vars[k] != NULL)
+            continue;
+
+        jd_val *empty = stack_create_empty_val();
+        empty->type = JD_VAR_REFERENCE_T;
+        empty->data->cname = (string) g_str_Object;
+        empty->ins = NULL;
+        empty->slot = k;
+        empty->name = NULL;
+
+        dex_variable_name(m, NULL, empty, k);
+        if (empty->name == NULL)
+            stack_val_name(m, NULL, empty, k);
+        stack_define_var(m, empty, k);
+        stack->local_vars[k] = empty;
+    }
+
+    handler->stack_in = stack;
+    return true;
 }
 
 static void dex_fill_visit_queue(jd_method *m, jd_dex_ins *ins)
@@ -238,7 +248,8 @@ static void dex_fill_visit_queue(jd_method *m, jd_dex_ins *ins)
         jd_dex_ins *suc_ins = lget_obj(m->ins_watch_successors, i);
         int is_handler_start = ins_is_handler_start(m, suc_ins);
         if (is_handler_start && block_can_execute(m, ins, suc_ins)) {
-            merge_all_try_start_block(m, suc_ins);
+            if (suc_ins->stack_in != NULL)
+                merge_local_variables_for_exception_block(ins, suc_ins);
         }
         else if (suc_ins->stack_in == NULL && !is_handler_start) {
             suc_ins->stack_in = stack_clone(ins->stack_out);
@@ -277,6 +288,7 @@ void dex_simulator(jd_method *m)
     m->offset2var_map = hashmap_init((hcmp_fn)i2obj_cmp, 0);
     m->slot_counter_map = hashmap_init((hcmp_fn) i2i_cmp, 0);
     m->class_counter_map = hashmap_init((hcmp_fn) s2i_cmp, 0);
+    m->var_name_taken = hashmap_init((hcmp_fn) s2i_cmp, 0);
     m->var_name_map = hashmap_init((hcmp_fn) s2s_cmp, 0);
     m->types = linit_object();
 
@@ -289,6 +301,38 @@ void dex_simulator(jd_method *m)
     queue_push_object(m->ins_visit_queue, start);
 
     dex_process_instruction_action(m, dex_ins_cb);
+
+    bool progress = true;
+    while (progress) {
+        progress = false;
+        for (int i = 0; i < m->mix_exceptions->size; ++i) {
+            jd_mix_exception *e = lget_obj(m->mix_exceptions, i);
+            jd_ins *handlers[128];
+            int handler_count = 0;
+
+            if (!is_list_empty(e->catches)) {
+                for (int j = 0; j < e->catches->size &&
+                                handler_count < 128; ++j) {
+                    jd_range *r = lget_obj(e->catches, j);
+                    handlers[handler_count++] = get_ins(m, r->start_idx);
+                }
+            }
+            if (e->finally != NULL && handler_count < 128)
+                handlers[handler_count++] = get_ins(m, e->finally->start_idx);
+
+            for (int j = 0; j < handler_count; ++j) {
+                jd_dex_ins *handler = handlers[j];
+                if (handler == NULL || handler->stack_in != NULL)
+                    continue;
+                if (!seed_exception_handler(m, handler))
+                    continue;
+
+                queue_push_object(m->ins_visit_queue, handler);
+                dex_process_instruction_action(m, dex_ins_cb);
+                progress = true;
+            }
+        }
+    }
 
     mark_unreachable_instruction(m);
 
