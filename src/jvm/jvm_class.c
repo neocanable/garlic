@@ -9,6 +9,12 @@
 void jvm_signatures(jsource_file *jf)
 {
     jclass_file *jc = jf->jclass;
+    jf->signature = NULL;
+    for (int i = 0; i < jf->fields_count; ++i)
+        jf->fields[i].signature = NULL;
+    for (int i = 0; i < jf->methods->size; ++i)
+        ((jd_method *) lget_obj(jf->methods, i))->signature = NULL;
+
     for (int i = 0; i < be16toh(jc->attributes_count); ++i) {
         jattr *attr = &jc->attributes[i];
         if (STR_EQL(attr->name, "Signature")) {
@@ -90,7 +96,7 @@ void jvm_field_access_flag(jd_field *field, str_list *list)
 
 void jvm_fields(jsource_file *jf)
 {
-    jf->fields = make_obj_arr(jd_field, jf->fields_count);
+    jf->fields = make_obj_arr_zero(jd_field, jf->fields_count);
     jclass_file *jc = jf->jclass;
     u2 desc_index;
     for (int i = 0; i < jf->fields_count; ++i) {
@@ -101,7 +107,7 @@ void jvm_fields(jsource_file *jf)
 
         desc_index = j_field->descriptor_index;
         jd_descriptor *descriptor = jvm_descriptor(jf, desc_index);
-        field->type = lget_string(descriptor->list, 0);
+        field->type = descriptor_type_name(descriptor->str);
         field->name = pool_str(jf->jclass, j_field->name_index);
         field->access_flags_fn = jvm_field_access_flag;
     }

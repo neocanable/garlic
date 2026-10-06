@@ -214,8 +214,7 @@ static void build_cast_expression(jd_exp *exp, jd_ins *ins)
             jcp_info *info = pool_item(ins->method->meta, index);
             jclass_file *jc = ins->method->meta;
             string class_name = get_class_name(jc, info);
-            string descriptor = descriptor_to_s(class_name);
-            cast_exp->class_name = class_simple_name(descriptor);
+            cast_exp->class_name = descriptor_type_name(class_name);
             break;
         }
         default:
@@ -230,15 +229,18 @@ static void build_anonymous_expression(jd_ins *ins, jd_exp_invoke *invoke)
     jsource_file *jf = ins->method->jfile;
     jclass_file *jc = ins->method->meta;
     jcp_info *methodref_info = jvm_invoke_methodref_info(ins);
-    if (methodref_info == NULL || jf->jar_entry == NULL)
+    if (methodref_info == NULL)
         return;
-
     string fname = get_class_name(jc, methodref_info);
     invoke->class_name = class_simple_name(fname);
+    invoke->owner_class = fname;
 
-    if (!str_start_with(fname, jf->fname) || 
+    if (jf->jar_entry == NULL)
+        return;
+
+    if (!str_start_with(fname, jf->fname) ||
             STR_EQL(fname, jf->fname))
-        return; 
+        return;
 
     jd_jar_entry *inner_entry = NULL;
     bool is_inner = false;
@@ -298,6 +300,7 @@ static void build_invoke_expression(jd_exp *exp, jd_ins *ins)
     jd_method *m = ins->method;
     jclass_file *jc = m->meta;
     jsource_file *jf = jc->jfile;
+    invoke->owner_class = NULL;
 
     jcp_info *nt_info = jvm_invoke_name_and_type_info(ins);
     jconst_name_and_type *nt = nt_info->info->name_and_type;
@@ -329,7 +332,7 @@ static void build_invoke_expression(jd_exp *exp, jd_ins *ins)
     if (jvm_ins_is_invokevirtual(ins) ||
         jvm_ins_is_invokeinterface(ins) ||
         jvm_ins_is_invokespecial(ins)) {
-        /* invokevirtual, invokeinterface, invokespecial */
+        // invokevirtual, invokeinterface, invokespecial
         jd_exp *e = &invoke->list->args[invoke->list->len - 1];
         jd_val *val = ins->stack_in->vals[invoke->list->len - 1];
         build_stack_var_exp(e, val);
@@ -338,7 +341,7 @@ static void build_invoke_expression(jd_exp *exp, jd_ins *ins)
     if (jvm_ins_is_invokespecial(ins))
         build_anonymous_expression(ins, invoke);
 
-    if (STR_EQL(descriptor->str_return, "V")) {
+    if (STR_EQL(descriptor->str_return, g_str_void)) {
         exp->type = JD_EXPRESSION_INVOKE;
         exp->data = invoke;
         exp->ins = ins;
@@ -581,7 +584,7 @@ static void build_new_array_expression(jd_exp *exp, jd_ins *ins)
 
     jd_exp *right = assignment->right;
     right->type = JD_EXPRESSION_NEW_ARRAY;
-    jd_exp_new_array *new_array = make_obj(jd_exp_new_array);
+    jd_exp_new_array *new_array = make_obj_zero(jd_exp_new_array);
     jd_val *push0 = ins->stack_in->vals[0];
     new_array->class_name = class_name;
     new_array->list = make_exp_list(1);
@@ -1058,6 +1061,7 @@ static void build_lambda_expression(jd_exp *exp, jd_lambda *lda, jd_method *tm)
     }
 
     jd_exp_lambda *exp_lambda = make_obj(jd_exp_lambda);
+    memset(exp_lambda, 0, sizeof(jd_exp_lambda));
     exp_lambda->list = make_obj(jd_exp_list);
     exp_lambda->list->len = invoke->list->len;
     if (exp_lambda->list->len > 0) {
@@ -1067,8 +1071,12 @@ static void build_lambda_expression(jd_exp *exp, jd_lambda *lda, jd_method *tm)
     }
     exp_lambda->method = tm;
     exp_lambda->lambda = lda;
+    /* invokedynamic carries the captured values and nothing else. */
+    exp_lambda->captures = exp_lambda->list->len;
 
     exp_lambda->descriptor = lda->target_method->descriptor;
+    if (exp_lambda->descriptor != NULL && exp_lambda->descriptor->list != NULL)
+        exp_lambda->body_arity = exp_lambda->descriptor->list->size + 1;
     exp_lambda->class_name = lda->target_method->class_name;
     exp_lambda->method_name = lda->target_method->name;
     exp_lambda->is_static = lda->target_method->kind == 6;
@@ -1389,7 +1397,7 @@ static void follow_lambda(jd_method *m, jd_exp *exp)
         if (STR_EQL(lambda->target_method->name, name) &&
             !STR_EQL(name, m->name) &&
             target_index == jm->descriptor_index) {
-            jd_method *target_method = make_obj(jd_method);
+            jd_method *target_method = make_obj_zero(jd_method);
             ladd_obj(jc->jfile->methods, target_method);
 
             jvm_method(m->meta, target_method, jm);
