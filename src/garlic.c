@@ -1,3 +1,4 @@
+#include "common/output_error.h"
 #include "parser/class/metadata.h"
 #include "jvm/jvm_decompile.h"
 #include "common/str_tools.h"
@@ -351,6 +352,10 @@ int main(int argc, char **argv)
     if (argc >= 2 && strcmp(argv[1], "-m") == 0) {
         jd_mcp_set_self_path(argv[0]);
         jd_mcp_server *server = jd_init_mcp_server();
+        if (server == NULL) {
+            fprintf(stderr, "failed to start the MCP server\n");
+            return 1;
+        }
         server->tools = &MCP_TOOLS;
         server->tool_count = MCP_TOOL_COUNT;
         jd_mcp_server_run(server);
@@ -407,6 +412,9 @@ int main(int argc, char **argv)
         free_opt(opt);
         exit(EXIT_FAILURE);
     }
+
+    if (output_report())
+        return EXIT_FAILURE;
 
     return 0;
 }

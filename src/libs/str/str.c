@@ -5,6 +5,7 @@
 str_list* str_list_init()
 {
     str_list *list = make_obj(str_list);
+    list->count = 0;
     list->len = 0;
     list->first = NULL;
     list->last  = NULL;

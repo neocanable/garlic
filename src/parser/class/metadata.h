@@ -1,5 +1,5 @@
-#ifndef GARLIC_METADATA_H
-#define GARLIC_METADATA_H
+#ifndef GARLIC_CLASS_METADATA_H
+#define GARLIC_CLASS_METADATA_H
 
 #include <string.h>
 #include <stdio.h>
@@ -41,4 +41,4 @@ void init_java_class_content(jclass_file *jc, const char *path);
 
 jsource_file* init_java_source_file(jclass_file *jc);
 
-#endif //GARLIC_METADATA_H
+#endif //GARLIC_CLASS_METADATA_H

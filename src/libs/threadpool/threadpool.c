@@ -16,6 +16,7 @@ void create_tls_key() {
 }
 
 thread_local_data* get_thread_local_data() {
+    pthread_once(&tls_init_once, create_tls_key);
     return pthread_getspecific(tls_key);
 }
 
@@ -51,10 +52,6 @@ threadpool_t* threadpool_create_in(mem_pool *mem_pool, int cnt, int flags)
         goto err;
     }
 
-    /**
-     *  set large stack size
-     *  dom tree's depth maybe more than 1000, stack overflow
-     **/
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setstacksize(&attr, 4 * 1024 * 1024); /* 4 MB */
@@ -221,9 +218,11 @@ int threadpool_free(threadpool_t *pool)
 }
 
 void thread_local_data_init(threadpool_t *pool, pthread_t tid) {
+    (void) pool; (void) tid;
     pthread_once(&tls_init_once, create_tls_key);
-    mem_pool *mpool = pool->mem_pool;
-    thread_local_data *tls = x_alloc_in(mpool, sizeof(thread_local_data));
+
+    mem_pool *storage = mem_create_pool();
+    thread_local_data *tls = x_alloc_in(storage, sizeof(thread_local_data));
     if (!tls) {
         perror("Failed to allocate thread local storage");
         exit(EXIT_FAILURE);
