@@ -96,7 +96,9 @@ typedef struct jd_export_str {
 
 void dex_analyzer(jd_dumper_analyzer *analyzer, jd_meta_dex *meta);
 
-void apk_analyzer(string path, string our_dir);
+int apk_analyzer(string path, string our_dir);
+
+int call_graph_from_sources(char **paths, int count, string out_dir);
 
 void jd_dex_analyzer_from_file(string path, string save_dir);
 

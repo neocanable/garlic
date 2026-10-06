@@ -12,6 +12,11 @@
 #include "jd_string_analyzer.h"
 #include "decompiler/descriptor.h"
 #include "jd_api_matcher.h"
+#include "parser/class/metadata.h"
+#include "parser/class/class_tools.h"
+#include "jvm/jvm_decompile.h"
+#include "jvm/jvm_ins.h"
+#include "jvm/jvm_ins_helper.h"
 
 static jd_dumper_analyzer *g_dumpper_analyer = NULL;
 
@@ -703,14 +708,39 @@ void initialize_analyzer(string out_dir)
     fprintf(g_dumpper_analyer->string_edge_stream, "src_id,dst_id\n");
 }
 
+// flush and close csv stream
+static void close_analyzer_streams(jd_dumper_analyzer *analyzer)
+{
+    FILE *streams[4];
+    streams[0] = analyzer->method_node_stream;
+    streams[1] = analyzer->method_edge_stream;
+    streams[2] = analyzer->string_node_stream;
+    streams[3] = analyzer->string_edge_stream;
+    for (int i = 0; i < 4; i++) {
+        if (streams[i]) {
+            fflush(streams[i]);
+            fclose(streams[i]);
+        }
+    }
+    analyzer->method_node_stream = NULL;
+    analyzer->method_edge_stream = NULL;
+    analyzer->string_node_stream = NULL;
+    analyzer->string_edge_stream = NULL;
+}
+
 void jd_dex_analyzer_from_file(string path, string save_dir)
 {
     initialize_analyzer(save_dir);
 
     jd_meta_dex *meta = parse_dex_file(path);
-    dex_call_graph(g_dumpper_analyer, meta);
+    if (meta == NULL) {
+        close_analyzer_streams(g_dumpper_analyer);
+        return;
+    }
+    dex_analyzer(g_dumpper_analyer, meta);
     write_all_graph_node(g_dumpper_analyer);
     write_all_string(g_dumpper_analyer);
+    close_analyzer_streams(g_dumpper_analyer);
     mem_pool_free(meta->pool);
 }
 
@@ -723,8 +753,6 @@ void dex_analyzer(jd_dumper_analyzer *analyzer, jd_meta_dex *meta)
     mark_field_strings(analyzer, meta);
 }
 
-/* Process DEX entries from a ZIP, recursing into nested APK entries.
- * Follows the same pattern as apk_process_dex_from_zip() in apk.c. */
 static void apk_analyzer_process_zip(struct zip_t *zip)
 {
     int total = zip_entries_total(zip);
@@ -732,13 +760,11 @@ static void apk_analyzer_process_zip(struct zip_t *zip)
         zip_entry_openbyindex(zip, i);
         string entry_name = (string)zip_entry_name(zip);
 
-        /* Skip entries in subdirectories */
         if (strchr(entry_name, '/') != NULL) {
             zip_entry_close(zip);
             continue;
         }
 
-        /* Nested APK (split APK / App Bundle) — recurse into it */
         if (str_is_apk_path(entry_name)) {
             size_t buf_size = zip_entry_size(zip);
             char *buf = malloc(buf_size);
@@ -755,7 +781,6 @@ static void apk_analyzer_process_zip(struct zip_t *zip)
             continue;
         }
 
-        /* Only process DEX files */
         if (!str_end_with(entry_name, ".dex")) {
             zip_entry_close(zip);
             continue;
@@ -779,19 +804,252 @@ static void apk_analyzer_process_zip(struct zip_t *zip)
     }
 }
 
-void apk_analyzer(string path, string out_dir)
+static string jvm_graph_class(jd_dumper_analyzer *analyzer, string internal)
 {
+    if (internal == NULL)
+        return NULL;
+    return str_create_in(analyzer->pool, "L%s;", internal);
+}
+
+static void jvm_call_graph_scan_method(jd_dumper_analyzer *analyzer, jd_method *m)
+{
+    jclass_file *jc = (jclass_file *)m->meta;
+    jsource_file *jf = m->jfile;
+    jmethod *jm = (jmethod *)m->meta_method;
+    if (jc == NULL || jf == NULL || jm == NULL)
+        return;
+
+    string caller_class = jvm_graph_class(analyzer, jf->fname);
+    string caller_name = m->name;
+    string caller_desc = pool_str(jc, jm->descriptor_index);
+    if (caller_class == NULL || caller_name == NULL || caller_desc == NULL)
+        return;
+
+    char *caller_ident = str_create_in(analyzer->pool, "%s->%s%s",
+            caller_class, caller_name, caller_desc);
+    int caller_id = register_method(analyzer, caller_class, caller_name,
+            caller_desc, caller_ident, NULL);
+
+    if (m->instructions == NULL)
+        return;
+
+    for (int i = 0; i < m->instructions->size; ++i) {
+        jd_ins *ins = lget_obj(m->instructions, i);
+
+        if (jvm_ins_is_invoke(ins)) {
+            jcp_info *nt = jvm_invoke_name_and_type_info(ins);
+            if (nt == NULL || nt->info == NULL)
+                continue;
+            jconst_name_and_type *nat = nt->info->name_and_type;
+            string callee_name = pool_str(jc, nat->name_index);
+            string callee_desc = pool_str(jc, nat->descriptor_index);
+            if (callee_name == NULL || callee_desc == NULL)
+                continue;
+
+            jcp_info *owner = jvm_invoke_methodref_info(ins);
+            string raw_class = owner ? get_class_name(jc, owner) : NULL;
+            string callee_class = raw_class
+                ? jvm_graph_class(analyzer, raw_class)
+                : str_create_in(analyzer->pool, "%s", "<dynamic_lambda>");
+
+            char *callee_ident = str_create_in(analyzer->pool, "%s->%s%s",
+                    callee_class, callee_name, callee_desc);
+            int callee_id = register_method(analyzer, callee_class, callee_name,
+                    callee_desc, callee_ident, NULL);
+            register_method_edge(analyzer, caller_id, callee_id);
+            continue;
+        }
+
+        if (ins->code == INS_LDC || ins->code == INS_LDC_W ||
+                ins->code == INS_LDC2_W) {
+            jcp_info *item = (ins->code == INS_LDC)
+                ? pool_u1_item(jc, ins->param[0])
+                : pool_item(jc, be16toh((u2)(ins->param[0] << 8 | ins->param[1])));
+            if (item == NULL || item->tag != CONST_STRING_TAG)
+                continue;
+            string str = get_const_string(jc, item);
+            if (str != NULL) {
+                int str_id = register_string(analyzer, str, NULL);
+                register_string_edge(analyzer, str_id, caller_id);
+            }
+        }
+    }
+}
+
+static void jvm_call_graph_scan_class(jd_dumper_analyzer *analyzer, jsource_file *jf)
+{
+    if (jf == NULL || jf->methods == NULL)
+        return;
+    for (int i = 0; i < jf->methods->size; ++i)
+        jvm_call_graph_scan_method(analyzer, lget_obj(jf->methods, i));
+}
+
+static void jvm_mark_strings(jd_dumper_analyzer *analyzer, jclass_file *jc)
+{
+    if (jc == NULL || jc->constant_pool == NULL)
+        return;
+
+    const uint16_t pool_count = be16toh(jc->constant_pool_count);
+    for (int i = 0; i < pool_count - 1; ++i) {
+        jcp_info *item = &jc->constant_pool[i];
+        if (item->info == NULL)
+            continue;
+        switch (item->tag) {
+            case CONST_CLASS_TAG: {
+                string norm = jvm_graph_class(analyzer, get_class_name(jc, item));
+                if (norm)
+                    mark_string_to(analyzer, norm, JD_STR_TYPE_CLASS_DESC);
+                break;
+            }
+            case CONST_METHODREF_TAG:
+            case CONST_INTERFACEMETHODREF_TAG: {
+                string name = get_method_name(jc, item);
+                if (name)
+                    mark_string_to(analyzer, name, JD_STR_TYPE_METHOD_NAME);
+                break;
+            }
+            case CONST_FIELDREF_TAG: {
+                string name = get_field_name(jc, item);
+                if (name)
+                    mark_string_to(analyzer, name, JD_STR_TYPE_FIELD_NAME);
+                break;
+            }
+            default:
+                break;
+        }
+    }
+}
+
+static void jd_jar_analyzer_from_file(string path, string save_dir)
+{
+    initialize_analyzer(save_dir);
+
+    struct zip_t *zip = zip_open(path, 0, 'r');
+    if (zip == NULL) {
+        close_analyzer_streams(g_dumpper_analyer);
+        return;
+    }
+
+    const int total = zip_entries_total(zip);
+    for (int i = 0; i < total; ++i) {
+        zip_entry_openbyindex(zip, i);
+        string entry_name = (string)zip_entry_name(zip);
+
+        if (entry_name == NULL || !str_end_with(entry_name, ".class")) {
+            zip_entry_close(zip);
+            continue;
+        }
+
+        const size_t buf_size = (size_t)zip_entry_size(zip);
+        if (buf_size > 0) {
+            char *buf = (char *)malloc(buf_size);
+            if (buf != NULL && zip_entry_noallocread(zip, (void *)buf, buf_size) > 0) {
+                jclass_file *jc = parse_class_content(entry_name, buf, buf_size);
+                if (jc != NULL && jc->jfile != NULL) {
+                    jvm_analyse_class_file_inside(jc->jfile);
+                    jvm_call_graph_scan_class(g_dumpper_analyer, jc->jfile);
+                    jvm_mark_strings(g_dumpper_analyer, jc);
+                }
+            }
+            free(buf);
+        }
+        zip_entry_close(zip);
+    }
+
+    write_all_graph_node(g_dumpper_analyer);
+    write_all_string(g_dumpper_analyer);
+    close_analyzer_streams(g_dumpper_analyer);
+    zip_close(zip);
+    mem_pool_free(g_dumpper_analyer->pool);
+}
+
+static int looks_like_dex(const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    if (f == NULL)
+        return 0;
+    char magic[4] = {0};
+    const size_t n = fread(magic, 1, sizeof magic, f);
+    fclose(f);
+    return n == sizeof magic && memcmp(magic, "dex\n", 4) == 0;
+}
+
+static int ends_with_ci(const char *s, const char *suff)
+{
+    size_t slen = strlen(s);
+    size_t sufflen = strlen(suff);
+    if (slen < sufflen)
+        return 0;
+    for (size_t i = 0; i < sufflen; i++) {
+        if (tolower((unsigned char)s[slen - sufflen + i]) !=
+                tolower((unsigned char)suff[i]))
+            return 0;
+    }
+    return 1;
+}
+
+int apk_analyzer(string path, string out_dir)
+{
+    if (ends_with_ci(path, ".dex") && looks_like_dex(path)) {
+        jd_dex_analyzer_from_file(path, out_dir);
+        return 1;
+    }
+
+    if (ends_with_ci(path, ".jar") || ends_with_ci(path, ".war")) {
+        jd_jar_analyzer_from_file(path, out_dir);
+        return 1;
+    }
+
     initialize_analyzer(out_dir);
 
     struct zip_t *zip = zip_open(path, 0, 'r');
-    if (zip == NULL)
-        return;
+    if (zip == NULL) {
+        close_analyzer_streams(g_dumpper_analyer);
+        return 0;
+    }
 
     apk_analyzer_process_zip(zip);
 
     write_all_graph_node(g_dumpper_analyer);
     write_all_string(g_dumpper_analyer);
+    close_analyzer_streams(g_dumpper_analyer);
 
     zip_close(zip);
     mem_pool_free(g_dumpper_analyer->pool);
+    return 1;
+}
+
+int call_graph_from_sources(char **paths, int count, string out_dir)
+{
+    initialize_analyzer(out_dir);
+
+    int used = 0;
+    for (int i = 0; i < count; ++i) {
+        string path = paths[i];
+        if (path == NULL)
+            continue;
+
+        if (str_end_with(path, ".dex")) {
+            jd_meta_dex *meta = parse_dex_file(path);
+            if (meta == NULL)
+                continue;
+            dex_analyzer(g_dumpper_analyer, meta);
+            mem_pool_free(meta->pool);
+            used++;
+            continue;
+        }
+
+        struct zip_t *zip = zip_open(path, 0, 'r');
+        if (zip == NULL)
+            continue;
+        apk_analyzer_process_zip(zip);
+        zip_close(zip);
+        used++;
+    }
+
+    write_all_graph_node(g_dumpper_analyer);
+    write_all_string(g_dumpper_analyer);
+    close_analyzer_streams(g_dumpper_analyer);
+    mem_pool_free(g_dumpper_analyer->pool);
+    return used;
 }

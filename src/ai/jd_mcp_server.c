@@ -1,6 +1,9 @@
 #include "jd_mcp.h"
 #include "str_tools.h"
 
+#include <stdlib.h>
+#include <string.h>
+
 #ifdef _WIN32
 #include <windows.h>
 #include <time.h>
@@ -317,13 +320,16 @@ void jd_mcp_server_init(jd_mcp_server *server)
 
 jd_mcp_server* jd_init_mcp_server()
 {
-    mem_pool *pool = mem_create_pool();
-    jd_mcp_server *server = make_obj_in(jd_mcp_server, pool);
+    jd_mcp_server *server = malloc(sizeof(jd_mcp_server));
     if (server == NULL)
         return NULL;
-    server->pool = pool;
-    server->initialized = false;
-    server->shutdown = false;
+    memset(server, 0, sizeof(*server));
+
+    server->pool = mem_create_pool();
+    if (server->pool == NULL) {
+        free(server);
+        return NULL;
+    }
     return server;
 }
 
@@ -344,6 +350,13 @@ void jd_mcp_server_run(jd_mcp_server *server)
 
         dispatch(server, msg);
         cJSON_Delete(msg);
+
+        mem_pool_free(server->pool);
+        server->pool = mem_create_pool();
+        if (server->pool == NULL) {
+            jd_mcp_log("out of memory replenishing the request pool");
+            break;
+        }
     }
 
     jd_mcp_log("MCP server exiting");
@@ -351,6 +364,10 @@ void jd_mcp_server_run(jd_mcp_server *server)
 
 void jd_mcp_server_cleanup(jd_mcp_server *server)
 {
-    (void)server;
+    if (server == NULL)
+        return;
+    if (server->pool != NULL)
+        mem_pool_free(server->pool);
+    free(server);
     jd_mcp_log("cleanup");
 }
