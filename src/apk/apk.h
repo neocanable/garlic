@@ -9,4 +9,10 @@ void apk_decompile_analyse(string path,
                            int thread_num,
                            jd_dex_task_type type);
 
+void apk_decompile_analyse_sources(string *sources,
+                                   int source_count,
+                                   string save_dir,
+                                   int thread_num,
+                                   jd_dex_task_type type);
+
 #endif //GARLIC_APK_H

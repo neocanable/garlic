@@ -58,18 +58,21 @@ void jvm_method_access_flags(jd_method *m, str_list *list) {
         str_concat(list, ("/* synthetic */"));
     }
 
-    if (!method_is_init(m))
-        if (list->count > 0)
-            str_concat(list, (" "));
+    if (list->count > 0)
+        str_concat(list, (" "));
 }
 
 jd_val* jvm_method_parameter_val(jd_method *m, int index)
 {
     if (m->enter == NULL)
         return NULL;
-    int i = method_is_member(m) ? index + 1 : index;
-    // i += method_is_enum_constructor(m) ? 2 : 0;
-    return m->enter->local_vars[i];
+
+    int slot = method_is_member(m) ? 1 : 0;
+    jd_descriptor *desc = m->desc;
+    for (int i = 0; i < index && i < desc->list->size; ++i)
+        slot += descriptor_type_slot_width(lget_string(desc->list, i));
+
+    return m->enter->local_vars[slot];
 }
 
 static void jvm_fill_multi_array_stack_action(jd_ins *ins)
@@ -114,7 +117,7 @@ static void jvm_fill_invoke_stack_action(jd_ins *ins)
         jvm_ins_is_invokevirtual(ins))
         ins->popped_cnt += 1;
 
-    ins->pushed_cnt = STR_EQL(descriptor->str_return, "V") ? 0 : 1;
+    ins->pushed_cnt = STR_EQL(descriptor->str_return, g_str_void) ? 0 : 1;
 }
 
 static void init_tableswitch_jumps(jd_ins *ins) {

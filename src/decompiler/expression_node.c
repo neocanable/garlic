@@ -134,7 +134,7 @@ static u4 expression_end_index(jd_method *m, jd_exp *expression)
 
 static jd_node* create_root_node(jd_method *m)
 {
-    jd_node *root = make_obj(jd_node);
+    jd_node *root = make_obj_zero(jd_node);
     root->node_id = 0;
     root->type = JD_NODE_METHOD_ROOT;
     root->start_idx = 0;
@@ -150,7 +150,7 @@ static jd_node* create_root_node(jd_method *m)
 
 jd_node* create_expression_node(jd_method *m, jd_exp *exp)
 {
-    jd_node *node = make_obj(jd_node);
+    jd_node *node = make_obj_zero(jd_node);
     node->type = JD_NODE_EXPRESSION;
     node->start_idx = exp->idx;
     node->end_idx = exp->idx;
@@ -164,7 +164,7 @@ jd_node* create_expression_node(jd_method *m, jd_exp *exp)
 
 jd_node* create_new_node(jd_method *m, jd_node_type type, int start, int end)
 {
-    jd_node *node = make_obj(jd_node);
+    jd_node *node = make_obj_zero(jd_node);
     node->type = type;
     node->start_idx = start;
     node->end_idx = end;
@@ -219,7 +219,8 @@ static inline jd_range* exception_to_node_range(jd_method *m, jd_range *r)
 static bool node_contains_exception_block(jd_node *b, jd_node *eb)
 {
     assert(b->type != JD_NODE_EXCEPTION && eb->type == JD_NODE_EXCEPTION);
-    return b->start_idx <= eb->start_idx && b->end_idx >= eb->end_idx;
+    return b->start_idx <= eb->start_idx && b->end_idx >= eb->end_idx &&
+           (b->start_idx < eb->start_idx || b->end_idx > eb->end_idx);
 }
 
 static jd_node* find_exception_parent_node(jd_method *m, jd_node *node)
@@ -276,6 +277,118 @@ static void add_basic_blocks(jd_method *m, jd_node *node, list_object *blocks)
     }
 }
 
+static bool nothing_between_writes(jd_method *m, jd_bblock *from,
+                                   jd_bblock *out_block)
+{
+    jd_nblock *from_nb = from->ub->nblock;
+    jd_nblock *out_nb = out_block->ub->nblock;
+
+    for (int i = 0; i < m->basic_blocks->size; ++i) {
+        jd_bblock *w = lget_obj(m->basic_blocks, i);
+        if (w == from || !basic_block_is_normal_live(w))
+            continue;
+
+        jd_nblock *nb = w->ub->nblock;
+        if (nb->start_idx <= from_nb->end_idx ||
+                nb->start_idx >= out_nb->start_idx)
+            continue;
+
+        for (int k = nb->start_idx; k <= nb->end_idx; ++k) {
+            jd_ins *ins = get_ins(m, k);
+            if (ins == NULL || ins->expression == NULL)
+                continue;
+            if (!exp_is_nopped(ins->expression) &&
+                    !exp_is_empty(ins->expression))
+                return false;
+        }
+    }
+    return true;
+}
+
+void expand_suffix_copy_nodes(jd_method *m)
+{
+    int existing = m->nodes->size;
+    for (int i = 0; i < existing; ++i) {
+        jd_node *node = lget_obj(m->nodes, i);
+        if (!node_is_basic_block(node) || node->data == NULL)
+            continue;
+
+        jd_bblock *b = node->data;
+        jd_nblock *nb = b->ub->nblock;
+        jd_ins *end_ins = get_ins(m, nb->end_idx);
+        if (end_ins == NULL || !ins_is_copy_block(end_ins))
+            continue;
+
+        list_object *copies = end_ins->extra;
+        if (copies == NULL || copies->size == 0)
+            continue;
+
+        jd_exp *first = NULL;
+        jd_exp *last = NULL;
+        for (int j = 0; j < copies->size; ++j) {
+            jd_ins *copy = lget_obj(copies, j);
+            if (copy == NULL || copy->expression == NULL) {
+                last = NULL;
+                break;
+            }
+            if (first == NULL)
+                first = copy->expression;
+            last = copy->expression;
+        }
+        if (first == NULL || last == NULL)
+            continue;
+        jd_exp *goto_exp = get_exp(m, node->end_idx);
+        if (goto_exp == NULL || !exp_is_goto(goto_exp))
+            continue;
+        jd_ins *first_copy = lget_obj(copies, 0);
+        jd_bblock *from = first_copy->block;
+        for (int j = 0; j < copies->size; ++j) {
+            jd_ins *copy = lget_obj(copies, j);
+            copy->expression->block = b;
+        }
+
+        jd_node *parent = node->parent;
+        if (parent == NULL)
+            continue;
+
+        jd_node *copy_node = make_obj_zero(jd_node);
+        copy_node->type = JD_NODE_BASIC_BLOCK;
+        copy_node->start_idx = first->idx;
+        copy_node->end_idx = last->idx;
+        copy_node->parent = parent;
+        copy_node->node_id = m->nodes->size;
+        copy_node->children = linit_object();
+        copy_node->method = m;
+        copy_node->data = b;
+        ladd_obj(m->nodes, copy_node);
+
+        int at = lfind_object(parent->children, node);
+        if (at < 0)
+            ladd_obj(parent->children, copy_node);
+        else
+            ladd_obj_at(parent->children, copy_node, at + 1);
+
+        exp_mark_nopped(goto_exp);
+        jd_exp *last_exp = last;
+        if (last_exp == NULL || !exp_is_goto(last_exp))
+            continue;
+
+        bool falls_through = false;
+        if (from != NULL && from->in != NULL && from->in->size == 0 &&
+                from->out != NULL && from->out->size > 0) {
+            jd_edge *out_edge = lget_obj_first(from->out);
+            if (out_edge != NULL && out_edge->target_block != NULL)
+                falls_through = nothing_between_writes(
+                        m, from, out_edge->target_block);
+        }
+
+        if (falls_through) {
+            DEBUG_PRINT("[suffix] %s: copy falls through\n", m->name);
+            exp_mark_nopped(last_exp);
+        }
+    }
+}
+
 static void create_basic_block_node(jd_method *m)
 {
     jd_node *root = lget_obj(m->nodes, 0);
@@ -284,7 +397,7 @@ static void create_basic_block_node(jd_method *m)
         if (!basic_block_is_normal_live(b))
             continue;
         jd_nblock *nb = b->ub->nblock;
-        jd_node *node = make_obj(jd_node);
+        jd_node *node = make_obj_zero(jd_node);
         node->type = JD_NODE_BASIC_BLOCK;
         jd_ins *start_ins = get_ins(m, nb->start_idx);
         jd_ins *end_ins = get_ins(m, nb->end_idx);
@@ -444,24 +557,34 @@ void print_node_tree(jd_method *m, jd_node *node)
                m->name, m->nodes->size);
         node = lget_obj(m->nodes, 0);
     }
-    int level = node_level_ident(node);
+    static int depth = 0;
+    int level = depth > 40 ? 40 : depth;
+    depth++;
     printf("%*s", level * 4, " ");
-    jd_exp *start_exp = get_exp(m, node->start_idx);
-    jd_exp *end_exp = get_exp(m, node->end_idx);
-    jd_ins *start_ins = start_exp->ins;
-    jd_ins *end_ins = end_exp->ins;
+    jd_exp *start_exp = node->start_idx >= 0 &&
+                        node->start_idx < m->expressions->size ?
+                        get_exp(m, node->start_idx) : NULL;
+    jd_exp *end_exp = node->end_idx >= 0 &&
+                      node->end_idx < m->expressions->size ?
+                      get_exp(m, node->end_idx) : NULL;
+    jd_ins *start_ins = start_exp == NULL ? NULL : start_exp->ins;
+    jd_ins *end_ins = end_exp == NULL ? NULL : end_exp->ins;
     printf("node: %d, %s, %d -> %d offset: %x -> %x\n",
            node->node_id,
            node_name(node),
            node->start_idx,
            node->end_idx,
-           start_ins->offset, end_ins->offset);
-    if (node->children == NULL)
+           start_ins == NULL ? 0 : start_ins->offset,
+           end_ins == NULL ? 0 : end_ins->offset);
+    if (node->children == NULL || depth > 40) {
+        depth--;
         return;
+    }
     for (int i = 0; i < node->children->size; ++i) {
         jd_node *child = lget_obj(node->children, i);
         print_node_tree(m, child);
     }
+    depth--;
 }
 
 void create_node_tree(jd_method *m)

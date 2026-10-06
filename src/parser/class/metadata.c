@@ -8,20 +8,18 @@ static void setup_string_of_const_pool(jclass_file*);
 
 jsource_file* init_java_source_file(jclass_file *jc)
 {
-    jsource_file *jf     = make_obj(jsource_file);
+    jsource_file *jf     = make_obj_zero(jsource_file);
     jc->jfile            = jf;
     jf->jclass           = jc;
     jf->descriptors      = linit_object();
-    if (jc->super_class > 0)
-        jf->super_cname = pool_str(jc, jc->super_class);
-    else
-        jf->super_cname = (string)g_str_Object;
+    jf->super_cname      = NULL;
 
     jf->imports          = trie_create_node("");
     jf->source           = NULL;
     jf->descs            = hashmap_init((hcmp_fn)u2obj_cmp, 0);
     jf->descs_map        = hashmap_init((hcmp_fn)s2o_cmp, 0);
     jf->type             = JD_TYPE_JVM;
+    jf->enum_constants   = NULL;
     return jf;
 }
 
@@ -42,7 +40,7 @@ void init_java_class_content(jclass_file *jc, const char *path)
 
 jclass_file* init_java_class_from_file(const char* path)
 {
-    jclass_file* jc = make_obj(jclass_file);
+    jclass_file* jc = make_obj_zero(jclass_file);
     // init_class_opcode_hashmap(jc);
     jc->path = str_create("%s", path);
     init_java_class_content(jc, path);
@@ -52,7 +50,7 @@ jclass_file* init_java_class_from_file(const char* path)
 
 jclass_file* init_class_from_content(string path, string buf, size_t size)
 {
-    jclass_file* jc = make_obj(jclass_file);
+    jclass_file* jc = make_obj_zero(jclass_file);
     // init_class_opcode_hashmap(jc);
     jc->path = str_create("%s", path);
     jc->bin = make_obj(jd_bin);
@@ -205,10 +203,6 @@ static void setup_string_of_const_pool(jclass_file *jc)
             case CONST_METHODTYPE_TAG:
             case CONST_PACKAGE_TAG:
             case CONST_MODULE_TAG: {
-              /*
-               * const string && const methodtype && const_package && 
-               * const_module same structure, all index point to const_utf8
-               **/
                 u2 string_index = info->string_info->string_index;
                 jcp_info *_utf8 = pool_item(jc, string_index);
                 item->readable = str_create("%s", _utf8->readable);
@@ -456,7 +450,7 @@ void parse_methods_section(jclass_file* jc)
     DEBUG_PRINT("Method_count is: %d\n", methods_count);
     for (int i = 0; i < methods_count; ++i) {
         jmethod *item = &jc->methods[i];
-        jd_method *m = make_obj(jd_method);
+        jd_method *m = make_obj_zero(jd_method);
         m->meta_method = item;
         m->jfile = jf;
         ladd_obj(jf->methods, m);

@@ -5,6 +5,8 @@
 
 void negative_if_expression(jd_method *m);
 
+void reverse_single_operand(jd_exp *condition);
+
 void identify_boolean_in_if(jd_method *m);
 
 void identify_if_break_or_if_continue(jd_method *m);

@@ -334,10 +334,10 @@ static void build_jvm_ins_invoke_action(jd_ins *ins)
 {
     jd_descriptor *descriptor = jvm_invoke_descriptor(ins);
 
-    if (STR_EQL(descriptor->str_return, "V"))
+    if (STR_EQL(descriptor->str_return, g_str_void))
         return;
     jd_val *push0 = ins->stack_out->vals[0];
-    push0->type = descriptor_data_type(descriptor->str_return);
+    push0->type = descriptor_name_data_type(descriptor->str_return);
     push0->ins = ins;
     string fname = class_full_name(descriptor->str_return);
     push0->data->cname = get_sname(ins, fname);

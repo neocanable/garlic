@@ -418,7 +418,7 @@ void jvm_simulator(jd_method *m)
     m->offset2var_map = hashmap_init((hcmp_fn)i2obj_cmp, 0);
     m->class_counter_map = hashmap_init((hcmp_fn) s2i_cmp, 0);
     m->slot_counter_map = hashmap_init((hcmp_fn) i2i_cmp, 0);
-    m->class_counter_map = hashmap_init((hcmp_fn) s2i_cmp, 0);
+    m->var_name_taken = hashmap_init((hcmp_fn) s2i_cmp, 0);
     m->var_name_map = hashmap_init((hcmp_fn)s2s_cmp, 0);
     m->types = linit_object();
 

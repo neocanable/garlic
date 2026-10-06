@@ -1,5 +1,6 @@
 #include <libgen.h>
 
+#include "common/output_error.h"
 #include "decompiler/method.h"
 #include "decompiler/klass.h"
 #include "decompiler/expression_writter.h"
@@ -72,11 +73,15 @@ void jvm_init_method_fn(jsource_file *jf)
 
 void jvm_analyse_class_file_inside(jsource_file *jf)
 {
-    jf->fname = pool_str(jf->jclass, ((jclass_file*)jf->jclass)->this_class);
+    jclass_file *jc = jf->jclass;
+    jf->fname = pool_str(jc, jc->this_class);
+    jf->super_cname = jc->super_class > 0
+                      ? class_simple_name(pool_str(jc, jc->super_class))
+                      : (string) g_str_Object;
     jf->pname = class_package_name(jf);
     if (jf->pname == NULL)
         jf->pname = (string) g_str_default;
-    jf->sname = class_simple_name(jf->fname);
+    jf->sname = class_simple_name_without_primitive(jf->fname);
     jf->access_flags_fn = jvm_class_access_flag;
 
     jvm_init_ins_fn(jf);
@@ -107,6 +112,6 @@ void jvm_analyse_class_file(jsource_file *jf)
     if (jf->parent == NULL) {
         writter_for_class(jf, NULL);
         if (jf->source != NULL)
-            fclose(jf->source);
+            output_close(jf->source, jf->fname);
     }
 }

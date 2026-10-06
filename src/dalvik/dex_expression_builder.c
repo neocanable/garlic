@@ -182,16 +182,16 @@ static void dex_new_array_expression(jd_exp *exp, jd_dex_ins *ins)
     jd_exp *right = get_store_right(exp);
 
     right->type = JD_EXPRESSION_NEW_ARRAY;
-    right->data = make_obj(jd_exp_new_array);
+    right->data = make_obj_zero(jd_exp_new_array);
     jd_exp_new_array *new_array = right->data;
 
     jd_meta_dex *meta = dex_ins_meta(ins);
     u8 type_idx = dex_ins_parameter(ins, 2);
     string desc = dex_str_of_type_id(meta, type_idx);
-    string class_name = descriptor_to_s(desc);
+    string class_name = array_component_name(descriptor_to_s(desc));
 
     u8 slot = dex_ins_parameter(ins, 1);
-    jd_val *val = ins->stack_out->local_vars[slot];
+    jd_val *val = ins->stack_in->local_vars[slot];
     new_array->class_name = class_name;
     new_array->list = make_exp_list(1);
     jd_exp *count_exp = &new_array->list->args[0];
@@ -207,12 +207,12 @@ static void dex_filled_new_array_expression(jd_exp *exp, jd_dex_ins *ins)
 
 //    right->type = JD_EXPRESSION_NEW_ARRAY;
 //    right->data = make_obj(jd_exp_new_array);
-    jd_exp_new_array *new_array = make_obj(jd_exp_new_array);
+    jd_exp_new_array *new_array = make_obj_zero(jd_exp_new_array);
 
     jd_meta_dex *meta = dex_ins_meta(ins);
     u8 type_idx = dex_ins_parameter(ins, 1);
     string desc = dex_str_of_type_id(meta, type_idx);
-    string class_name = descriptor_to_s(desc);
+    string class_name = array_component_name(descriptor_to_s(desc));
     new_array->class_name = class_name;
 
     u1 size = dex_ins_parameter(ins, 0);
@@ -247,12 +247,12 @@ static void dex_filled_new_array_expression(jd_exp *exp, jd_dex_ins *ins)
 
 static void dex_filled_new_array_range_expression(jd_exp *exp, jd_dex_ins *ins)
 {
-    jd_exp_new_array *new_array = make_obj(jd_exp_new_array);
+    jd_exp_new_array *new_array = make_obj_zero(jd_exp_new_array);
 
     jd_meta_dex *meta = dex_ins_meta(ins);
     u8 type_idx = dex_ins_parameter(ins, 1);
     string desc = dex_str_of_type_id(meta, type_idx);
-    string class_name = descriptor_to_s(desc);
+    string class_name = array_component_name(descriptor_to_s(desc));
     new_array->class_name = class_name;
 
     u1 u_a = dex_ins_parameter(ins, 0);
@@ -289,7 +289,7 @@ static void dex_filled_new_array_range_expression(jd_exp *exp, jd_dex_ins *ins)
 static void dex_fill_array_data_expression(jd_exp *exp, jd_dex_ins *ins)
 {
     exp->type = JD_EXPRESSION_NEW_ARRAY;
-    exp->data = make_obj(jd_exp_new_array);
+    exp->data = make_obj_zero(jd_exp_new_array);
 
     jd_exp_new_array *new_array = exp->data;
     s4 offset = (s4)dex_ins_parameter(ins, 1);
@@ -302,88 +302,91 @@ static void dex_fill_array_data_expression(jd_exp *exp, jd_dex_ins *ins)
     }
     //    offset = offset + ins->old_offset;
 
+    u1 slot = dex_ins_parameter(ins, 0);
+    jd_val *val = ins->stack_out->local_vars[slot];
     jd_dex_ins *payload_ins = dex_ins_of_offset(ins->method, offset);
+
+    if (payload_ins == NULL || val == NULL || val->data == NULL) {
+        new_array->class_name = (string) g_str_unknown;
+        new_array->list = make_exp_list(1);
+        build_empty_expression(&new_array->list->args[0], ins);
+        return;
+    }
+
     u2 element_size = payload_ins->param[1];
     u4 size = payload_ins->param[3] << 16 | payload_ins->param[2];
 
     DEBUG_PRINT("[payload size]: %d\n", size);
 
-    u1 slot = dex_ins_parameter(ins, 0);
-    jd_val *val = ins->stack_out->local_vars[slot];
-    new_array->class_name = val->data->cname;
-    new_array->list = make_exp_list(size);
+    string component = array_component_name(val->data->cname);
+    if (component == NULL)
+        component = (string) g_str_unknown;
+    new_array->class_name = component;
+    new_array->list = make_exp_list(size + 1);
+
+    jd_exp *count_exp = &new_array->list->args[0];
+    count_exp->type = JD_EXPRESSION_CONST;
+    count_exp->ins = ins;
+    jd_exp_const *count_const = make_obj(jd_exp_const);
+    count_exp->data = count_const;
+    count_const->val = stack_create_empty_val();
+    count_const->val->type = JD_VAR_INT_T;
+    count_const->val->data->primitive = make_obj(jd_primitive_union);
+    count_const->val->data->primitive->int_val = size;
+    count_const->val->data->cname = (string) g_str_int;
+
     u1 *params = &payload_ins->param[4];
 
     for (int i = 0; i < size; ++i) {
-        jd_exp *count_exp = &new_array->list->args[i];
-        count_exp->type = JD_EXPRESSION_CONST;
+        jd_exp *element = &new_array->list->args[i + 1];
+        element->type = JD_EXPRESSION_CONST;
+        element->ins = ins;
         jd_exp_const *const_exp = make_obj(jd_exp_const);
-        count_exp->data = const_exp;
-        count_exp->ins = ins;
+        element->data = const_exp;
         const_exp->val = stack_create_empty_val();
         jd_val *const_val = const_exp->val;
         const_val->data->primitive = make_obj(jd_primitive_union);
         jd_primitive_union *primitive = const_val->data->primitive;
 
-        if (stack_val_is_int(val)) {
-            const_val->type = JD_VAR_INT_T;
-            int int_value = 0;
-            memcpy(&int_value, params, element_size);
-            primitive->int_val = int_value;
-            const_val->data->cname = (string)g_str_int;
-        }
-        else if (stack_val_is_long(val)) {
-            const_val->type = JD_VAR_LONG_T;
-            long long_val = 0;
-            memcpy(&long_val, params, element_size);
-            primitive->long_val = long_val;
-            const_val->data->cname = (string)g_str_long;
-        }
-        else if (stack_val_is_float(val)) {
-            const_val->type = JD_VAR_FLOAT_T;
-            float fvalue = 0;
-            memcpy(&fvalue, params, element_size);
-            primitive->float_val = fvalue;
-            const_val->data->cname = (string)g_str_float;
-        }
-        else if (stack_val_is_double(val)) {
-            const_val->type = JD_VAR_DOUBLE_T;
+        if (STR_EQL(component, g_str_double)) {
             double dval = 0;
-            memcpy(&dval, params, element_size);
+            memcpy(&dval, params, element_size < sizeof(dval) ? element_size
+                                                              : sizeof(dval));
+            const_val->type = JD_VAR_DOUBLE_T;
             primitive->double_val = dval;
-            const_val->data->cname = (string)g_str_double;
+            const_val->data->cname = (string) g_str_double;
         }
-        else if (stack_val_is_boolean(val)) {
-            const_val->type = JD_VAR_INT_T;
-            int int_value = 0;
-            memcpy(&int_value, params, element_size);
-            primitive->int_val = int_value;
-            const_val->data->cname = (string)g_str_boolean;
+        else if (STR_EQL(component, g_str_long)) {
+            long long_value = 0;
+            memcpy(&long_value, params, element_size < sizeof(long_value)
+                                           ? element_size : sizeof(long_value));
+            const_val->type = JD_VAR_LONG_T;
+            primitive->long_val = long_value;
+            const_val->data->cname = (string) g_str_long;
         }
-        else if (stack_val_is_byte(val)) {
-            const_val->type = JD_VAR_INT_T;
-            int int_value = 0;
-            memcpy(&int_value, params, element_size);
-            primitive->int_val = int_value;
-            const_val->data->cname = (string)g_str_byte;
+        else if (STR_EQL(component, g_str_float)) {
+            float fvalue = 0;
+            memcpy(&fvalue, params, element_size < sizeof(fvalue)
+                                         ? element_size : sizeof(fvalue));
+            const_val->type = JD_VAR_FLOAT_T;
+            primitive->float_val = fvalue;
+            const_val->data->cname = (string) g_str_float;
         }
-        else if (stack_val_is_short(val)) {
-            const_val->type = JD_VAR_INT_T;
+        else if (STR_EQL(component, g_str_int) ||
+                 STR_EQL(component, g_str_char) ||
+                 STR_EQL(component, g_str_byte) ||
+                 STR_EQL(component, g_str_short) ||
+                 STR_EQL(component, g_str_boolean)) {
             int int_value = 0;
-            memcpy(&int_value, params, element_size);
-            primitive->int_val = int_value;
-            const_val->data->cname = (string)g_str_short;
-        }
-        else if (stack_val_is_char(val)) {
+            memcpy(&int_value, params, element_size < sizeof(int_value)
+                                            ? element_size : sizeof(int_value));
             const_val->type = JD_VAR_INT_T;
-            int int_value = 0;
-            memcpy(&int_value, params, element_size);
             primitive->int_val = int_value;
-            const_val->data->cname = (string)g_str_char;
+            const_val->data->cname = component;
         }
         else {
-            const_val->type = JD_VAR_REFERENCE_T;
-            const_val->data->cname = (string)g_str_Object;
+            const_val->type = JD_VAR_NULL_T;
+            const_val->data->cname = (string) g_str_Object;
         }
         params += element_size;
     }
@@ -614,8 +617,8 @@ static void dex_array_get_expression(jd_exp *exp, jd_dex_ins *ins)
     right->type = JD_EXPRESSION_ARRAY_LOAD;
     jd_exp_array_load *array_load = right->data;
     array_load->list = make_exp_list(2);
-    jd_exp *array = &array_load->list->args[0];
-    jd_exp *index = &array_load->list->args[1];
+    jd_exp *index = &array_load->list->args[0];
+    jd_exp *array = &array_load->list->args[1];
 
     u2 array_slot = dex_ins_parameter(ins, 1);
     u2 index_slot = dex_ins_parameter(ins, 2);
@@ -637,8 +640,8 @@ static void dex_array_put_expression(jd_exp *exp, jd_dex_ins *ins)
     jd_exp *array = &array_store->list->args[2];
 
     u2 value_slot = dex_ins_parameter(ins, 0);
-    u2 index_slot = dex_ins_parameter(ins, 1);
-    u2 array_slot = dex_ins_parameter(ins, 2);
+    u2 index_slot = dex_ins_parameter(ins, 2);
+    u2 array_slot = dex_ins_parameter(ins, 1);
 
     jd_val **locals = ins->stack_out->local_vars;
 
@@ -780,6 +783,7 @@ static void dex_invoke_expression(jd_exp *exp, jd_dex_ins *ins)
     string name = dex_str_of_idx(meta, method_id->name_idx);
 
     invoke->class_name = descriptor_to_s(class_name);
+    invoke->owner_class = class_full_name(class_name);
     invoke->method_name = name;
 
     u1 real_param_size = param_size;
@@ -830,6 +834,35 @@ static void dex_invoke_expression(jd_exp *exp, jd_dex_ins *ins)
     }
 
     jd_exp_lambda *lambda_exp = NULL;
+
+    bool lambda_is_static_site = !dex_ins_is_invoke_direct(ins) &&
+                                 dex_ins_is_invoke_static(ins);
+    if (lambda_is_static_site &&
+        !dex_lambda_is_factory_call(meta,
+                hget_u4obj(meta->synthetic_classes_map, method_id->class_idx),
+                method_id))
+        lambda_is_static_site = false;
+    if (lambda_is_static_site) {
+        jd_dex *dex = ins->method->meta;
+        dex_class_def *cf = hget_u4obj(meta->synthetic_classes_map,
+                                       method_id->class_idx);
+        if (cf != NULL &&
+            (dex_class_is_anonymous_class(meta, cf) ||
+             dex_class_is_lambda_shape(meta, cf))) {
+            lambda_exp = dex_lambda_cached(meta, cf, dex, jf, invoke, true);
+            if (lambda_exp != NULL) {
+                invoke->lambda = lambda_exp;
+                jd_exp *where = exp;
+                if (exp_is_store(exp)) {
+                    jd_exp_store *store = exp->data;
+                    if (store->list != NULL && store->list->len >= 2)
+                        where = &store->list->args[1];
+                }
+                where->type = JD_EXPRESSION_LAMBDA;
+                where->data = lambda_exp;
+            }
+        }
+    }
     if (dex_ins_is_invoke_direct(ins) &&
         STR_EQL(invoke->method_name, g_str_init)) {
         dex_class_def *cf = hget_u4obj(meta->synthetic_classes_map,
@@ -837,11 +870,9 @@ static void dex_invoke_expression(jd_exp *exp, jd_dex_ins *ins)
 
         if (cf != NULL &&
             !is_nested_inner_class(cf, jf) &&
-            dex_class_is_anonymous_class(meta, cf)) {
-            jsource_file *_inner = dex_class_inside(dex, cf, jf);
-            _inner->parent = ins->method->jfile;
-            _inner->source = _inner->parent->source;
-            lambda_exp = dex_lambda(_inner, invoke);
+            (dex_class_is_anonymous_class(meta, cf) ||
+             dex_class_is_lambda_shape(meta, cf))) {
+            lambda_exp = dex_lambda_cached(meta, cf, dex, jf, invoke, false);
             if (lambda_exp != NULL)
                 invoke->lambda = lambda_exp;
         }
@@ -884,6 +915,7 @@ static void dex_invoke_range_expression(jd_exp *exp, jd_dex_ins *ins)
     string name = dex_str_of_idx(meta, method_id->name_idx);
 
     invoke->class_name = descriptor_to_s(class_name);
+    invoke->owner_class = class_full_name(class_name);
     invoke->method_name = name;
 
     u2 start_index = dex_ins_parameter(ins, 2);
@@ -946,14 +978,43 @@ static void dex_invoke_range_expression(jd_exp *exp, jd_dex_ins *ins)
     }
 
     jd_exp_lambda *lambda_exp = NULL;
+    bool lambda_is_static_site = !dex_ins_is_invoke_direct(ins) &&
+                                 dex_ins_is_invoke_static(ins);
+    if (lambda_is_static_site &&
+        !dex_lambda_is_factory_call(meta,
+                hget_u4obj(meta->synthetic_classes_map, method_id->class_idx),
+                method_id))
+        lambda_is_static_site = false;
+    if (lambda_is_static_site) {
+        jd_dex *dex = ins->method->meta;
+        dex_class_def *cf = hget_u4obj(meta->synthetic_classes_map,
+                                       method_id->class_idx);
+        if (cf != NULL &&
+            (dex_class_is_anonymous_class(meta, cf) ||
+             dex_class_is_lambda_shape(meta, cf))) {
+            lambda_exp = dex_lambda_cached(meta, cf, dex, jf, invoke, true);
+            if (lambda_exp != NULL) {
+                invoke->lambda = lambda_exp;
+                jd_exp *where = exp;
+                if (exp_is_store(exp)) {
+                    jd_exp_store *store = exp->data;
+                    if (store->list != NULL && store->list->len >= 2)
+                        where = &store->list->args[1];
+                }
+                where->type = JD_EXPRESSION_LAMBDA;
+                where->data = lambda_exp;
+            }
+        }
+    }
     if (dex_ins_is_invoke_direct(ins) &&
         STR_EQL(invoke->method_name, g_str_init)) {
         dex_class_def *cf = hget_u4obj(meta->synthetic_classes_map,
                                        method_id->class_idx);
         jd_dex *dex = ins->method->meta;
-        if (cf != NULL && dex_class_is_anonymous_class(meta, cf)) {
-            jsource_file *_inner = dex_class_inside(dex, cf, jf);
-            lambda_exp = dex_lambda(_inner, invoke);
+        if (cf != NULL &&
+            (dex_class_is_anonymous_class(meta, cf) ||
+             dex_class_is_lambda_shape(meta, cf))) {
+            lambda_exp = dex_lambda_cached(meta, cf, dex, jf, invoke, false);
             if (lambda_exp != NULL)
                 invoke->lambda = lambda_exp;
         }

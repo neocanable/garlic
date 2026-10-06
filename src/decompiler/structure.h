@@ -504,8 +504,11 @@ typedef struct {
     jd_lambda       *lambda;
     string          class_name;
     string          method_name;
+    string          interface_name;
     jd_descriptor   *descriptor;
     bool            is_static;
+    int             captures;
+    int             body_arity;
 } jd_exp_lambda;
 
 typedef struct {
@@ -519,6 +522,7 @@ typedef struct {
     jd_exp_list *list;
 
     string          class_name;
+    string          owner_class;
     string          method_name;
     jd_descriptor   *descriptor;
     jd_exp_lambda   *lambda;
@@ -735,6 +739,7 @@ typedef enum {
     JD_NODE_DO_WHILE,
     JD_NODE_IF_TRUE,
     JD_NODE_IF_FALSE,
+    JD_NODE_IF_RETURN,
     JD_NODE_EXCEPTION,
     JD_NODE_BASIC_BLOCK,
     JD_NODE_EXPRESSION,
@@ -765,6 +770,8 @@ typedef struct {
     list_object     *true_blocks;
     list_object     *false_blocks;
     jd_node         *node;
+    jd_bblock       *dropped_true_block;
+    jd_bblock       *dropped_false_block;
 
     int             if_start_idx;
     int             true_start_idx;
@@ -816,11 +823,6 @@ typedef struct {
     jd_loop_type type;
 } jd_loop;
 
-/**
- * 1. exception有断的情况，有些obfuscator会把try,catch,finally分开
- * 2. switch有断的情况，有些obfuscator会把switch, case分开
- **/
-
 struct jd_node {
     int             node_id;
     int             start_idx;
@@ -831,11 +833,6 @@ struct jd_node {
     jd_method       *method;
     jd_node         *parent;
     list_object     *children;
-
-    /**
-     * catch/case/if/loop/switch/synchronized/else_if
-     * 这些节点是有参数的,param_exp就是存储这个参数的
-     **/
     jd_exp          *param_exp;
 
     int             order;
@@ -845,6 +842,7 @@ enum method_state_flag {
     METHOD_STATE_LAMBDA        = 0x0001,
     METHOD_STATE_HIDE          = 0x0002,
     METHOD_STATE_UNSUPPORT     = 0x0004,
+    METHOD_STATE_SYNC_BLOCK    = 0x0008,
 };
 
 typedef struct {
@@ -914,6 +912,8 @@ struct jd_method {
     hashmap         *offset2id_map;
 
     hashmap         *class_counter_map;
+
+    hashmap         *var_name_taken;
 
     hashmap         *var_name_map;
 
@@ -1192,6 +1192,8 @@ struct jsource_file {
     jd_method_fn    *method_fn;
 
     jd_ins_fn       *ins_fn;
+
+    jd_exp          *enum_constants;
 
     FILE            *source;
 };

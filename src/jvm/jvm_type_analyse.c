@@ -78,7 +78,8 @@ void jvm_int_type_analyze(jd_ins *ins)
     switch(ins->code) {
         case INS_IRETURN: {
             jd_descriptor *descriptor = ins->method->desc;
-            string type = class_simple_name(descriptor->str_return);
+            string type = class_simple_name_without_primitive(
+                    descriptor->str_return);
             string val_class_name = val->data->cname;
             if (vins == NULL)
                 break;
@@ -118,7 +119,7 @@ void jvm_int_type_analyze(jd_ins *ins)
                 jd_var *var = val->stack_var;
                 string val_class_name = val->data->cname;
 
-                if (!is_hide_int_type(type) || vins == NULL)
+                if (!is_hide_int_class(type) || vins == NULL)
                     continue;
 
                 string simple_name = class_simple_name(type);

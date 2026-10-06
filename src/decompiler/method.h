@@ -11,7 +11,7 @@
 
 string create_method_defination(jd_method *m);
 
-string create_lambda_defination(jd_method *m);
+string create_lambda_defination(jd_method *m, int captures);
 
 static inline bool method_is_jvm(jd_method *m)
 {
@@ -78,6 +78,16 @@ static inline bool method_is_hide(jd_method *m)
     return access_flags_contains(m->state_flag, METHOD_STATE_HIDE);
 }
 
+static inline void method_mark_sync_block(jd_method *m)
+{
+    m->state_flag |= METHOD_STATE_SYNC_BLOCK;
+}
+
+static inline bool method_is_sync_block(jd_method *m)
+{
+    return access_flags_contains(m->state_flag, METHOD_STATE_SYNC_BLOCK);
+}
+
 static inline void method_mark_lambda(jd_method *m)
 {
     m->state_flag |= METHOD_STATE_LAMBDA;
@@ -100,12 +110,34 @@ static inline bool method_is_lambda(jd_method *m)
 
 static inline bool method_is_enum_constructor(jd_method *m)
 {
-    if (STR_EQL(m->name, g_str_init)) {
-        jclass_file *jc = m->meta;
-        if (class_has_flag(jc, CLASS_ACC_ENUM))
-            return true;
-    }
-    return false;
+    if (!STR_EQL(m->name, g_str_init))
+        return false;
+
+    jsource_file *jf = m->jfile;
+    if (!class_is_enum(jf))
+        return false;
+
+    return jf->super_cname != NULL &&
+           STR_EQL(class_simple_name(jf->super_cname), (string) g_str_Enum);
+}
+
+static inline int method_synthetic_parameter_count(jd_method *m)
+{
+    return method_is_enum_constructor(m) ? 2 : 0;
+}
+
+static inline bool invoke_is_this_constructor(jd_exp_invoke *invoke,
+                                              jd_exp *expression)
+{
+    if (invoke->method_name == NULL ||
+            !STR_EQL(invoke->method_name, g_str_init))
+        return false;
+
+    jd_method *m = expression->ins->method;
+    if (invoke->owner_class == NULL || m->jfile == NULL)
+        return false;
+
+    return STR_EQL(invoke->owner_class, m->jfile->fname);
 }
 
 #endif //GARLIC_METHOD_H

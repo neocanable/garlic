@@ -6,7 +6,7 @@ string exp_invokeinterface_to_s(jd_exp *expression)
     jd_exp_invoke *invoke = expression->data;
     string method_name = invoke->method_name;
     jd_exp *ref_exp = &invoke->list->args[invoke->list->len - 1];
-    string object_ref_str = exp_to_s(ref_exp);
+    string object_ref_str = lambda_receiver_to_s(ref_exp);
     string result;
 
     size_t len = snprintf(NULL, 0, "%s.%s", object_ref_str, method_name) + 3;
@@ -37,7 +37,7 @@ void exp_invokeinterface_to_stream(FILE *stream,
     jd_exp_invoke *invoke = expression->data;
     string method_name = invoke->method_name;
     jd_exp *ref_exp = &invoke->list->args[invoke->list->len - 1];
-    expression_to_stream(stream, node, ref_exp);
+    lambda_receiver_to_stream(stream, node, ref_exp);
     fprintf(stream, ".%s(", method_name);
 
     for (int j = 0; j <= invoke->list->len - 2; ++j) {

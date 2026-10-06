@@ -52,9 +52,8 @@ jd_val* stack_create_val_with_descriptor(jd_method *m, string desc, int slot)
 {
     jd_val *val = stack_create_empty_val();
     val->slot = slot;
-    val->type = descriptor_data_type(desc);
-    string full = class_full_name(desc);
-    val->data->cname = class_simple_name_without_primitive(full);
+    val->type = descriptor_name_data_type(desc);
+    val->data->cname = class_simple_name_without_primitive(desc);
     return val;
 }
 

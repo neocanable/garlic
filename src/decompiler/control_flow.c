@@ -98,7 +98,7 @@ static void basic_block_init_common_object(jd_bblock *block)
 
 jd_bblock* cfg_create_basic_block(jd_method *m, int id, jd_bblock_type t)
 {
-    jd_bblock *block = make_obj(jd_bblock);
+    jd_bblock *block = make_obj_zero(jd_bblock);
     block->method = m;
     block->block_id = id;
     block->type = t;

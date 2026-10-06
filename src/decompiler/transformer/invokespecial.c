@@ -1,4 +1,22 @@
 #include "decompiler/transformer/transformer.h"
+#include "decompiler/method.h"
+
+static int ctor_delegation_first_arg(jd_exp_invoke *invoke,
+                                     jd_exp *expression,
+                                     string object_ref_str)
+{
+    if (!STR_EQL(invoke->method_name, g_str_init) ||
+            !STR_EQL(object_ref_str, g_str_this))
+        return 0;
+
+    return method_synthetic_parameter_count(expression->ins->method);
+}
+
+static string new_expression_class_name(jd_exp_invoke *invoke,
+                                        string object_ref_str)
+{
+    return invoke->class_name != NULL ? invoke->class_name : object_ref_str;
+}
 
 string exp_invokespecial_to_s(jd_exp *expression)
 {
@@ -21,7 +39,14 @@ string exp_invokespecial_to_s(jd_exp *expression)
     }
     else if (STR_EQL(object_ref_str, g_str_this) &&
              STR_EQL(method_name, g_str_init) &&
-             STR_EQL(current_method_name, g_str_init)) {
+             invoke_is_this_constructor(invoke, expression)) {
+        len = snprintf(NULL, 0, "this") + 3;
+        result = x_alloc(len);
+        snprintf(result, len, "this");
+        strcat(result, "(");
+    }
+    else if (STR_EQL(object_ref_str, g_str_this) &&
+             STR_EQL(method_name, g_str_init)) {
         len = snprintf(NULL, 0, "super") + 3;
         result = x_alloc(len);
         snprintf(result, len, "super");
@@ -35,13 +60,15 @@ string exp_invokespecial_to_s(jd_exp *expression)
         strcat(result, "(");
     }
     else {
-        len = snprintf(NULL, 0, "new %s.%s", object_ref_str, method_name) + 3;
+        string cname = new_expression_class_name(invoke, object_ref_str);
+        len = snprintf(NULL, 0, "new %s", cname) + 3;
         result = x_alloc(len);
-        snprintf(result, len, "new %s.%s", object_ref_str, method_name);
+        snprintf(result, len, "new %s", cname);
         strcat(result, "(");
     }
 
-    for (int j = 0; j <= invoke->list->len - 2; ++j) {
+    for (int j = ctor_delegation_first_arg(invoke, expression, object_ref_str);
+         j <= invoke->list->len - 2; ++j) {
         string arg_name = exp_to_s(&invoke->list->args[j]);
         new_len = len + strlen(arg_name) + 2;
 
@@ -72,9 +99,13 @@ void exp_invokespecial_to_stream(FILE *stream,
          STR_EQL(current_method_name, method_name))) {
         fprintf(stream, "super.%s(", method_name);
     }
-    else if (/*STR_EQL(object_ref_str, g_str_this) &&*/
+    else if (STR_EQL(object_ref_str, g_str_this) &&
              STR_EQL(method_name, g_str_init) &&
-             STR_EQL(current_method_name, g_str_init)) {
+             invoke_is_this_constructor(invoke, expression)) {
+        fprintf(stream, "this(");
+    }
+    else if (STR_EQL(object_ref_str, g_str_this) &&
+             STR_EQL(method_name, g_str_init)) {
         fprintf(stream, "super(");
     }
     else if (!STR_EQL(method_name, g_str_init)) {
@@ -82,10 +113,12 @@ void exp_invokespecial_to_stream(FILE *stream,
         fprintf(stream, "%s.%s(", object_ref_str, method_name);
     }
     else {
-        fprintf(stream, "new %s.%s(", object_ref_str, method_name);
+        fprintf(stream, "new %s(",
+                new_expression_class_name(invoke, object_ref_str));
     }
 
-    for (int j = 0; j <= invoke->list->len - 2; ++j) {
+    for (int j = ctor_delegation_first_arg(invoke, expression, object_ref_str);
+         j <= invoke->list->len - 2; ++j) {
         expression_to_stream(stream, node, &invoke->list->args[j]);
         if (j != invoke->list->len - 2)
             fprintf(stream, ", ");

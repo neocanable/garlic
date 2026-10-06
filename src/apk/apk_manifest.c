@@ -140,30 +140,61 @@ void parse_manifest_binary(FILE *stream, const u1* buffer, size_t buffer_size) {
             size_t remaining = pool_end - str_ptr;
 
             if (is_utf8) {
+                // AXML UTF-8 strings carry TWO length prefixes:
+                //   utf16-length (encoded), then utf8 byte-length-1 (encoded).
+                // The old code only consumed/skipped ONE and used it as the
+                // byte count, dropping the final character of every string.
                 char buf[2048] = {0};
-                size_t len = 0;
+                const u1* p = str_ptr;
+                size_t rem = remaining;
 
-                if (remaining > 0) {
-                    if (str_ptr[0] & 0x80) {
-                        if (remaining >= 2) {
-                            len = ((str_ptr[0] & 0x7F) << 8) | str_ptr[1];
-                            str_ptr += 2;
-                            remaining -= 2;
+                // consume the utf16-length varint prefix
+                if (rem >= 1) {
+                    if (p[0] & 0x80) {
+                        if (rem >= 3) {
+                            p += 3;
+                            rem -= 3;
                         } else {
                             str_table.table[i] = strdup("");
                             continue;
                         }
                     } else {
-                        len = str_ptr[0];
-                        str_ptr += 1;
-                        remaining -= 1;
+                        p += 1;
+                        rem -= 1;
                     }
+                } else {
+                    str_table.table[i] = strdup("");
+                    continue;
                 }
 
-                if (len > 0 && len <= remaining) {
-                    if (len >= sizeof(buf)) len = sizeof(buf) - 1;
-                    memcpy(buf, str_ptr, len);
-                    buf[len] = '\0';
+                u4 utf8_len = 0;
+                if (rem < 1) {
+                    str_table.table[i] = strdup("");
+                    continue;
+                }
+                if (p[0] & 0x80) {
+                    if (rem < 3) {
+                        str_table.table[i] = strdup("");
+                        continue;
+                    }
+                    utf8_len = ((u4)(p[0] & 0x7F) << 8) | p[1];
+                    p += 3;
+                    rem -= 3;
+                } else {
+                    utf8_len = p[0];
+                    p += 1;
+                    rem -= 1;
+                }
+
+                // stored count is byte length minus one
+                utf8_len += 1;
+                if (utf8_len > rem)
+                    utf8_len = (u4)rem;
+                if (utf8_len >= sizeof(buf))
+                    utf8_len = sizeof(buf) - 1;
+                if (utf8_len > 0) {
+                    memcpy(buf, p, utf8_len);
+                    buf[utf8_len] = '\0';
                     str_table.table[i] = strdup(buf);
                 } else {
                     str_table.table[i] = strdup("");

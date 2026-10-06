@@ -1867,7 +1867,6 @@ void mcp_handle_tools_call(jd_mcp_server *server, unsigned id,
             char *errmsg = str_create_in(server->pool,
                 "File not found: %s", file_path);
             jd_mcp_send_error(id, JD_MCP_ERROR_INVALID_PARAMS, errmsg);
-            mem_pool_free(server->pool);
             return;
         }
         jd_mcp_log("executing %s on %s", tool_name, file_path);
@@ -2020,5 +2019,4 @@ void mcp_handle_tools_call(jd_mcp_server *server, unsigned id,
     }
 
     jd_mcp_send_tool_result(id, output ? output : "(no output)");
-    mem_pool_free(server->pool);
 }

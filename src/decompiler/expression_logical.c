@@ -2,12 +2,25 @@
 #include "decompiler/expression_logical.h"
 #include "decompiler/control_flow.h"
 #include "decompiler/expression.h"
+#include "decompiler/expression_if.h"
 #include "jvm/jvm_expression_builder.h"
 #include "expression_writter.h"
 #include "dominator_tree.h"
 
 void make_logic_not(jd_exp *expression)
 {
+    if (expression->type == JD_EXPRESSION_SINGLE_LIST) {
+        reverse_single_operand(expression);
+        return;
+    }
+    if (expression->type == JD_EXPRESSION_SINGLE_OPERATOR) {
+        jd_exp_single_operator *single_op = expression->data;
+        if (single_op->operator == JD_OP_LOGICAL_NOT) {
+            reverse_single_operand(expression);
+            return;
+        }
+    }
+
     if (exp_is_operator(expression)) {
         jd_exp_operator *exp_operator = expression->data;
         switch (exp_operator->operator) {

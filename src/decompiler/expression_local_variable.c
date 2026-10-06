@@ -108,58 +108,65 @@ static string get_array_variable_name(string name)
     base_name[len] = '\0';
 
     int count = 0;
-    for (int i = strlen(name)-1; i >=0 ; ++i) {
-        char c = name[i];
-        if (c != '[')
-            break;
-        count++;
+    for (size_t i = len; i < strlen(name); ++i) {
+        if (name[i] == '[')
+            count++;
     }
 
-    string result = NULL;
-    if (count == 1) {
-        result = str_create("%sArr", base_name);
-    }
-    else {
-        result = str_create("%sArr%d", base_name, count);
-    }
-    return result;
+    if (count == 1)
+        return str_create("%sArr", base_name);
+    return str_create("%sArr%d", base_name, count);
 }
 
 static string gen_variable_name(jd_method *m, jd_exp *exp, string cname)
 {
-    int count = hget_s2i(m->class_counter_map, cname);
+    string stem = NULL;
+    bool numbered = true;
+
+    if (STR_EQL(cname, "String"))
+        stem = "str";
+    else if (STR_EQL(cname, g_str_int))
+        stem = "i";
+    else if (STR_EQL(cname, g_str_long))
+        stem = "l";
+    else if (STR_EQL(cname, g_str_double))
+        stem = "dbl";
+    else if (STR_EQL(cname, g_str_float))
+        stem = "flt";
+    else if (STR_EQL(cname, g_str_byte))
+        stem = "byte";
+    else if (STR_EQL(cname, g_str_short))
+        stem = "short";
+    else if (STR_EQL(cname, g_str_boolean))
+        stem = "bool";
+    else if (STR_EQL(cname, g_str_char))
+        stem = "char";
+    else {
+        string last_word = get_last_word_lower(cname);
+        stem = get_array_variable_name(last_word);
+        numbered = false;
+    }
+
+    if (m->var_name_taken == NULL)
+        m->var_name_taken = hashmap_init((hcmp_fn) s2i_cmp, 0);
+    int count = hget_s2i(m->class_counter_map, stem);
     if (count == -1)
         count = 0;
 
-    string var_name = NULL;
-    if (STR_EQL(cname, "String"))
-        var_name = str_create("str%d", count);
-    else if (STR_EQL(cname, g_str_int))
-        var_name = str_create("i%d", count);
-    else if (STR_EQL(cname, g_str_long))
-        var_name = str_create("l%d", count);
-    else if (STR_EQL(cname, g_str_double))
-        var_name = str_create("dbl%d", count);
-    else if (STR_EQL(cname, g_str_float))
-        var_name = str_create("flt%d", count);
-    else if (STR_EQL(cname, g_str_byte))
-        var_name = str_create("byte%d", count);
-    else if (STR_EQL(cname, g_str_short))
-        var_name = str_create("short%d", count);
-    else if (STR_EQL(cname, g_str_boolean))
-        var_name = str_create("bool%d", count);
-    else if (STR_EQL(cname, g_str_char))
-        var_name = str_create("char%d", count);
-
-    string last_word = get_last_word_lower(cname);
-    string lower = get_array_variable_name(last_word);
-    if (var_name == NULL) {
-        if (count == 0)
-            var_name = str_create("%s", lower);
+    string name = NULL;
+    do {
+        if (numbered)
+            name = str_create("%s%d", stem, count);
+        else if (count == 0)
+            name = str_create("%s", stem);
         else
-            var_name = str_create("%sVar%d", lower, count);
-    }
-    return var_name;
+            name = str_create("%sVar%d", stem, count);
+        count++;
+    } while (hget_s2i(m->var_name_taken, name) != -1);
+
+    hset_s2i(m->class_counter_map, stem, count);
+    hset_s2i(m->var_name_taken, name, 1);
+    return name;
 }
 
 void analyse_local_variables(jd_method *m)
@@ -315,22 +322,6 @@ static void variables_scope(jd_method *m)
     }
 }
 
-static int get_class_counter(jd_method *m, string cname)
-{
-    int count = hget_s2i(m->class_counter_map, cname);
-    if (count == -1)
-        count = 0;
-    return count;
-}
-
-static void increase_class_counter(jd_method *m, string cname)
-{
-    int count = hget_s2i(m->class_counter_map, cname);
-    if (count == -1)
-        count = 0;
-    hset_s2i(m->class_counter_map, cname, count + 1);
-}
-
 void variables_rename(jd_method *m)
 {
     if (!DEBUG_RENAME_VARIABLES) return;
@@ -346,7 +337,6 @@ void variables_rename(jd_method *m)
             continue;
         string var_name = gen_variable_name(m, NULL, val->data->cname);
         hset_s2s(m->var_name_map, val->name, var_name);
-        increase_class_counter(m, val->data->cname);
 
         val->name = var_name;
     }
@@ -368,7 +358,6 @@ void variables_rename(jd_method *m)
             }
             var_name = gen_variable_name(m, exp, var->cname);
             hset_s2s(m->var_name_map, var->name, var_name);
-            increase_class_counter(m, var->cname);
 
             var->name = var_name;
             DEBUG_PRINT("[variable name]: %s -> %s -> %s\n",
@@ -397,7 +386,6 @@ void variables_rename(jd_method *m)
 
             var_name = gen_variable_name(m, exp, val->data->cname);
             hset_s2s(m->var_name_map, val->name, var_name);
-            increase_class_counter(m, val->data->cname);
 
             val->name = var_name;
 

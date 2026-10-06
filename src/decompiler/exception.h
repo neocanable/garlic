@@ -8,6 +8,8 @@ void identify_exception_handler_block_end(jd_method *m);
 
 void cleanup_full_exception_table(jd_method *m);
 
+void expand_stat_report(void);
+
 void copy_exceptions_closed2cfg(jd_method *m);
 
 void identify_finally_excpetion_handler_block_end(jd_method *m);
@@ -17,6 +19,7 @@ void flatten_exceptions(jd_method *m);
 void pullin_block_jump_into_exception_try_block(jd_method *m);
 
 jd_exc* closest_exception_of(jd_method *m, uint32_t offset);
+void exc_time_report(void);
 
 
 // exception sort

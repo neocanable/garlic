@@ -182,7 +182,11 @@ static inline string str_replace_nl(string src)
     size_t new_len = len;
 
     for (size_t i = 0; i < len; i++) {
-        if (src[i] == '\n') new_len++;
+        unsigned char c = (unsigned char) src[i];
+        if (c == '\n' || c == '\r' || c == '\t' || c == '"' || c == '\\')
+            new_len += 1;
+        else if (c < 0x20)
+            new_len += 5;
     }
 
     char *dst = x_alloc(new_len + 1);
@@ -192,11 +196,19 @@ static inline string str_replace_nl(string src)
     char *q = dst;
 
     while (*p) {
-        if (*p == '\n') {
-            *q++ = '\\';
-            *q++ = 'n';
-        } else {
-            *q++ = *p;
+        unsigned char c = (unsigned char) *p;
+        switch (c) {
+            case '\n': *q++ = '\\'; *q++ = 'n';  break;
+            case '\r': *q++ = '\\'; *q++ = 'r';  break;
+            case '\t': *q++ = '\\'; *q++ = 't';  break;
+            case '"':  *q++ = '\\'; *q++ = '"';  break;
+            case '\\': *q++ = '\\'; *q++ = '\\'; break;
+            default:
+                if (c < 0x20)
+                    q += sprintf(q, "\\u%04x", c);
+                else
+                    *q++ = (char) c;
+                break;
         }
         p++;
     }

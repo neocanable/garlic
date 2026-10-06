@@ -55,6 +55,8 @@ include_directories(libs/include)
 include_directories(src/ai)
 include_directories(src/jar)
 include_directories(src/dalvik)
+include_directories(src/decompiler)
+include_directories(src/decompiler/transformer)
 include_directories(src)
 
 aux_source_directory(src/common COMMON)

@@ -1,6 +1,7 @@
 #include "decompiler/method.h"
 #include "dalvik/dex_method.h"
 #include "dex_descriptor.h"
+#include "decompiler/descriptor.h"
 #include "dex_exception.h"
 #include "parser/dex/metadata.h"
 #include "dex_annotation.h"
@@ -20,21 +21,24 @@ void dex_method_access_flag_with_flags(u4 flags, str_list *list)
 void dex_method_access_flags(jd_method *m, str_list *list)
 {
     dex_method_access_flag_with_flags(m->access_flags, list);
+
+    u4 sync_flags = ACC_DEX_SYNCHRONIZED | ACC_DEX_DECLARED_SYNCHRONIZED;
+    if (access_flags_contains(m->access_flags, sync_flags) &&
+        !method_is_sync_block(m))
+        str_concat(list, "synchronized ");
 }
 
 jd_val* dex_method_parameter_val(jd_method *m, int index)
 {
     if (m->enter == NULL)
         return NULL;
-    int max = m->max_locals;
-    int desc_size = m->desc->list->size;
-    int start = max - desc_size;
-    // int i = method_is_member(m) ? (max-1)-index+1 : (max-1)-index;
-    // int i = method_is_member(m) ? start + index : start + index;
-    int i = start + index;
-    // TODO: enum constructor
-    //      i += method_is_enum_constructor(m) ? 2 : 0;
-    return m->enter->local_vars[i];
+
+    jd_descriptor *desc = m->desc;
+    int slot = m->max_locals;
+    for (int i = desc->list->size - 1; i >= index; --i)
+        slot -= descriptor_type_slot_width(lget_string(desc->list, i));
+
+    return m->enter->local_vars[slot];
 }
 
 static void init_dex_ins_unconditional_jump(jd_dex_ins *ins)
