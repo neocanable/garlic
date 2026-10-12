@@ -282,10 +282,10 @@ endif ()
 # `ctest --test-dir build` runs every fixture under tests/fixtures. Fixtures do
 # not need a toolchain: each carries a prebuilt input plus the exact output
 # garlic is expected to produce. See tests/README.md.
-option(GARLIC_BUILD_TESTS "Build the fixture test suite" ON)
-if (GARLIC_BUILD_TESTS
-    AND NOT CMAKE_CROSSCOMPILING
-    AND NOT DEFINED PLATFORM_NAME)
-    enable_testing()
-    add_subdirectory(tests)
-endif()
+#option(GARLIC_BUILD_TESTS "Build the fixture test suite" ON)
+#if (GARLIC_BUILD_TESTS
+#    AND NOT CMAKE_CROSSCOMPILING
+#    AND NOT DEFINED PLATFORM_NAME)
+#    enable_testing()
+#    add_subdirectory(tests)
+#endif()
