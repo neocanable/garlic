@@ -25,7 +25,7 @@ typedef struct jd_node              jd_node;
 typedef struct jd_synthetic_class   jd_synthetic_class;
 typedef struct jd_var               jd_var;
 
-typedef char* (*jd_access_flag_fn) (void *ptr, str_list *list);
+typedef void (*jd_access_flag_fn) (void *ptr, str_list *list);
 
 typedef struct jd_ssa_state {
     int version;

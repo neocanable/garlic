@@ -516,7 +516,7 @@ static string parse_identifier(string sig, int *pint)
                 int len = end - start + 1;
                 string identifier = x_alloc(len);
                 memcpy(identifier, sig + start, len-1);
-                identifier[len] = '\0';
+                identifier[len - 1] = '\0';
                 DEBUG_PRINT("[identifier]: %d %s\n", len, identifier);
                 return identifier;
             }

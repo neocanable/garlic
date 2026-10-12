@@ -1,0 +1,62 @@
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: build, fixtures, strict warnings (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # both ship a pre-built librosemarylib that gets embedded in the binary
+        os: [ ubuntu-latest, macos-latest ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: build
+        run: cmake --build build -j
+
+      - name: fixtures
+        run: ctest --test-dir build --output-on-failure
+
+      # implicit declarations, pointer type mismatches and discarded qualifiers
+      # are hard errors on GCC 14+ and Clang 16+, so the tree has to stay clean
+      # of them even though the default build still suppresses the warnings
+      - name: build with those warnings as errors
+        run: |
+          cmake -S . -B build-strict -DCMAKE_BUILD_TYPE=Release \
+                -DGARLIC_STRICT_WARNINGS=ON
+          cmake --build build-strict -j
+
+  fuzz:
+    name: differential fuzz (behaviour, not text)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j
+
+      # a decompiler with known gaps cannot demand zero changed methods; the
+      # baseline records what is known and this fails when the number grows
+      - name: fuzz against the baseline
+        run: |
+          for shape in guard else call; do
+            python3 tests/fuzz.py --garlic build/garlic --cases 120 \
+                    --mode jvm --shape "$shape" --seed 1 \
+                    --baseline tests/fuzz-baseline.json
+          done

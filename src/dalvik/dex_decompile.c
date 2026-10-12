@@ -58,27 +58,27 @@ void dex_init_ins_fn(jd_dex *dex)
 {
     // setup instruction's interface
     jd_ins_fn *fn = make_obj(jd_ins_fn);
-    fn->is_compare = dex_ins_is_compare;
-    fn->is_return = dex_ins_is_return_op;
-    fn->is_void_return = dex_ins_is_return_void;
-    fn->is_switch = dex_ins_is_switch;
-    fn->is_goto = dex_ins_is_goto_jump;
-    fn->is_unconditional_jump = dex_ins_is_unconditional_jump;
-    fn->is_conditional_jump = dex_ins_is_conditional_jump;
-    fn->is_goto_back = dex_ins_is_goto_back;
-    fn->is_jump_dst = dex_ins_is_jump_destination;
-    fn->is_block_start = dex_ins_is_block_start;
-    fn->is_block_end = dex_ins_is_block_end;
-    fn->is_store = dex_ins_is_store;
-    fn->is_load = dex_ins_is_load;
-    fn->is_if = dex_ins_is_if;
-    fn->is_branch = dex_ins_is_branch;
-    fn->is_athrow = dex_ins_is_throw;
-    fn->is_invoke_static = dex_ins_is_invokestatic;
-    fn->is_invoke_virtual = dex_ins_is_invokevirtual;
-    fn->is_invoke_interface = dex_ins_is_invokeinterface;
-    fn->is_invoke_dynamic = dex_ins_is_invokedymamic;
-    fn->is_invoke_special = dex_ins_is_invokespecial;
+    fn->is_compare = (ins_checker) dex_ins_is_compare;
+    fn->is_return = (ins_checker) dex_ins_is_return_op;
+    fn->is_void_return = (ins_checker) dex_ins_is_return_void;
+    fn->is_switch = (ins_checker) dex_ins_is_switch;
+    fn->is_goto = (ins_checker) dex_ins_is_goto_jump;
+    fn->is_unconditional_jump = (ins_checker) dex_ins_is_unconditional_jump;
+    fn->is_conditional_jump = (ins_checker) dex_ins_is_conditional_jump;
+    fn->is_goto_back = (ins_checker) dex_ins_is_goto_back;
+    fn->is_jump_dst = (ins_checker) dex_ins_is_jump_destination;
+    fn->is_block_start = (ins_checker) dex_ins_is_block_start;
+    fn->is_block_end = (ins_checker) dex_ins_is_block_end;
+    fn->is_store = (ins_checker) dex_ins_is_store;
+    fn->is_load = (ins_checker) dex_ins_is_load;
+    fn->is_if = (ins_checker) dex_ins_is_if;
+    fn->is_branch = (ins_checker) dex_ins_is_branch;
+    fn->is_athrow = (ins_checker) dex_ins_is_throw;
+    fn->is_invoke_static = (ins_checker) dex_ins_is_invokestatic;
+    fn->is_invoke_virtual = (ins_checker) dex_ins_is_invokevirtual;
+    fn->is_invoke_interface = (ins_checker) dex_ins_is_invokeinterface;
+    fn->is_invoke_dynamic = (ins_checker) dex_ins_is_invokedymamic;
+    fn->is_invoke_special = (ins_checker) dex_ins_is_invokespecial;
 
     dex->ins_fn = fn;
 }
@@ -86,7 +86,7 @@ void dex_init_ins_fn(jd_dex *dex)
 void dex_init_method_fn(jd_dex *dex)
 {
     jd_method_fn *fn = make_obj(jd_method_fn);
-    fn->access_flags_fn = dex_method_access_flags;
+    fn->access_flags_fn = (jd_access_flag_fn) dex_method_access_flags;
     fn->param_val_fn = dex_method_parameter_val;
     fn->param_annotation_fn = dex_method_parameter_annotation;
     fn->is_native = dex_method_is_native;
@@ -282,7 +282,7 @@ jsource_file* dex_class_inside(jd_dex *dex,
 
     jf->type = JD_TYPE_DALVIK;
     jf->enum_constants = NULL;
-    jf->access_flags_fn = dex_class_access_flag;
+    jf->access_flags_fn = (jd_access_flag_fn) dex_class_access_flag;
     jf->is_anonymous = dex_class_is_anonymous_class(dex->meta, cf);
     jf->is_inner = dex_class_is_inner_class(dex->meta, cf);
     jf->parent = parent;
@@ -499,7 +499,7 @@ void dex_decompile_threadpool_start(jd_dex *dex)
             jd_dex_task *t = make_obj(jd_dex_task);
             t->dex = dex;
             t->cf = cf;
-            int ret = threadpool_add(dex->threadpool, &dex_decompile_thread_task, t, 0);
+            int ret = threadpool_add(dex->threadpool, (void (*)(void *)) &dex_decompile_thread_task, t, 0);
             if (ret != 0) {
                 fprintf(stderr, "[garlic] Warning: threadpool_add failed with %d\n", ret);
             }
@@ -544,7 +544,7 @@ void dex_smali_threadpool_start(jd_dex *dex)
         t->dex = dex;
         t->cf = cf;
         t->type = JD_DEX_TASK_SMALI;
-        threadpool_add(dex->threadpool, &dex_smali_thread_task, t, 0);
+        threadpool_add(dex->threadpool, (void (*)(void *)) &dex_smali_thread_task, t, 0);
         dex->added++;
     }
 }

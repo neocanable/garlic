@@ -7,11 +7,20 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fvisibility=hidden -Wall")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-unused-function")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-unused-parameter")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-implicit-function-declaration")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-incompatible-pointer-types")
+
+option(GARLIC_STRICT_WARNINGS "Treat implicit declarations, pointer type mismatches and discarded qualifiers as errors" OFF)
+if (GARLIC_STRICT_WARNINGS)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror=implicit-function-declaration")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror=incompatible-pointer-types")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror=incompatible-function-pointer-types")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror=discarded-qualifiers")
+else ()
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-implicit-function-declaration")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-incompatible-pointer-types")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-discarded-qualifiers")
+endif ()
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-misleading-indentation")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-format")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-discarded-qualifiers")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-missing-braces")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-parentheses")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-cpp")
@@ -205,8 +214,6 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   target_link_libraries(garlic pthread)
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Android")
-  # pthread is part of bionic libc (no libpthread stub since NDK r27);
-  # libdl is only needed when the embedded ELF analyzer is present.
   target_link_libraries(garlic dl)
 elseif (WIN32)
   target_link_libraries(garlic ws2_32 advapi32)
@@ -270,3 +277,15 @@ if (RELEASE)
     endif ()
 
 endif ()
+
+# ---- tests -----------------------------------------------------------------
+# `ctest --test-dir build` runs every fixture under tests/fixtures. Fixtures do
+# not need a toolchain: each carries a prebuilt input plus the exact output
+# garlic is expected to produce. See tests/README.md.
+#option(GARLIC_BUILD_TESTS "Build the fixture test suite" ON)
+#if (GARLIC_BUILD_TESTS
+#    AND NOT CMAKE_CROSSCOMPILING
+#    AND NOT DEFINED PLATFORM_NAME)
+#    enable_testing()
+#    add_subdirectory(tests)
+#endif()

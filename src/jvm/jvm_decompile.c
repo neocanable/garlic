@@ -58,7 +58,7 @@ void jvm_init_ins_fn(jsource_file *jf)
 void jvm_init_method_fn(jsource_file *jf)
 {
     jd_method_fn *fn = make_obj(jd_method_fn);
-    fn->access_flags_fn = jvm_method_access_flags;
+    fn->access_flags_fn = (jd_access_flag_fn) jvm_method_access_flags;
     fn->param_val_fn = jvm_method_parameter_val;
     fn->param_annotation_fn = jvm_method_parameter_annotation;
     fn->is_native = jvm_method_is_native;
@@ -82,7 +82,7 @@ void jvm_analyse_class_file_inside(jsource_file *jf)
     if (jf->pname == NULL)
         jf->pname = (string) g_str_default;
     jf->sname = class_simple_name_without_primitive(jf->fname);
-    jf->access_flags_fn = jvm_class_access_flag;
+    jf->access_flags_fn = (jd_access_flag_fn) jvm_class_access_flag;
 
     jvm_init_ins_fn(jf);
 

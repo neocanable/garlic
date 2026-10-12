@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "parser/class/class_structure.h"
+#include "parser/dex/metadata.h"
 #include "decompiler/structure.h"
 #include "decompiler/control_flow.h"
 #include "jvm/jvm_ins.h"
@@ -1069,7 +1070,7 @@ static int monitor_ins_register(jd_ins *ins)
 {
     if (ins == NULL || ins->type != JD_TYPE_DALVIK)
         return -1;
-    if (!dex_ins_is_monitor_enter(ins) && !dex_ins_is_monitor_exit(ins))
+    if (!dex_ins_is_monitor_enter((jd_dex_ins *) ins) && !dex_ins_is_monitor_exit((jd_dex_ins *) ins))
         return -1;
 
     return (int) dex_ins_parameter((jd_dex_ins *) ins, 0);
@@ -1084,7 +1085,7 @@ static int exception_handler_monitor_register(jd_method *m, jd_exc *exc)
         jd_ins *ins = get_ins(m, i);
         if (ins == NULL || ins->type != JD_TYPE_DALVIK)
             continue;
-        if (dex_ins_is_monitor_exit(ins))
+        if (dex_ins_is_monitor_exit((jd_dex_ins *) ins))
             return monitor_ins_register(ins);
     }
 
@@ -1098,11 +1099,11 @@ static int exception_handler_monitor_register(jd_method *m, jd_exc *exc)
             jd_ins *ins = get_ins(m, k);
             if (ins == NULL || ins->type != JD_TYPE_DALVIK)
                 continue;
-            if (dex_ins_is_monitor_exit(ins))
+            if (dex_ins_is_monitor_exit((jd_dex_ins *) ins))
                 return monitor_ins_register(ins);
             /* A handler that takes a monitor of its own is a synchronized
              * written inside the catch, not the one around it. */
-            if (dex_ins_is_monitor_enter(ins))
+            if (dex_ins_is_monitor_enter((jd_dex_ins *) ins))
                 return -1;
         }
 
@@ -1130,7 +1131,7 @@ static jd_ins* idom_chain_monitor_enter(jd_method *m, jd_exc *exc, int reg)
 
         for (int k = nb->end_idx; k >= nb->start_idx; --k) {
             jd_ins *ins = get_ins(m, k);
-            if (ins == NULL || !dex_ins_is_monitor_enter(ins))
+            if (ins == NULL || !dex_ins_is_monitor_enter((jd_dex_ins *) ins))
                 continue;
             if (reg >= 0 && monitor_ins_register(ins) != reg)
                 continue;
@@ -1477,6 +1478,20 @@ static jd_range* exception_catch_range(jd_method *m, jd_exc *exception,
     return catch;
 }
 
+static bool handler_tail_is_rethrow(jd_method *m, jd_exc *exception)
+{
+    if (m == NULL || m->type != JD_TYPE_DALVIK)
+        return false;
+
+    jd_dex_ins *f = exception_ins_at(m, exception->handler_start_idx);
+    jd_dex_ins *l = exception_ins_at(m, exception->handler_end_idx);
+    if (f == NULL || l == NULL)
+        return false;
+    if (!dex_ins_is_move_exception(f) || !dex_ins_is_throw(l))
+        return false;
+    return dex_ins_parameter(f, 0) == dex_ins_parameter(l, 0);
+}
+
 static bool handler_is_finally(jd_method *m, jd_exc *exception)
 {
     if (m == NULL || m->type != JD_TYPE_DALVIK)
@@ -1616,8 +1631,17 @@ void flatten_exceptions(jd_method *m)
             jd_range *handler = exception_catch_range(m, exception,
                                                      next_exception);
 
-            if (handler_is_finally(m, exception))
+            if (handler_is_finally(m, exception)) {
+                if (handler_tail_is_rethrow(m, exception) &&
+                    handler->end_idx == handler->start_idx + 1) {
+                    handler->end_idx = handler->start_idx - 1;
+                    jd_dex_ins *tail = exception_ins_at(m,
+                                                exception->handler_end_idx);
+                    if (tail != NULL)
+                        ins_mark_nopped((jd_ins *) tail);
+                }
                 current->finally = handler;
+            }
             else
                 ladd_obj(current->catches, handler);
         }

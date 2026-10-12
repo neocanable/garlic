@@ -128,7 +128,7 @@ static const jd_bblock* same_dom_block(const jd_bblock *b1,
     return same_dom_block(b2, b1->idom);
 }
 
-static bool compute_dominator_cb(jd_bblock *block)
+static int compute_dominator_cb(jd_bblock *block)
 {
     jd_bblock *dominator_block = NULL;
 

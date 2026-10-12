@@ -8,6 +8,17 @@
 #include "common/types.h"
 #include "mem_common.h"
 
+#if defined(__BIGGEST_ALIGNMENT__)
+#define MEM_POOL_ALIGN ((size_t)__BIGGEST_ALIGNMENT__)
+#else
+#define MEM_POOL_ALIGN ((size_t)16)
+#endif
+
+static inline size_t mem_align_up(size_t n)
+{
+    return (n + (MEM_POOL_ALIGN - 1)) & ~(MEM_POOL_ALIGN - 1);
+}
+
 typedef struct small_block {
     u1                  *cur_usable_buffer;
     u1                  *buffer_end;

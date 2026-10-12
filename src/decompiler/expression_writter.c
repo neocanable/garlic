@@ -473,7 +473,8 @@ static void write_notice(jsource_file *jf)
 static void write_import(jsource_file *jf)
 {
     FILE *stream = file_output(jf);
-    if (jf->pname != NULL) {
+
+    if (jf->pname != NULL && strcmp(jf->pname, g_str_default) != 0) {
         fprintf(stream, "package ");
         for (int i = 0; i < strlen(jf->pname); ++i) {
             unsigned char c = jf->pname[i];

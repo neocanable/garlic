@@ -126,7 +126,7 @@ static inline string descriptor_to_annotation_name(string descriptor)
     string name = x_alloc(name_len);
     memcpy(name + 1, descriptor + start_index + 1, name_len - 2);
     name[0] = '@';
-    name[name_len] = '\0';
+    name[name_len - 1] = '\0';
     return name;
 }
 #endif //GARLIC_DESCRIPTOR_H

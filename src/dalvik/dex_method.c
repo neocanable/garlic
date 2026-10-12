@@ -44,7 +44,7 @@ jd_val* dex_method_parameter_val(jd_method *m, int index)
 static void init_dex_ins_unconditional_jump(jd_dex_ins *ins)
 {
     u4 jump_offset = dex_goto_offset(ins);
-    jd_dex_ins *target_ins = ins_of_offset(ins->method, jump_offset);
+    jd_dex_ins *target_ins = (jd_dex_ins *) ins_of_offset(ins->method, jump_offset);
     ladd_obj(ins->targets, target_ins);
     ladd_obj(ins->jumps, target_ins);
 }
@@ -56,7 +56,7 @@ static void init_dex_ins_conditional_jump(jd_dex_ins *ins)
     if (next != NULL)
         ladd_obj_no_dup(ins->targets, next);
 
-    jd_dex_ins *jump_to_ins = ins_of_offset(ins->method, jump_offset);
+    jd_dex_ins *jump_to_ins = (jd_dex_ins *) ins_of_offset(ins->method, jump_offset);
     ladd_obj(ins->targets, jump_to_ins);
     ladd_obj(ins->jumps, jump_to_ins);
 }
@@ -83,7 +83,7 @@ static void init_dex_packed_switch_jump(jd_dex_ins *ins)
     for (int i = 0; i < size; ++i) {
         int offset = packed_ins->param[5 + i * 2] << 16 |
                      packed_ins->param[4 + i * 2];
-        jd_dex_ins *target_ins = ins_of_offset(m, ins->offset+offset);
+        jd_dex_ins *target_ins = (jd_dex_ins *) ins_of_offset(m, ins->offset+offset);
         ladd_obj(ins->targets, target_ins);
         ladd_obj(ins->jumps, target_ins);
         DEBUG_PRINT("key: %d, goto_offset: %d\n",

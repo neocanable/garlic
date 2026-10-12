@@ -22,7 +22,7 @@ static inline jd_val* dex_stack_val(jd_dex_ins *ins, int slot, char desc)
     val->data = make_obj(jd_val_data);
     val->type = descriptor_data_type_of_char(desc);
     val->data->cname = descriptor_class_name_of_primitive(desc);
-    val->ins = ins;
+    val->ins = (jd_ins *) ins;
     val->slot = slot;
     return val;
 }
@@ -61,7 +61,7 @@ static inline void move_act(jd_dex_ins *ins, int dst, int src)
 
     stack_clone_val(dst_val, src_val);
     dst_val->slot = dst;
-    dst_val->ins = ins;
+    dst_val->ins = (jd_ins *) ins;
     save_stack_val(ins, dst_val, dst);
 
     if (dex_ins_is_move_wide_16(ins) ||
@@ -153,7 +153,7 @@ static inline void build_dex_ins_move_result_act(jd_dex_ins *ins)
         jd_val *val = stack_create_empty_val();
         val->type = JD_VAR_REFERENCE_T;
         val->data->cname = class_simple_name_without_primitive("Ljava/lang/Object;");
-        val->ins = ins;
+        val->ins = (jd_ins *) ins;
         val->slot = u_a;
         save_stack_val(ins, val, u_a);
         if (dex_ins_is_move_result_wide(ins))
@@ -196,7 +196,7 @@ static inline void build_dex_ins_move_result_act(jd_dex_ins *ins)
             jd_val *val = stack_create_empty_val();
             val->type = JD_VAR_REFERENCE_T;
             val->data->cname = class_simple_name_without_primitive("Ljava/lang/Object;");
-            val->ins = ins;
+            val->ins = (jd_ins *) ins;
             val->slot = u_a;
             save_stack_val(ins, val, u_a);
             if (dex_ins_is_move_result_wide(ins))
@@ -211,7 +211,7 @@ static inline void build_dex_ins_move_result_act(jd_dex_ins *ins)
         val->type = JD_VAR_REFERENCE_T;
         string full = dex_desc_full_name(ins, desc);
         val->data->cname = class_simple_name_without_primitive(full);
-        val->ins = ins;
+        val->ins = (jd_ins *) ins;
         val->slot = u_a;
         save_stack_val(ins, val, u_a);
     }
@@ -231,7 +231,7 @@ static inline void build_dex_ins_move_result_act(jd_dex_ins *ins)
             string class_name = descriptor_class_name_of_primitive(desc[0]);
             val->data->cname = class_name;
         }
-        val->ins = ins;
+        val->ins = (jd_ins *) ins;
         val->slot = u_a;
         save_stack_val(ins, val, u_a);
 
@@ -290,7 +290,7 @@ static inline void build_dex_ins_const_int_act(jd_dex_ins *ins, int reg, int v)
 static inline void build_dex_ins_const_4_act(jd_dex_ins *ins)
 {
     u1 u_a = dex_ins_parameter(ins, 0);
-    s1 u_b = (s1)dex_ins_parameter(ins, 1);
+    s1 u_b = (s1)(((int)dex_ins_parameter(ins, 1) << 28) >> 28);
     build_dex_ins_const_int_act(ins, u_a, u_b);
 }
 
@@ -382,7 +382,7 @@ static inline void build_dex_ins_string_act(jd_dex_ins *ins, int reg, u4 idx)
     val->type = JD_VAR_REFERENCE_T;
     data->cname = (string)g_str_String;
 
-    val->ins = ins;
+    val->ins = (jd_ins *) ins;
     val->slot = reg;
     save_stack_val(ins, val, reg);
 }
@@ -415,7 +415,7 @@ static inline void build_dex_ins_const_class_act(jd_dex_ins *ins)
 
     data->val = type_desc;
     val->type = JD_VAR_REFERENCE_T;
-    val->ins = ins;
+    val->ins = (jd_ins *) ins;
     val->slot = u_a;
 
     save_stack_val(ins, val, u_a);
@@ -465,7 +465,7 @@ static inline void build_dex_ins_new_instance_act(jd_dex_ins *ins)
     string full = dex_desc_full_name(ins, type_desc);
     data->cname = class_simple_name_without_primitive(full);
     val->type = JD_VAR_UNINITIALIZED_T;
-    val->ins = ins;
+    val->ins = (jd_ins *) ins;
     val->slot = u_a;
 
     save_stack_val(ins, val, u_a);
@@ -485,7 +485,7 @@ static inline void build_dex_ins_new_array_act(jd_dex_ins *ins)
     string full = dex_desc_full_name(ins, type_desc);
     data->cname = class_simple_name_without_primitive(full);
     val->type = JD_VAR_REFERENCE_T;
-    val->ins = ins;
+    val->ins = (jd_ins *) ins;
 
     save_stack_val(ins, val, u_a);
 }
@@ -540,7 +540,7 @@ static inline void build_dex_ins_arrayop_act(jd_dex_ins *ins)
 
         val->type = JD_VAR_REFERENCE_T;
         val->slot = u_a;
-        val->ins = ins;
+        val->ins = (jd_ins *) ins;
         save_stack_val(ins, val, u_a);
     }
     else if (dex_ins_is_aget_boolean(ins)) {
@@ -589,7 +589,7 @@ static inline void build_dex_ins_instanceop_act(jd_dex_ins *ins)
         jd_val *val = stack_create_empty_val();
         jd_val_data *data = val->data;
         val->slot = u_a;
-        val->ins = ins;
+        val->ins = (jd_ins *) ins;
         string full = dex_desc_full_name(ins, desc);
         data->cname = class_simple_name_without_primitive(full);
         val->type = JD_VAR_REFERENCE_T;
@@ -656,7 +656,7 @@ static inline void build_dex_ins_staticop_act(jd_dex_ins *ins)
     }
     else if (dex_ins_is_sget_object(ins)) {
         jd_val *val = stack_create_empty_val();
-        val->ins = ins;
+        val->ins = (jd_ins *) ins;
         val->slot = u_a;
         jd_val_data *data = val->data;
         string full = dex_desc_full_name(ins, desc);

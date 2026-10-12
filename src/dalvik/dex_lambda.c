@@ -235,7 +235,7 @@ jd_lambda_facts* dex_lambda_facts(jsource_file *jf) {
 
     jd_exp_invoke *last_exp_invoke = last_invoke->data;
 
-    jd_dex_ins *last_ins = last_invoke->ins;
+    jd_dex_ins *last_ins = (jd_dex_ins *) last_invoke->ins;
     if (last_ins == NULL || last_ins->fn == NULL ||
             last_ins->method == NULL || last_ins->method->meta == NULL)
         return facts;

@@ -32,7 +32,7 @@ static inline bool is_goto_edge(jd_edge *edge)
     if (source->type != JD_BB_NORMAL)
         return false;
     jd_nblock *source_nb = source->ub->nblock;
-    jd_dex_ins *ins = ins_of_offset(source->method, source_nb->end_offset);
+    jd_dex_ins *ins = (jd_dex_ins *) ins_of_offset(source->method, source_nb->end_offset);
     return dex_ins_is_goto_jump(ins);
 }
 
@@ -56,8 +56,8 @@ static bool basic_block_has_live_jump_in_goto(jd_bblock *block)
         jd_bblock *source = edge->source_block;
         if (source->type != JD_BB_NORMAL) continue;
         jd_nblock *nsb = source->ub->nblock;
-        jd_dex_ins *end_ins = ins_of_offset(source->method, nsb->end_offset);
-        if (dex_ins_is_goto_jump(end_ins) && !ins_is_nopped(end_ins))
+        jd_dex_ins *end_ins = (jd_dex_ins *) ins_of_offset(source->method, nsb->end_offset);
+        if (dex_ins_is_goto_jump(end_ins) && !ins_is_nopped((jd_ins *) end_ins))
             return true;
     }
     return false;
@@ -114,8 +114,8 @@ static void modify_handler_start_to_goto_target(jd_method *m,
         }
     }
 
-    ins_mark_nopped(start_ins);
-    ins_mark_nopped(end_ins);
+    ins_mark_nopped((jd_ins *) start_ins);
+    ins_mark_nopped((jd_ins *) end_ins);
 }
 
 static void optimize_goto_to_return(jd_method *m)
@@ -227,7 +227,7 @@ static void optimize_share_suffix_v2(jd_method *m)
                 jd_dex_ins *goto_ins = dex_ins_of_offset(m, snb->end_offset);
                 if (goto_ins->extra == NULL)
                     goto_ins->extra = linit_object();
-                ins_mark_copy_block(goto_ins);
+                ins_mark_copy_block((jd_ins *) goto_ins);
 
                 cfg_unlink_blocks(sb, b);
                 create_link_edge(sb, out_block);
@@ -240,7 +240,7 @@ static void optimize_share_suffix_v2(jd_method *m)
 
                     jd_dex_ins *copy = dup_dex_ins(ins);
                     copy->state_flag = ins->state_flag & INS_STATE_UNREACHED;
-                    ins_mark_duplicate(copy);
+                    ins_mark_duplicate((jd_ins *) copy);
                     copy->extra = NULL;
                     copy->prev = copy_prev;
                     copy->next = NULL;
@@ -261,7 +261,7 @@ static void optimize_share_suffix_v2(jd_method *m)
 
                 jd_dex_ins *goto_copy = dup_dex_ins(goto_ins);
                 goto_copy->state_flag = 0;
-                ins_mark_duplicate(goto_copy);
+                ins_mark_duplicate((jd_ins *) goto_copy);
                 goto_copy->extra = NULL;
                 goto_copy->block = sb;
                 goto_copy->prev = copy_prev;
@@ -279,7 +279,7 @@ static void optimize_share_suffix_v2(jd_method *m)
             if (b->in->size == 0) {
                 jd_dex_ins *nopped = start_ins;
                 while (nopped != NULL && nopped->offset <= end_ins->offset) {
-                    ins_mark_nopped(nopped);
+                    ins_mark_nopped((jd_ins *) nopped);
                     nopped = nopped->next;
                 }
             }

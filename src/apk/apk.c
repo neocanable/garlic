@@ -182,13 +182,13 @@ static void apk_run_dex_tasks(jd_apk *apk, jd_meta_dex *meta)
                 int ret;
                 if (t->type == JD_DEX_TASK_SMALI) {
                     ret = threadpool_add(apk->threadpool,
-                                   &apk_smali_thread_task,
+                                   (void (*)(void *)) &apk_smali_thread_task,
                                    t,
                                    0);
                 }
                 else {
                     ret = threadpool_add(apk->threadpool,
-                                   &apk_decompile_thread_task,
+                                   (void (*)(void *)) &apk_decompile_thread_task,
                                    t,
                                    0);
                 }

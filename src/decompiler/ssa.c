@@ -459,7 +459,7 @@ static void sform_local_variable_renames(jd_method *m,
                 jd_ssa_param *param = lget_obj(phi_node->params, k);
                 if (param->def_block_id != block->block_id)
                     continue;
-                jd_stack *_stack = lget_object(stacks, param->slot);
+                queue_object *_stack = lget_object(stacks, param->slot);
                 jd_ssa_state *_state = queue_peek_object(_stack);
                 param->version = _state->version;
             }
@@ -513,7 +513,8 @@ void sform_local_variable_rename(jd_method *m)
 {
     int max_locals = m->max_locals;
 
-    int counter[max_locals];
+    // a method with no locals still gets here, and a zero length vla is ub
+    int counter[max_locals > 0 ? max_locals : 1];
     list_object *stacks = linit_object_with_capacity(max_locals);
     for (int i = 0; i < max_locals; ++i) {
         queue_object *stack = queue_init_object();
