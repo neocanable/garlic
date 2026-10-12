@@ -103,14 +103,14 @@ static bool identify_fill_array_data(jd_method *m)
         jd_val *count = locals[count_reg];
         if (count == NULL || count->data == NULL || count->data->primitive == NULL)
             continue;
-        if (!stack_val_is_int(count) || !dex_ins_is_const_int(count->ins))
+        if (!stack_val_is_int(count) || !dex_ins_is_const_int((jd_dex_ins *) count->ins))
             continue;
 
         if ((u4) count->data->primitive->int_val != payload->list->len - 1)
             continue;
 
         array->list = payload->list;
-        build_empty_expression(expression, ins);
+        build_empty_expression(expression, (jd_ins *) ins);
         folded = true;
     }
 

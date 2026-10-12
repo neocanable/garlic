@@ -356,7 +356,7 @@ int main(int argc, char **argv)
             fprintf(stderr, "failed to start the MCP server\n");
             return 1;
         }
-        server->tools = &MCP_TOOLS;
+        server->tools = MCP_TOOLS;
         server->tool_count = MCP_TOOL_COUNT;
         jd_mcp_server_run(server);
         jd_mcp_server_cleanup(server);

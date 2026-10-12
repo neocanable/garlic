@@ -695,12 +695,12 @@ void initialize_analyzer(string out_dir)
     g_dumpper_analyer->string_node_stream = fopen(g_dumpper_analyer->string_node_path, "wb");
     g_dumpper_analyer->string_edge_stream = fopen(g_dumpper_analyer->string_edge_path, "wb");
 
-    g_dumpper_analyer->method_id_map = hashmap_init_in(pool, s2o_cmp, 0);
-    g_dumpper_analyer->method_edge_map = hashmap_init_in(pool, s2i_cmp, 0);
+    g_dumpper_analyer->method_id_map = hashmap_init_in(pool, (hcmp_fn) s2o_cmp, 0);
+    g_dumpper_analyer->method_edge_map = hashmap_init_in(pool, (hcmp_fn) s2i_cmp, 0);
     g_dumpper_analyer->next_method_id = 0;
 
-    g_dumpper_analyer->string_map = hashmap_init_in(pool, s2o_cmp, 0);
-    g_dumpper_analyer->string_edge_map = hashmap_init_in(pool, s2i_cmp, 0);
+    g_dumpper_analyer->string_map = hashmap_init_in(pool, (hcmp_fn) s2o_cmp, 0);
+    g_dumpper_analyer->string_edge_map = hashmap_init_in(pool, (hcmp_fn) s2i_cmp, 0);
     g_dumpper_analyer->next_string_id = 0;
 
     fprintf(g_dumpper_analyer->method_node_stream, "id,method,type,class_name,method_name,method_desc,api_type\n");

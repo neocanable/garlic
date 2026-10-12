@@ -318,6 +318,21 @@ static void remove_single_node_of_if_branch(jd_method *m)
     // remove_single_true_node(m);
 }
 
+static bool if_node_has_dropped_body(jd_method *m, jd_node *if_node)
+{
+    if (m->branches == NULL)
+        return false;
+    for (int i = 0; i < m->branches->size; ++i) {
+        jd_if_branch *branch = lget_obj(m->branches, i);
+        if (branch->node != if_node)
+            continue;
+        if (branch->dropped_true_block != NULL ||
+            branch->dropped_false_block != NULL)
+            return true;
+    }
+    return false;
+}
+
 void remove_empty_if_else_of_method(jd_method *m)
 {
     for (int i = 0; i < m->nodes->size; ++i) {
@@ -336,6 +351,9 @@ void remove_empty_if_else_of_method(jd_method *m)
         if (node_valid_children_count(else_node) == 0) {
             ldel_obj(parent->children, else_node);
         }
+
+        if (if_node_has_dropped_body(m, if_node))
+            continue;
 
         if (node_valid_children_count(if_node) == 1) {
              ldel_obj(parent->children, else_node);
@@ -870,11 +888,48 @@ void attach_dropped_terminals(jd_method *m)
         if (branch->node->type == JD_NODE_DELETED ||
             branch->node->children == NULL)
             continue;
-        if (dropped_side_class(m, dropped) != 'T')
-            continue;
         if (dropped->ub == NULL || dropped->ub->nblock == NULL)
             continue;
         if (block_has_falling_predecessor(dropped))
+            continue;
+
+        jd_exp *condition = branch->node->param_exp;
+        jd_bblock *condition_target = NULL;
+        if (condition != NULL && exp_is_if(condition)) {
+            jd_exp_if *condition_if = condition->data;
+            condition_target = exp_block(exp_of_offset(m, condition_if->offset));
+        }
+
+        if (condition_target != dropped) {
+            jd_node *block_node = dropped->node;
+            if (block_node == NULL || block_node->type == JD_NODE_DELETED)
+                continue;
+
+            jd_node *grand = branch->node->parent;
+            if (grand == NULL || grand->children == NULL)
+                continue;
+
+            jd_node *else_node = make_obj_zero(jd_node);
+            else_node->type = JD_NODE_ELSE;
+            else_node->children = linit_object();
+            else_node->method = m;
+            else_node->node_id = m->nodes->size;
+            else_node->start_idx = dropped->ub->nblock->start_idx;
+            else_node->end_idx = dropped->ub->nblock->end_idx;
+            ladd_obj(m->nodes, else_node);
+
+            size_t index = lfind_object(grand->children, branch->node);
+            ladd_obj_at(grand->children, else_node, index + 1);
+            else_node->parent = grand;
+
+            if (block_node->parent != NULL)
+                ldel_obj(block_node->parent->children, block_node);
+            ladd_obj(else_node->children, block_node);
+            block_node->parent = else_node;
+            continue;
+        }
+
+        if (dropped_side_class(m, dropped) != 'T')
             continue;
 
         jd_nblock *nb = dropped->ub->nblock;

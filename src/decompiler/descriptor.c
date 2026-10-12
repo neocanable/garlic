@@ -28,7 +28,7 @@
         snprintf(substring, _obj_total_length, "%s", param_type);       \
         for (int j = 0; j < _is_arr; ++j)                               \
             strcat(substring, "[]");                                    \
-        substring[_obj_total_length] = '\0';                            \
+        substring[_obj_total_length - 1] = '\0';                        \
         _is_obj = 0;                                                    \
         _is_arr = 0;                                                    \
         _from_length = 0;                                               \
@@ -68,10 +68,13 @@ string descriptor_to_s(string str)
                 size_t _obj_total_length = _obj_length + _is_arr*2 + 1;
                 char *substring = x_alloc(_obj_total_length);
                 memcpy(substring, &str[_from_length+1], _obj_length);
+                // the memcpy leaves no terminator, so strcat below used to walk
+                // off the end of the buffer looking for one
+                substring[_obj_length] = '\0';
                 for (int j = 0; j < _is_arr; ++j) {
                     strcat(substring, "[]");
                 }
-                substring[_obj_total_length] = '\0';
+                substring[_obj_total_length - 1] = '\0';
                 return substring;
             }
             case 'B': {
@@ -191,9 +194,11 @@ static void descriptor_tokenizer(jd_descriptor *descriptor)
             size_t _obj_total_length = _obj_length + _is_arr*2 + 1;
             char *substring = x_alloc(_obj_total_length);
             memcpy(substring, &str[_from_length+1], _obj_length);
+            // same as above: terminate before strcat, and stay inside the buffer
+            substring[_obj_length] = '\0';
             for (int j = 0; j < _is_arr; ++j)
                 strcat(substring, "[]");
-            substring[_obj_total_length] = '\0';
+            substring[_obj_total_length - 1] = '\0';
             _is_obj = 0;
             _is_arr = 0;
             _from_length = 0;

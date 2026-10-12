@@ -79,9 +79,9 @@ static string element_value_to_s(jclass_file *jc, element_value *ev)
     }
 }
 
-static string element_pair_to_s(jclass_file *jc, annotation *ano, anno_evp *p)
+static string element_pair_to_s(jclass_file *jc, u2 num_pairs, anno_evp *p)
 {
-    if (be16toh(ano->num_element_value_pairs) == 1) {
+    if (be16toh(num_pairs) == 1) {
         string value = element_value_to_s(jc, p->value);
         string result = str_create("%s", value);
         DEBUG_ANNO_PRINT("[annotation p] value: %s %s\n",
@@ -116,7 +116,7 @@ string annotation_to_s(jclass_file *jc, annotation *ano)
     snprintf(result, len, "%s(", type_name);
     for (int i = 0; i < be16toh(ano->num_element_value_pairs); ++i) {
         annotation_element_value_pairs *pair = &ano->element_value_pairs[i];
-        string pair_str = element_pair_to_s(jc, ano, pair);
+        string pair_str = element_pair_to_s(jc, ano->num_element_value_pairs, pair);
         old_len = len;
         len = old_len + strlen(pair_str) + 2; // key = value,[space]
 
@@ -277,7 +277,7 @@ static void jvm_read_runtime_type_annotation(jclass_file *jc,
     snprintf(result, len, "%s(", type_name);
     for (int i = 0; i < be16toh(ta->num_element_value_pairs); ++i) {
         annotation_element_value_pairs *pair = &ta->element_value_pairs[i];
-        string pair_str = element_pair_to_s(jc, ta, pair);
+        string pair_str = element_pair_to_s(jc, ta->num_element_value_pairs, pair);
         old_len = len;
         len = old_len + strlen(pair_str) + 2; // key = value,[space]
 

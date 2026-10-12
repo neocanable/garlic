@@ -18,7 +18,7 @@ jd_ins* make_goto_ins(jd_method *m, jd_support_type type, uint32_t offset)
     ins->name = strdup("goto");
 
     ins->param = x_alloc(sizeof(u2) * 2);
-    dex_setup_goto_offset(ins, offset);
+    dex_setup_goto_offset((jd_dex_ins *) ins, offset);
 
     ladd_obj(m->instructions, ins);
     hset_i2i(m->offset2id_map, ins->offset, ins->idx);
@@ -73,7 +73,7 @@ jd_bblock* dup_basic_block_and_ins(jd_method *m, jd_bblock *src_block)
     jd_ins *end = NULL;
     for (int i = src_nb->start_idx; i <= src_nb->end_idx; ++i) {
         jd_ins *src = get_ins(m, i);
-        if (dex_ins_is_goto_jump(src))
+        if (dex_ins_is_goto_jump((jd_dex_ins *) src))
             continue;
         jd_ins *copy = make_obj(jd_ins);
         memcpy(copy, src, sizeof(jd_ins));
@@ -1212,7 +1212,7 @@ jd_dex_ins* dup_dex_ins(jd_dex_ins *src)
     ins->expression = NULL;
     ins->block = src->block;
     ins->old_offset = src->offset;
-    ins_mark_duplicate(ins);
+    ins_mark_duplicate((jd_ins *) ins);
 
     ladd_obj(m->instructions, ins);
     hset_i2i(m->offset2id_map, ins->offset, ins->idx);

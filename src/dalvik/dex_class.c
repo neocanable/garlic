@@ -140,7 +140,7 @@ bool dex_class_is_inner_class(jd_meta_dex *meta, dex_class_def *cf) {
         return result;
 
     for (int i = 0; i < set_item->size; ++i) {
-        annotation_item *item = &set_item->entries[i];
+        annotation_item *item = set_item->entries[i].annotation_item;
         u4 type_idx = item->encoded_annotation->type_idx;
         string type_name = dex_str_of_type_id(meta, type_idx);
         if (STR_EQL(type_name, "Ldalvik/annotation/InnerClass;")) {
@@ -183,7 +183,7 @@ int dex_class_is_anonymous_class(jd_meta_dex *meta, dex_class_def *cf) {
         return result;
 
     for (int i = 0; i < set_item->size; ++i) {
-        annotation_item *item = &set_item->entries[i];
+        annotation_item *item = set_item->entries[i].annotation_item;
         u4 type_idx = item->encoded_annotation->type_idx;
         string type_name = dex_str_of_type_id(meta, type_idx);
         if (STR_EQL(type_name, "Ldalvik/annotation/EnclosingClass;")) {
@@ -210,7 +210,7 @@ static void dex_encoded_field_to_field(jd_dex *dex,
      * name too (its tokenizer expands the same way), so both backends
      * answer the renderers with the same thing. */
     field->type = descriptor_type_name(dex_field_desc(meta, efield));
-    field->access_flags_fn = dex_filed_access_flag;
+    field->access_flags_fn = (jd_access_flag_fn) dex_filed_access_flag;
     if (instance)
         field->defination = str_create("%s %s",
                                        field->type,

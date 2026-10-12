@@ -72,7 +72,8 @@ static void reorder_nodes(jd_method *m, jd_node *node)
     if (node == NULL)
         node = lget_obj(m->nodes, 0);
 
-    node_children_sort(node);
+    if (node->type != JD_NODE_EXCEPTION)
+        node_children_sort(node);
     for (int i = 0; i < node->children->size; ++i) {
         jd_node *child = lget_obj(node->children, i);
         if (node_is_not_expression(child))

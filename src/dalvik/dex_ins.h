@@ -224,7 +224,7 @@ static inline bool dex_ins_is_block_start(jd_dex_ins *ins)
     return dex_ins_is_move_exception(ins) ||
            dex_ins_is_handler_start(ins) ||
 //           ins_is_handler_start(ins) ||
-           ins_is_jump_destination(ins);
+           ins_is_jump_destination((jd_ins *) ins);
 }
 
 static inline bool dex_ins_is_branch(jd_dex_ins *ins)
@@ -405,6 +405,9 @@ static inline jd_operator dex_ins_operator(jd_ins *ins)
         case DEX_INS_NEG_FLOAT:
         case DEX_INS_NEG_DOUBLE:
             return JD_OP_NEG;
+        case DEX_INS_NOT_INT:
+        case DEX_INS_NOT_LONG:
+            return JD_OP_NOT;
         case DEX_INS_SHL_INT:
         case DEX_INS_SHL_LONG:
         case DEX_INS_SHL_INT_2ADDR:

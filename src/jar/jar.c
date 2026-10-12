@@ -218,10 +218,10 @@ static jd_jar* jar_obj_create(string path, string save_path, int thread_cnt)
     jar->path = path;
     jar->save = save_path;
     jar->pool = pool;
-    jar->inner_class_map = hashmap_init_in(jar->pool, s2o_cmp, 0);
-    jar->anoymous_class_map = hashmap_init_in(jar->pool, s2o_cmp, 0);
-    jar->name_to_index_map = hashmap_init_in(jar->pool, s2o_cmp, 0);
-    jar->index_to_name_map = hashmap_init_in(jar->pool, i2obj_cmp, 0);
+    jar->inner_class_map = hashmap_init_in(jar->pool, (hcmp_fn) s2o_cmp, 0);
+    jar->anoymous_class_map = hashmap_init_in(jar->pool, (hcmp_fn) s2o_cmp, 0);
+    jar->name_to_index_map = hashmap_init_in(jar->pool, (hcmp_fn) s2o_cmp, 0);
+    jar->index_to_name_map = hashmap_init_in(jar->pool, (hcmp_fn) i2obj_cmp, 0);
 
     mkdir_p(jar->save);
 
@@ -267,7 +267,7 @@ static void jar_threadpool_start(jd_jar *jar)
         jd_jar_entry *entry = lget_obj(jar->class_entries, i);
         if (entry->is_inner || entry->is_anoymous)
             continue;
-        threadpool_add(jar->threadpool, &jar_entry_thread_task, entry, 0);
+        threadpool_add(jar->threadpool, (void (*)(void *)) &jar_entry_thread_task, entry, 0);
         jar->added++;
     }
 }
@@ -325,10 +325,8 @@ jsource_file* jar_entry_analyse(jd_jar *jar,
         inner_jclass->jfile->jar = jar;
 
         tire_merge(jf->imports, inner_jfile->imports);
-        jd_node *inner_block = class_body_block(inner_jfile);
-        jd_node *parent_body = class_body_block(jf);
-        inner_block->parent = parent_body;
-        ladd_obj(parent_body->children, inner_block);
+        // the recursive call already put the inner body into its parent:
+        // attaching it here as well emitted every inner class twice
     }
     return jc->jfile;
 }

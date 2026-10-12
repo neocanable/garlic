@@ -14,14 +14,14 @@ void dex_variable_name(jd_method *m, jd_dex_ins *ins, jd_val *val, int slot)
     if (match_dex_debug(m, ins, val, slot))
         return;
 
-    stack_val_name(m, ins, val, slot);
+    stack_val_name(m, (jd_ins *) ins, val, slot);
 }
 
 static jd_stack* dex_exception_stack(jd_method *m,
                                      jd_dex_ins *ins,
                                      jd_stack *src)
 {
-    jd_bblock *block = block_handler_equals_ins(m, ins);
+    jd_bblock *block = block_handler_equals_ins(m, (jd_ins *) ins);
     jd_eblock *eblock = block->ub->eblock;
     string class_desc = NULL;
 
@@ -41,7 +41,7 @@ static jd_stack* dex_exception_stack(jd_method *m,
     eval->type = JD_VAR_REFERENCE_T;
     string full = class_full_name(class_desc);
     eval->data->cname = class_simple_name(full);
-    eval->ins = ins;
+    eval->ins = (jd_ins *) ins;
 
     if (dex_ins_is_move_exception(ins)) {
         int reg_num = move_exception_reg_num(ins);
@@ -100,7 +100,7 @@ static void perform_dex_stack_var_defination(jd_dex_ins *ins)
         jd_val *val = stack_create_empty_val();
         val->type = JD_VAR_REFERENCE_T;
         val->data->cname = (string)g_str_Object;
-        val->ins = ins;
+        val->ins = (jd_ins *) ins;
         val->slot = 0;
         dex_variable_name(m, ins, val, 0);
         jd_var *stack_var = stack_define_var(m, val, 0);
@@ -204,7 +204,7 @@ static jd_mix_exception* exception_of_handler(jd_method *m, jd_ins *handler)
 // simulated like any other code and its expressions are built.
 static bool seed_exception_handler(jd_method *m, jd_dex_ins *handler)
 {
-    jd_mix_exception *e = exception_of_handler(m, handler);
+    jd_mix_exception *e = exception_of_handler(m, (jd_ins *) handler);
     if (e == NULL || e->try == NULL)
         return false;
 
@@ -246,7 +246,7 @@ static void dex_fill_visit_queue(jd_method *m, jd_dex_ins *ins)
 {
     for (int i = 0; i < m->ins_watch_successors->size; ++i) {
         jd_dex_ins *suc_ins = lget_obj(m->ins_watch_successors, i);
-        int is_handler_start = ins_is_handler_start(m, suc_ins);
+        int is_handler_start = ins_is_handler_start(m, (jd_ins *) suc_ins);
         if (is_handler_start && block_can_execute(m, ins, suc_ins)) {
             if (suc_ins->stack_in != NULL)
                 merge_local_variables_for_exception_block(ins, suc_ins);
@@ -274,7 +274,7 @@ static void dex_process_instruction_action(jd_method *m, ins_action_cb cb)
     jd_dex_ins *ins = NULL;
     while ((ins = queue_pop_object(m->ins_visit_queue)) != NULL) {
         times ++;
-        cb(m, ins);
+        cb(m, (jd_ins *) ins);
     }
 }
 
@@ -300,7 +300,7 @@ void dex_simulator(jd_method *m)
 
     queue_push_object(m->ins_visit_queue, start);
 
-    dex_process_instruction_action(m, dex_ins_cb);
+    dex_process_instruction_action(m, (ins_action_cb) dex_ins_cb);
 
     bool progress = true;
     while (progress) {
@@ -321,14 +321,14 @@ void dex_simulator(jd_method *m)
                 handlers[handler_count++] = get_ins(m, e->finally->start_idx);
 
             for (int j = 0; j < handler_count; ++j) {
-                jd_dex_ins *handler = handlers[j];
+                jd_dex_ins *handler = (jd_dex_ins *) handlers[j];
                 if (handler == NULL || handler->stack_in != NULL)
                     continue;
                 if (!seed_exception_handler(m, handler))
                     continue;
 
                 queue_push_object(m->ins_visit_queue, handler);
-                dex_process_instruction_action(m, dex_ins_cb);
+                dex_process_instruction_action(m, (ins_action_cb) dex_ins_cb);
                 progress = true;
             }
         }

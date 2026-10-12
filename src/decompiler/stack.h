@@ -59,7 +59,7 @@ static inline void stack_clone_local_variables(jd_stack *dst, jd_stack *src)
     memcpy(dst->local_vars, src->local_vars, size);
 }
 
-static inline bool stack_val_type_is(jd_val *val, string name)
+static inline bool stack_val_type_is(jd_val *val, const char *name)
 {
     return val != NULL && val->data != NULL &&
            val->data->cname != NULL &&

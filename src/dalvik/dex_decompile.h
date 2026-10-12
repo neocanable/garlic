@@ -36,4 +36,12 @@ FILE* dex_class_smali_save_dir(jd_dex *dex, dex_class_def *cf);
 
 void dex_to_source(string dex_path, string save_dir);
 
+void dex_decompile_class(jd_dex *dex, dex_class_def *cf);
+
+void dex_smali_class(jd_dex *dex, dex_class_def *cf);
+
+void dex_decompile_class(jd_dex *dex, dex_class_def *cf);
+
+void dex_smali_class(jd_dex *dex, dex_class_def *cf);
+
 #endif

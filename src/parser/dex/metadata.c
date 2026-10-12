@@ -8,6 +8,7 @@
 #include "metadata.h"
 #include "dex_meta_helper.h"
 #include "decompiler/klass.h"
+#include "dalvik/dex_class.h"
 
 /*
  *  android 9.0 libdex/Leb128.h
@@ -78,17 +79,17 @@ static void setup_current_offset(jd_meta_dex *dex, size_t offset)
 
 static void parse_dex_header(jd_meta_dex *dex)
 {
-    dex->header = dex->bin->buffer;
+    dex->header = (dex_header *) dex->bin->buffer;
 }
 
 static void parse_dex_links(jd_meta_dex *dex)
 {
-    dex->links = dex->bin->buffer + dex->header->link_off;
+    dex->links = (dex_link *) (dex->bin->buffer + dex->header->link_off);
 }
 
 static void parse_dex_map_list(jd_meta_dex *dex)
 {
-    dex->maps = dex->bin->buffer + dex->header->map_off;
+    dex->maps = (dex_map_list *) (dex->bin->buffer + dex->header->map_off);
 }
 
 static int dex_string_byte_size(jd_meta_dex *dex, uint32_t utf16_size)
@@ -116,7 +117,7 @@ static int dex_string_byte_size(jd_meta_dex *dex, uint32_t utf16_size)
 static void parse_dex_string_ids(jd_meta_dex *dex)
 {
     dex_header *header = dex->header;
-    dex->string_ids = dex->bin->buffer + header->string_ids_off;
+    dex->string_ids = (dex_string_id *) (dex->bin->buffer + header->string_ids_off);
 
 
     dex->strings = make_obj_arr_in(dex_string_item,
@@ -143,7 +144,7 @@ static void parse_dex_string_ids(jd_meta_dex *dex)
 
 static void parse_dex_type_ids(jd_meta_dex *dex)
 {
-    dex->type_ids = dex->bin->buffer + dex->header->type_ids_off;
+    dex->type_ids = (dex_type_id *) (dex->bin->buffer + dex->header->type_ids_off);
 }
 
 static void parse_dex_proto_ids(jd_meta_dex *dex)
@@ -185,12 +186,12 @@ static void parse_dex_proto_ids(jd_meta_dex *dex)
 
 static void parse_dex_field_ids(jd_meta_dex *dex)
 {
-    dex->field_ids = dex->bin->buffer + dex->header->field_ids_off;
+    dex->field_ids = (dex_field_id *) (dex->bin->buffer + dex->header->field_ids_off);
 }
 
 static void parse_dex_method_ids(jd_meta_dex *dex)
 {
-    dex->method_ids = dex->bin->buffer + dex->header->method_ids_off;
+    dex->method_ids = (dex_method_id *) (dex->bin->buffer + dex->header->method_ids_off);
 }
 
 static void parse_dex_class_interfaces(jd_meta_dex *dex, dex_class_def *cdef)
@@ -680,7 +681,7 @@ static void parse_dex_code_item(jd_meta_dex *dex, encoded_method *em)
     jdex_read4(dex, &code->debug_info_off);
     jdex_read4(dex, &code->insns_size);
 
-    code->insns = dex->bin->buffer + dex->bin->cur_off;
+    code->insns = (u2 *) (dex->bin->buffer + dex->bin->cur_off);
     setup_current_offset(dex, dex->bin->cur_off + sizeof(u2)*code->insns_size);
 
     parse_dex_code_try_item(dex, code);
@@ -891,15 +892,15 @@ static jd_meta_dex* init_dex_content(mem_pool *pool, string path)
 
 static void init_dex_extract_data(jd_meta_dex *dex)
 {
-    dex->synthetic_classes_map = hashmap_init_in(dex->pool, u4obj_cmp, 0);
-    dex->lambda_method_map = hashmap_init_in(dex->pool, u4obj_cmp, 0);
-    dex->rebuilt_lambda_bodies = hashmap_init_in(dex->pool, u4obj_cmp, 0);
-    dex->rebuilt_lambda_classes = hashmap_init_in(dex->pool, u4obj_cmp, 0);
+    dex->synthetic_classes_map = hashmap_init_in(dex->pool, (hcmp_fn) u4obj_cmp, 0);
+    dex->lambda_method_map = hashmap_init_in(dex->pool, (hcmp_fn) u4obj_cmp, 0);
+    dex->rebuilt_lambda_bodies = hashmap_init_in(dex->pool, (hcmp_fn) u4obj_cmp, 0);
+    dex->rebuilt_lambda_classes = hashmap_init_in(dex->pool, (hcmp_fn) u4obj_cmp, 0);
     dex->lambda_in_progress = hashmap_init((hcmp_fn) i2i_cmp, 0);
     pthread_mutex_init(&dex->lambda_lock, NULL);
-    dex->lambda_facts = hashmap_init_in(dex->pool, u4obj_cmp, 0);
-    dex->class_type_id_map = hashmap_init_in(dex->pool, u4obj_cmp, 0);
-    dex->class_name_map = hashmap_init_in(dex->pool, s2o_cmp, 0);
+    dex->lambda_facts = hashmap_init_in(dex->pool, (hcmp_fn) u4obj_cmp, 0);
+    dex->class_type_id_map = hashmap_init_in(dex->pool, (hcmp_fn) u4obj_cmp, 0);
+    dex->class_name_map = hashmap_init_in(dex->pool, (hcmp_fn) s2o_cmp, 0);
 }
 
 jd_meta_dex* parse_dex_file(string path)

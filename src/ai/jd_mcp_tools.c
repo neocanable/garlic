@@ -1333,7 +1333,7 @@ static void analyze_import_native(mem_pool *pool,
         "    --- native import took %ds ---\n", elapsed);
 }
 
-static char* tool_analyze(jd_mcp_server *server, string path, string out_dir)
+static char* tool_analyze(jd_mcp_server *server, const char *path, const char *out_dir)
 {
     mem_pool *pool = server->pool;
     time_t t_total_start = time(NULL);
@@ -1350,14 +1350,14 @@ static char* tool_analyze(jd_mcp_server *server, string path, string out_dir)
 
     /* Phase 1 — Decompile */
     time_t t_deco_start = time(NULL);
-    int rc = jd_mcp_do_decompile(server, path, decompile_dir);
+    int rc = jd_mcp_do_decompile(server, (string) path, decompile_dir);
     int deco_sec = (int)difftime(time(NULL), t_deco_start);
     if (rc != 0)
         return str_create_in(pool, "err: decompilation failed (exit=%d)", rc);
 
     /* Phase 2 — Call graph */
     time_t t_cg_start = time(NULL);
-    rc = jd_mcp_do_call_graph(server, path, cg_dir);
+    rc = jd_mcp_do_call_graph(server, (string) path, cg_dir);
     int cg_sec = (int)difftime(time(NULL), t_cg_start);
     if (rc != 0)
         return str_create_in(pool, "err: call graph creation failed (exit=%d)", rc);
