@@ -1016,11 +1016,11 @@ static void dexdump_write_class_def(jd_meta_dex *dex,
                                     int index)
 {
     string class_name = dex_str_of_type_id(dex, cf->class_idx);
-    string super_name = dex_str_of_type_id(dex, cf->superclass_idx);
+    string super_name = dex_str_of_superclass(dex, cf);
     printf("class: #%d\n", cf->class_idx);
     printf("\tdescriptor      : %s\n", class_name);
     printf("\tflag            : 0x%04x\n", cf->access_flags);
-    printf("\tsuper           : %s\n", super_name);
+    printf("\tsuper           : %s\n", super_name != NULL ? super_name : "Ljava/lang/Object;");
     printf("\tinterface       : ");
     if (cf->interfaces != NULL) {
         for (int i = 0; i < cf->interfaces->size; ++i) {

@@ -893,10 +893,12 @@ static void dex_invoke_expression(jd_exp *exp, jd_dex_ins *ins)
                 cname = dex_str_of_type_id(meta, item->type_idx);
             }
             else {
-                cname = dex_str_of_type_id(meta, cf->superclass_idx);
+                cname = dex_str_of_superclass(meta, cf);
             }
 
-            anonymous_exp->cname = class_simple_name(cname);
+            anonymous_exp->cname = cname != NULL
+                                   ? class_simple_name(cname)
+                                   : (string) g_str_Object;
             invoke->anonymous = anonymous_exp;
         }
     }
@@ -1033,10 +1035,12 @@ static void dex_invoke_range_expression(jd_exp *exp, jd_dex_ins *ins)
                 cname = dex_str_of_type_id(meta, item->type_idx);
             }
             else {
-                cname = dex_str_of_type_id(meta, cf->superclass_idx);
+                cname = dex_str_of_superclass(meta, cf);
             }
 
-            anonymous_exp->cname = class_simple_name(cname);
+            anonymous_exp->cname = cname != NULL
+                                   ? class_simple_name(cname)
+                                   : (string) g_str_Object;
             invoke->anonymous = anonymous_exp;
         }
     }

@@ -14,6 +14,14 @@ static inline string dex_str_of_type_id(jd_meta_dex *meta, u2 idx)
     return dex_str_of_idx(meta, meta->type_ids[idx].descriptor_idx);
 }
 
+static inline string dex_str_of_superclass(jd_meta_dex *meta, dex_class_def *cf)
+{
+    if (cf->superclass_idx == NO_INDEX ||
+            cf->superclass_idx >= meta->header->type_ids_size)
+        return NULL;
+    return dex_str_of_type_id(meta, cf->superclass_idx);
+}
+
 static inline string dex_str_of_field_type(jd_meta_dex *meta, u2 idx)
 {
     return dex_str_of_type_id(meta, meta->field_ids[idx].type_idx);

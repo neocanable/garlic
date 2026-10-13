@@ -155,7 +155,7 @@ bool dex_class_is_lambda_shape(jd_meta_dex *meta, dex_class_def *cf) {
     if (cf == NULL || cf->interfaces == NULL || cf->interfaces->size != 1)
         return false;
 
-    string super = dex_str_of_type_id(meta, cf->superclass_idx);
+    string super = dex_str_of_superclass(meta, cf);
     return super != NULL && STR_EQL(super, "Ljava/lang/Object;");
 }
 

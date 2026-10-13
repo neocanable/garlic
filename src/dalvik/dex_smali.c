@@ -946,7 +946,7 @@ static void smali_write_class_def(jd_meta_dex *dex,
                                   FILE *stream)
 {
     string class_name = dex_str_of_type_id(dex, cf->class_idx);
-    string super_name = dex_str_of_type_id(dex, cf->superclass_idx);
+    string super_name = dex_str_of_superclass(dex, cf);
 
     str_list *list = str_list_init();
     dex_class_access_flag_with_flags(cf->access_flags, list);
@@ -955,7 +955,8 @@ static void smali_write_class_def(jd_meta_dex *dex,
     fprintf(stream, ".class ");
     smali_class_flags(stream, cf_access_flags);
     fprintf(stream, " %s\n", class_name);
-    fprintf(stream, ".super %s\n", super_name);
+    fprintf(stream, ".super %s\n",
+            super_name != NULL ? super_name : "Ljava/lang/Object;");
 
     const u4 kNoIndex = 0xFFFFFFFF;
     if (cf->source_file_idx != kNoIndex &&

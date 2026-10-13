@@ -268,8 +268,10 @@ jsource_file* dex_class_inside(jd_dex *dex,
     jf->imports = trie_create_node("");
     jf->meta = dex;
     jf->jclass = cf;
-    string super_cname = dex_str_of_type_id(dex->meta, cf->superclass_idx);
-    jf->super_cname = class_simple_name(super_cname);
+    string super_cname = dex_str_of_superclass(dex->meta, cf);
+    jf->super_cname = super_cname != NULL
+                      ? class_simple_name(super_cname)
+                      : (string) g_str_Object;
     jf->interfaces = linit_object();
 
     if (cf->interfaces != NULL) {
