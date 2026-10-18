@@ -65,6 +65,47 @@ static void dex_move_expression(jd_exp *exp, jd_dex_ins *ins)
     dex_local_variable_exp(right, val);
 }
 
+static void dex_const_value_as_fp(jd_val *val, bool want_double)
+{
+    if (val == NULL || val->ins == NULL || val->data == NULL ||
+        val->data->primitive == NULL)
+        return;
+
+    jd_dex_ins *ins = (jd_dex_ins *) val->ins;
+    switch (ins->code) {
+        case DEX_INS_CONST_4:
+        case DEX_INS_CONST_16:
+        case DEX_INS_CONST:
+        case DEX_INS_CONST_HIGH16: {
+            if (val->type != JD_VAR_INT_T)
+                return;
+            int bits = val->data->primitive->int_val;
+            float f;
+            memcpy(&f, &bits, sizeof(f));
+            val->data->primitive->float_val = f;
+            val->type = JD_VAR_FLOAT_T;
+            val->data->cname = (string) g_str_float;
+            break;
+        }
+        case DEX_INS_CONST_WIDE_16:
+        case DEX_INS_CONST_WIDE_32:
+        case DEX_INS_CONST_WIDE:
+        case DEX_INS_CONST_WIDE_HIGH16: {
+            if (!want_double || val->type != JD_VAR_LONG_T)
+                return;
+            long bits = val->data->primitive->long_val;
+            double d;
+            memcpy(&d, &bits, sizeof(d));
+            val->data->primitive->double_val = d;
+            val->type = JD_VAR_DOUBLE_T;
+            val->data->cname = (string) g_str_double;
+            break;
+        }
+        default:
+            break;
+    }
+}
+
 static void dex_return_expression(jd_exp *exp, jd_dex_ins *ins)
 {
     exp->ins = (jd_ins *) ins;
@@ -77,6 +118,14 @@ static void dex_return_expression(jd_exp *exp, jd_dex_ins *ins)
         rval_exp->ins = (jd_ins *) ins;
         u8 slot = dex_ins_parameter(ins, 0);
         jd_val *val = ins->stack_in->local_vars[slot];
+        jd_method *m = ins->method;
+        if (val != NULL && m != NULL && m->desc != NULL) {
+            string ret = m->desc->str_return;
+            if (STR_EQL(ret, g_str_float))
+                dex_const_value_as_fp(val, false);
+            else if (STR_EQL(ret, g_str_double))
+                dex_const_value_as_fp(val, true);
+        }
         dex_local_variable_exp(rval_exp, val);
     }
     else
@@ -429,13 +478,12 @@ static void dex_switch_expression(jd_exp *exp, jd_dex_ins *ins)
 
     switch_exp->targets = linit_object();
     DEBUG_PRINT("[switch]: %d -> %s\n", ins->offset, ins->name);
-    for (int i = 0; i < ins->targets->size; ++i) {
+    int key_count = dex_switch_size(ins);
+    for (int i = 0; ins->targets != NULL && i < ins->targets->size && i < key_count; ++i) {
         jd_dex_ins *target_ins = lget_obj(ins->targets, i);
-        if (target_ins->offset == switch_exp->default_offset)
-            continue;
         jd_switch_param *param = make_obj(jd_switch_param);
         param->offset = target_ins->offset;
-        param->ikey = dex_switch_key(ins, target_ins->offset);
+        param->ikey = dex_switch_key_at(ins, i);
         ladd_obj(switch_exp->targets, param);
     }
 
@@ -467,7 +515,7 @@ static void dex_cmp_expression(jd_exp *exp, jd_dex_ins *ins)
     u8 slot_a = dex_ins_parameter(ins, 1);
     u8 slot_b = dex_ins_parameter(ins, 2);
 
-    jd_val **locals = ins->stack_out->local_vars;
+    jd_val **locals = ins->stack_in->local_vars;
     dex_local_variable_exp(left_cmp, locals[slot_a]);
     dex_local_variable_exp(right_cmp, locals[slot_b]);
 
@@ -623,7 +671,7 @@ static void dex_array_get_expression(jd_exp *exp, jd_dex_ins *ins)
     u2 array_slot = dex_ins_parameter(ins, 1);
     u2 index_slot = dex_ins_parameter(ins, 2);
 
-    jd_val **locals = ins->stack_out->local_vars;
+    jd_val **locals = ins->stack_in->local_vars;
     dex_local_variable_exp(index, locals[index_slot]);
     dex_local_variable_exp(array, locals[array_slot]);
 }
@@ -1124,6 +1172,23 @@ static void dex_cast_expression(jd_exp *exp, jd_dex_ins *ins)
     }
 }
 
+static void dex_coerce_binop_operands(jd_exp *exp, jd_val *left, jd_val *right)
+{
+    jd_exp_store *store = exp->data;
+    jd_exp *dest_exp = &store->list->args[0];
+    jd_val *dest = dest_exp->data;
+    if (dest == NULL)
+        return;
+    if (dest->type == JD_VAR_FLOAT_T) {
+        dex_const_value_as_fp(left, false);
+        dex_const_value_as_fp(right, false);
+    }
+    else if (dest->type == JD_VAR_DOUBLE_T) {
+        dex_const_value_as_fp(left, true);
+        dex_const_value_as_fp(right, true);
+    }
+}
+
 static void dex_binop_2addr_expression(jd_exp *exp, jd_dex_ins *ins)
 {
     dex_build_assignment(exp, ins);
@@ -1139,6 +1204,29 @@ static void dex_binop_2addr_expression(jd_exp *exp, jd_dex_ins *ins)
     jd_val **locals = ins->stack_in->local_vars;
     dex_local_variable_exp(left_exp, locals[slot_a]);
     dex_local_variable_exp(right_exp, locals[slot_b]);
+    dex_coerce_binop_operands(exp, locals[slot_a], locals[slot_b]);
+
+    exp_op->operator = dex_ins_operator((jd_ins *) ins);
+    right->data = exp_op;
+}
+
+static void dex_binop_expression(jd_exp *exp, jd_dex_ins *ins)
+{
+    // 23x: vAA = vBB op vCC
+    dex_build_assignment(exp, ins);
+    jd_exp *right = get_store_right(exp);
+    right->type = JD_EXPRESSION_OPERATOR;
+    jd_exp_operator *exp_op = make_obj(jd_exp_operator);
+    exp_op->list = make_exp_list(2);
+    jd_exp *left_exp = &exp_op->list->args[0];
+    jd_exp *right_exp = &exp_op->list->args[1];
+
+    u2 slot_b = dex_ins_parameter(ins, 1);
+    u2 slot_c = dex_ins_parameter(ins, 2);
+    jd_val **locals = ins->stack_in->local_vars;
+    dex_local_variable_exp(left_exp, locals[slot_b]);
+    dex_local_variable_exp(right_exp, locals[slot_c]);
+    dex_coerce_binop_operands(exp, locals[slot_b], locals[slot_c]);
 
     exp_op->operator = dex_ins_operator((jd_ins *) ins);
     right->data = exp_op;
@@ -1421,6 +1509,40 @@ void dex_build_expression(jd_exp *exp, jd_dex_ins *ins)
         case DEX_INS_INT_TO_CHAR:
         case DEX_INS_INT_TO_SHORT:
             dex_cast_expression(exp, ins);
+            break;
+        case DEX_INS_ADD_INT:
+        case DEX_INS_SUB_INT:
+        case DEX_INS_MUL_INT:
+        case DEX_INS_DIV_INT:
+        case DEX_INS_REM_INT:
+        case DEX_INS_AND_INT:
+        case DEX_INS_OR_INT:
+        case DEX_INS_XOR_INT:
+        case DEX_INS_SHL_INT:
+        case DEX_INS_SHR_INT:
+        case DEX_INS_USHR_INT:
+        case DEX_INS_ADD_LONG:
+        case DEX_INS_SUB_LONG:
+        case DEX_INS_MUL_LONG:
+        case DEX_INS_DIV_LONG:
+        case DEX_INS_REM_LONG:
+        case DEX_INS_AND_LONG:
+        case DEX_INS_OR_LONG:
+        case DEX_INS_XOR_LONG:
+        case DEX_INS_SHL_LONG:
+        case DEX_INS_SHR_LONG:
+        case DEX_INS_USHR_LONG:
+        case DEX_INS_ADD_FLOAT:
+        case DEX_INS_SUB_FLOAT:
+        case DEX_INS_MUL_FLOAT:
+        case DEX_INS_DIV_FLOAT:
+        case DEX_INS_REM_FLOAT:
+        case DEX_INS_ADD_DOUBLE:
+        case DEX_INS_SUB_DOUBLE:
+        case DEX_INS_MUL_DOUBLE:
+        case DEX_INS_DIV_DOUBLE:
+        case DEX_INS_REM_DOUBLE:
+            dex_binop_expression(exp, ins);
             break;
         case DEX_INS_ADD_INT_2ADDR:
         case DEX_INS_SUB_INT_2ADDR:

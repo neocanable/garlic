@@ -3,18 +3,60 @@
 #include "dalvik/dex_ins.h"
 #include "dalvik/dex_ins_action.h"
 #include "dalvik/dex_type_analyse.h"
+#include "dalvik/dex_meta_helper.h"
 
 #include "decompiler/stack.h"
 #include "decompiler/control_flow.h"
 #include "decompiler/ssa.h"
 #include "decompiler/method.h"
 
+static void dex_take_name(jd_method *m, jd_val *val)
+{
+    // reserve debug names so a later generated name cannot collide with them
+    if (val->name != NULL && m->var_name_taken != NULL)
+        hset_s2i(m->var_name_taken, val->name, 1);
+}
+
 void dex_variable_name(jd_method *m, jd_dex_ins *ins, jd_val *val, int slot)
 {
-    if (match_dex_debug(m, ins, val, slot))
+    if (match_dex_debug(m, ins, val, slot)) {
+        if (val->name != NULL && m->slot_name_map != NULL)
+            hset_i2s(m->slot_name_map, slot, val->name);
+        dex_take_name(m, val);
+        return;
+    }
+
+    if (m->slot_name_map != NULL) {
+        string existing = hget_i2s(m->slot_name_map, slot);
+        if (existing != NULL) {
+            val->name = existing;
+            val->name_type = JD_VAR_NAME_DEBUG;
+            dex_take_name(m, val);
+            return;
+        }
+    }
+    stack_val_name(m, (jd_ins *) ins, val, slot);
+}
+
+static void dex_seed_slot_names(jd_method *m)
+{
+    encoded_method *em = m->meta_method;
+    if (em == NULL || em->code == NULL)
+        return;
+    dex_debug_info_item *debug_info = em->code->debug_info;
+    if (debug_info == NULL)
         return;
 
-    stack_val_name(m, (jd_ins *) ins, val, slot);
+    jd_dex *dex = m->meta;
+    jd_meta_dex *meta = dex->meta;
+    for (int i = 0; i < debug_info->dbg_size; ++i) {
+        dex_dbg_item *item = &debug_info->items[i];
+        if (item->name_idx == NO_INDEX)
+            continue;
+        if (hget_i2s(m->slot_name_map, item->reg_num) == NULL)
+            hset_i2s(m->slot_name_map, item->reg_num,
+                     dex_str_of_idx(meta, item->name_idx));
+    }
 }
 
 static jd_stack* dex_exception_stack(jd_method *m,
@@ -287,10 +329,13 @@ void dex_simulator(jd_method *m)
     m->stack_variables = linit_object();
     m->offset2var_map = hashmap_init((hcmp_fn)i2obj_cmp, 0);
     m->slot_counter_map = hashmap_init((hcmp_fn) i2i_cmp, 0);
+    m->slot_name_map = hashmap_init((hcmp_fn) i2s_cmp, 0);
     m->class_counter_map = hashmap_init((hcmp_fn) s2i_cmp, 0);
     m->var_name_taken = hashmap_init((hcmp_fn) s2i_cmp, 0);
     m->var_name_map = hashmap_init((hcmp_fn) s2s_cmp, 0);
     m->types = linit_object();
+
+    dex_seed_slot_names(m);
 
     dex_method_enter_stack(m);
 

@@ -7,11 +7,10 @@ jd_ins* make_goto_ins(jd_method *m, jd_support_type type, uint32_t offset)
 {
     jd_ins *last = lget_obj_last(m->instructions);
     jd_ins *ins = make_obj(jd_ins);
-    ins->type = type;
+    ins->method = m;
     ins->offset = last->offset + 4;
     ins->idx = m->instructions->size;
-    ins->fn = last->fn;
-    if (ins->type == JD_TYPE_DALVIK)
+    if (type == JD_TYPE_DALVIK)
         ins->code = DEX_INS_GOTO;
     else
         ins->code = INS_GOTO;
@@ -81,9 +80,9 @@ jd_bblock* dup_basic_block_and_ins(jd_method *m, jd_bblock *src_block)
         copy->prev = NULL;
         copy->next = NULL;
 
-        copy->comings = linit_object();
-        copy->jumps = linit_object();
-        copy->targets = linit_object();
+        copy->comings = NULL;
+        copy->jumps = NULL;
+        copy->targets = NULL;
         copy->code = src->code;
         copy->name = src->name;
 
@@ -794,10 +793,12 @@ static inline u8 dex_ins_parameter_45cc(jd_dex_ins *ins, int number)
     u2 v_bbbb = ins->param[1];
     u2 second = ins->param[2];
     u2 v_hhhh = ins->param[3];
-    u1 v_c = second >> 12;
-    u1 v_d = (second >> 8) & 0x0F;
-    u1 v_e = (second >> 4) & 0x0F;
-    u1 v_f = second & 0x0F;
+    // 45cc packs the register list as F|E|D|C in the second code unit, so C
+    // is the low nibble (matches the 35c decoder and the smali writer)
+    u1 v_c = second & 0x0F;
+    u1 v_d = (second >> 4) & 0x0F;
+    u1 v_e = (second >> 8) & 0x0F;
+    u1 v_f = second >> 12;
 
     switch (number) {
         case 0:
@@ -906,11 +907,13 @@ static inline u8 dex_ins_parameter_51l(jd_dex_ins *ins, int number)
 {
     u2 item = ins->param[0];
     u1 v_a = (item >> 8);
-    s4 b1 = ins->param[1];
-    s4 b2 = ins->param[2];
-    s4 b3 = ins->param[3];
-    s4 b4 = ins->param[4];
-    s8 v_b = (s8)b1 << 48 | (s8)b2 << 32 | (s8)b3 << 16 | b4;
+    // the four code units are little-endian words of the 64-bit literal:
+    // param[1] is the low 16 bits, param[4] the high ones. Assembling them
+    // in the opposite order turns 0x100000002 into 0x0002000000010000.
+    u8 v_b = (u8) ins->param[1]
+            | ((u8) ins->param[2] << 16)
+            | ((u8) ins->param[3] << 32)
+            | ((u8) ins->param[4] << 48);
 
     switch (number) {
         case 0:
@@ -1076,13 +1079,39 @@ u8 dex_ins_parameter(jd_dex_ins *ins, int number)
     }
 }
 
-int dex_switch_key(jd_dex_ins *ins, uint32_t target_offset)
+static jd_dex_ins* dex_switch_payload(jd_dex_ins *ins)
 {
     jd_method *m = ins->method;
     s4 offset = (s4)(ins->param[2] << 16 | ins->param[1]);
-    hashmap *map = m->offset2id_map;
-    int payload_idx = hget_i2i(map, ins->offset + offset);
-    jd_dex_ins *pins = lget_obj(m->instructions, payload_idx);
+    int payload_idx = hget_i2i(m->offset2id_map, ins->offset + offset);
+    return lget_obj(m->instructions, payload_idx);
+}
+
+int dex_switch_size(jd_dex_ins *ins)
+{
+    jd_dex_ins *pins = dex_switch_payload(ins);
+    return pins == NULL ? 0 : pins->param[1];
+}
+
+int dex_switch_key_at(jd_dex_ins *ins, int index)
+{
+    jd_dex_ins *pins = dex_switch_payload(ins);
+    if (pins == NULL || index < 0 || index >= pins->param[1])
+        return 0;
+
+    if (dex_ins_is_packed_switch(ins)) {
+        int first_key = pins->param[3] << 16 | pins->param[2];
+        return first_key + index;
+    }
+
+    u2 *params = pins->param;
+    return params[3 + index * 2] << 16 | params[2 + index * 2];
+}
+
+int dex_switch_key(jd_dex_ins *ins, uint32_t target_offset)
+{
+    jd_method *m = ins->method;
+    jd_dex_ins *pins = dex_switch_payload(ins);
 
     if (dex_ins_is_packed_switch(ins)) {
         int size = pins->param[1];
@@ -1100,7 +1129,8 @@ int dex_switch_key(jd_dex_ins *ins, uint32_t target_offset)
         u2 *params = pins->param;
         for (int i = 0; i < size; ++i) {
             int key = params[3+i*2] << 16 | params[2+i*2];
-            u4 val = params[3+size*2+i*2] | params[2+size*2+i*2];
+            u4 val = params[3+size*2+i*2] << 16 |
+                     params[2+size*2+i*2];
             if (ins->offset + val == target_offset)
                 return key;
         }

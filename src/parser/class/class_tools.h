@@ -101,7 +101,10 @@ static inline int get_const_int(jcp_info *info)
 static inline float get_const_float(jcp_info *info)
 {
     jconst_float *f = info->info->float_info;
-    return ntohl(f->bytes);
+    uint32_t bits = ntohl(f->bytes);
+    float v;
+    memcpy(&v, &bits, sizeof(v));
+    return v;
 }
 
 static inline double get_const_double(jcp_info *info)

@@ -15,6 +15,8 @@ jd_dex_ins* dup_dex_ins(jd_dex_ins *src);
 u8 dex_ins_parameter(jd_dex_ins *ins, int number);
 
 int dex_switch_key(jd_dex_ins *ins, uint32_t target_offset);
+int dex_switch_key_at(jd_dex_ins *ins, int index);
+int dex_switch_size(jd_dex_ins *ins);
 
 bool dex_ins_type_changed(jd_dex_ins *ins);
 

@@ -311,11 +311,8 @@ static inline void build_dex_ins_const_act(jd_dex_ins *ins)
 static inline void build_dex_ins_const_high16_act(jd_dex_ins *ins)
 {
     u1 u_a = dex_ins_parameter(ins, 0);
-    u4 u_b = dex_ins_parameter(ins, 1) << 16;
-
-    jd_val *val = dex_primitive_val(ins, u_a, 'F');
-    val->data->primitive->float_val = (float)u_b;
-    save_stack_val(ins, val, u_a);
+    s4 u_b = (s4)((u4)dex_ins_parameter(ins, 1) << 16);
+    build_dex_ins_const_int_act(ins, u_a, u_b);
 }
 
 static inline void build_dex_ins_long_act(jd_dex_ins *ins, int reg, long l)
@@ -346,7 +343,8 @@ static inline void build_dex_ins_const_wide_16_act(jd_dex_ins *ins)
 static inline void build_dex_ins_const_wide_32_act(jd_dex_ins *ins)
 {
     u1 u_a = dex_ins_parameter(ins, 0);
-    u4 u_b = dex_ins_parameter(ins, 1);
+    // sign-extend: truncating to u4 turns -100000 into 4294867296
+    s8 u_b = (s8)(s4)dex_ins_parameter(ins, 1);
 
     build_dex_ins_long_act(ins, u_a, u_b);
 }
@@ -355,17 +353,16 @@ static inline void build_dex_ins_const_wide_act(jd_dex_ins *ins)
 {
     u1 u_a = dex_ins_parameter(ins, 0);
     s8 u_b = (s8)dex_ins_parameter(ins, 1);
-    build_dex_ins_double_act(ins, u_a, u_b);
+    build_dex_ins_long_act(ins, u_a, u_b);
 }
 
 static inline void build_dex_ins_const_wide_high16_act(jd_dex_ins *ins)
 {
     u1 u_a = dex_ins_parameter(ins, 0);
-    s4 b1 = (s4)dex_ins_parameter(ins, 1);
-    s8 u_b = (s8)b1 << 48;
+    u8 u_b = (u8)((u2)dex_ins_parameter(ins, 1)) << 48;
 
     jd_val *val = dex_primitive_val(ins, u_a, 'J');
-    val->data->primitive->long_val = u_b;
+    val->data->primitive->long_val = (s8)u_b;
 
     save_stack_val(ins, val, u_a);
     save_stack_val(ins, val, u_a + 1);
@@ -568,7 +565,8 @@ static inline void build_dex_ins_instanceop_act(jd_dex_ins *ins)
 {
     u1 u_a = dex_ins_parameter(ins, 0);
     u1 u_b = dex_ins_parameter(ins, 1);
-    u2 field_index = dex_ins_parameter(ins, 1);
+    // 22c: vA, vB, field@CCCC; parameter 1 is the object register
+    u2 field_index = dex_ins_parameter(ins, 2);
 
     jd_meta_dex *meta = dex_ins_meta(ins);
     dex_field_id *field_id = &meta->field_ids[field_index];
@@ -590,7 +588,7 @@ static inline void build_dex_ins_instanceop_act(jd_dex_ins *ins)
         jd_val_data *data = val->data;
         val->slot = u_a;
         val->ins = (jd_ins *) ins;
-        string full = dex_desc_full_name(ins, desc);
+        string full = dex_desc_full_name(ins, type_name);
         data->cname = class_simple_name_without_primitive(full);
         val->type = JD_VAR_REFERENCE_T;
 
@@ -659,7 +657,7 @@ static inline void build_dex_ins_staticop_act(jd_dex_ins *ins)
         val->ins = (jd_ins *) ins;
         val->slot = u_a;
         jd_val_data *data = val->data;
-        string full = dex_desc_full_name(ins, desc);
+        string full = dex_desc_full_name(ins, type_name);
         data->cname = class_simple_name_without_primitive(full);
         data->val = field_name;
         val->type = JD_VAR_REFERENCE_T;
@@ -965,7 +963,7 @@ static inline void build_dex_ins_op_act(jd_dex_ins *ins)
             break;
         }
         case DEX_INS_INT_TO_SHORT: {
-            jd_val *val = dex_stack_val(ins, u_a, 'C');
+            jd_val *val = dex_stack_val(ins, u_a, 'S');
             save_stack_val(ins, val, u_a);
             break;
         }

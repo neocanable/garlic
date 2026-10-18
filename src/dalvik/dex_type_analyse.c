@@ -31,6 +31,7 @@ bool match_dex_debug(jd_method *m, jd_dex_ins *ins, jd_val *val, int slot)
             if (s == i) {
                 string name = dex_str_of_idx(meta, name_idx);
                 val->name = name;
+                val->name_type = JD_VAR_NAME_DEBUG;
                 return true;
             }
         }
