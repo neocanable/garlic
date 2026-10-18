@@ -35,6 +35,8 @@ typedef struct mem_pool {
     size_t          total_size;
     size_t          small_buffer_capacity;
     small_block     *cur_usable_small_block;
+    // skip small block while(next)
+    small_block     *last_small_block;
     big_block       *big_block_start;
     small_block     small_block_start[0];
 

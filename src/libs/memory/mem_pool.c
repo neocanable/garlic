@@ -106,14 +106,12 @@ mem_pool* mem_pool_init(size_t capacity)
     sbp->buffer_end = sbp->cur_usable_buffer+capacity;
     sbp->next_block = NULL;
     sbp->no_enough_times = 0;
+    pool->last_small_block = sbp;
 
     return pool;
 }
 
 void mem_pool_free(mem_pool *pool){
-    // free(NULL) is a no-op and callers here rely on that: jar_file_analyse
-    // frees the global pool a second time after the per entry loop already
-    // freed it, and that used to dereference NULL
     if (pool == NULL)
         return;
 
@@ -153,21 +151,10 @@ u1* mem_pool_new_small_block(mem_pool *pool, size_t size)
     u1 *res = sbp->cur_usable_buffer;
     sbp->cur_usable_buffer = res + mem_align_up(size);
 
+    pool->last_small_block->next_block = sbp;
+    pool->last_small_block = sbp;
 
-    small_block *p = pool->cur_usable_small_block;
-    while (p->next_block) {
-        if (p->no_enough_times > 4) {
-            pool->cur_usable_small_block = p->next_block;
-        }
-        ++(p->no_enough_times);
-        p = p->next_block;
-    }
-
-    p->next_block = sbp;
-
-    if (pool->cur_usable_small_block == NULL) {
-        pool->cur_usable_small_block = sbp;
-    }
+    pool->cur_usable_small_block = sbp;
     return res;
 }
 
@@ -200,16 +187,19 @@ u1* mem_pool_new_big_block(mem_pool *pool, size_t size)
 }
 
 void* mem_pool_alloc(mem_pool *pool, size_t size){
+    size_t need = mem_align_up(size);
     if(size < pool->small_buffer_capacity) {
         small_block *temp = pool->cur_usable_small_block;
-        do {
+        while (temp != NULL) {
             u1 *res = (u1*) mem_align_up((size_t) temp->cur_usable_buffer);
-            if ((size_t)(temp->buffer_end - res) >= mem_align_up(size)) {
-                temp->cur_usable_buffer = res + mem_align_up(size);
+            if ((size_t)(temp->buffer_end - res) >= need) {
+                temp->cur_usable_buffer = res + need;
+                // skip the blocks we already know are full
+                pool->cur_usable_small_block = temp;
                 return pool_zero(res, size);
             }
             temp = temp->next_block;
-        } while (temp);
+        }
         return mem_pool_new_small_block(pool, size);
     }
     return mem_pool_new_big_block(pool, size);
@@ -218,9 +208,7 @@ void* mem_pool_alloc(mem_pool *pool, size_t size){
 void* mem_pool_realloc(mem_pool *pool, void *ptr, size_t old_size, 
                        size_t new_size)
 {
-    // this is alloc a new pointer shit
     void *new_ptr = mem_pool_alloc(pool, new_size);
-    memset(new_ptr, 0, new_size);
     memmove(new_ptr, ptr, old_size);
     return new_ptr;
 }
