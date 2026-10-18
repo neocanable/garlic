@@ -173,7 +173,7 @@ static void jar_entry_source_file(jclass_file *jc, string dir, string name)
 
     jcp_info *info = pool_item(jc, jc->this_class);
     string full = get_class_name(jc, info);
-    string class_name = class_simple_name(full);
+    string class_name = class_simple_name_without_primitive(full);
     string path = str_create("%s/%s", full_dir,
                              output_path_resolve(
                                      full_dir,
@@ -181,6 +181,7 @@ static void jar_entry_source_file(jclass_file *jc, string dir, string name)
     FILE *stream = fopen(path, "w");
     if (stream == NULL)
         output_open_failed(path);
+    output_set_buffer(stream);
     jc->jfile->source = stream;
 }
 

@@ -15,9 +15,20 @@ void create_tls_key() {
     pthread_key_create(&tls_key, NULL);
 }
 
+#if defined(_MSC_VER)
+#define JD_THREAD_LOCAL __declspec(thread)
+#else
+#define JD_THREAD_LOCAL __thread
+#endif
+
+static JD_THREAD_LOCAL thread_local_data *tls_cached;
+
 thread_local_data* get_thread_local_data() {
-    pthread_once(&tls_init_once, create_tls_key);
-    return pthread_getspecific(tls_key);
+    if (tls_cached == NULL) {
+        pthread_once(&tls_init_once, create_tls_key);
+        tls_cached = pthread_getspecific(tls_key);
+    }
+    return tls_cached;
 }
 
 threadpool_t* threadpool_create_in(mem_pool *mem_pool, int cnt, int flags)
@@ -229,6 +240,7 @@ void thread_local_data_init(threadpool_t *pool, pthread_t tid) {
     }
     tls->pool = mem_create_pool();
     pthread_setspecific(tls_key, tls);
+    tls_cached = tls;
 }
 
 static void *threadpool_thread(void *threadpool)

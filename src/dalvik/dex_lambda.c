@@ -236,7 +236,7 @@ jd_lambda_facts* dex_lambda_facts(jsource_file *jf) {
     jd_exp_invoke *last_exp_invoke = last_invoke->data;
 
     jd_dex_ins *last_ins = (jd_dex_ins *) last_invoke->ins;
-    if (last_ins == NULL || last_ins->fn == NULL ||
+    if (last_ins == NULL || ins_fn_of((jd_ins *) last_ins) == NULL ||
             last_ins->method == NULL || last_ins->method->meta == NULL)
         return facts;
 
@@ -250,7 +250,7 @@ jd_lambda_facts* dex_lambda_facts(jsource_file *jf) {
     facts->method_index = method_index;
 
     encoded_method *em = hget_u4obj(meta->lambda_method_map, method_index);
-    jd_ins_fn *fn = last_ins->fn;
+    jd_ins_fn *fn = ins_fn_of((jd_ins *) last_ins);
     if (em == NULL) {
         if (last_exp_invoke->class_name == NULL ||
                 last_exp_invoke->method_name == NULL)

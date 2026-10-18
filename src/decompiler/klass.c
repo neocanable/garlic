@@ -88,7 +88,7 @@ string class_path_to_short(string class_name)
     const char *last_slash = strrchr(class_name, '/');
     const char *start = (last_slash == NULL) ? class_name : last_slash + 1;
 
-    const char *last_char = strstr(start, ";");
+    const char *last_char = strchr(start, ';');
     size_t len = (last_char != NULL) ? (last_char - start) : strlen(start);
 
     if (len == 0)
@@ -116,7 +116,6 @@ void cut_generic_type_from_class_name(string class_name)
 
 string class_full_name(string descriptor)
 {
-    size_t len = strlen(descriptor);
     switch (descriptor[0]) {
         case 'I': return (string)g_str_int;
         case 'J': return (string)g_str_long;
@@ -133,6 +132,7 @@ string class_full_name(string descriptor)
                 depth++;
                 c = descriptor[depth];
             }
+            size_t len = strlen(descriptor);
             switch (c) {
                 case 'L': {
                     size_t class_name_len = len - depth - 1 + 1;
@@ -157,6 +157,7 @@ string class_full_name(string descriptor)
             }
         }
         case 'L': {
+            size_t len = strlen(descriptor);
             string class_name = x_alloc(len);
             memcpy(class_name, descriptor + 1, len - 1);
             class_name[len - 1] = '\0';
@@ -201,7 +202,7 @@ string class_simple_name_without_primitive(string full)
 
 string class_simple_name(string full)
 {
-    if (strlen(full) == 1) {
+    if (full[0] != '\0' && full[1] == '\0') {
         switch(full[0]) {
             case 'I': return (string)g_str_int;
             case 'J': return (string)g_str_long;

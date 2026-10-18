@@ -183,6 +183,8 @@ void optimize_dex_method(jd_method *m)
 
     attach_dropped_terminals(m);
 
+    optimize_goto_expression(m);
+
     optimize_exception_block(m);
 
     sync_stat_count_leftover(m);

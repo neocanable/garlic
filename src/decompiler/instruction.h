@@ -12,6 +12,38 @@ static inline jd_ins* get_ins(jd_method *m, uint32_t id)
     return lget_obj(m->instructions, id);
 }
 
+static inline jd_ins_fn* ins_fn_of(jd_ins *ins)
+{
+    return (ins != NULL && ins->method != NULL) ? ins->method->ins_fn : NULL;
+}
+
+static inline jd_support_type ins_method_type(jd_ins *ins)
+{
+    return (ins != NULL && ins->method != NULL) ? ins->method->type
+                                                : JD_TYPE_JVM;
+}
+
+static inline list_object* ins_targets(jd_ins *ins)
+{
+    if (ins->targets == NULL)
+        ins->targets = linit_object_with_capacity(1);
+    return ins->targets;
+}
+
+static inline list_object* ins_jumps(jd_ins *ins)
+{
+    if (ins->jumps == NULL)
+        ins->jumps = linit_object_with_capacity(2);
+    return ins->jumps;
+}
+
+static inline list_object* ins_comings(jd_ins *ins)
+{
+    if (ins->comings == NULL)
+        ins->comings = linit_object_with_capacity(1);
+    return ins->comings;
+}
+
 static inline bool ins_is_jump_destination(jd_ins *ins)
 {
     return !is_list_empty(ins->comings);

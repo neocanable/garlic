@@ -45,29 +45,18 @@ static void init_dex_ins_unconditional_jump(jd_dex_ins *ins)
 {
     u4 jump_offset = dex_goto_offset(ins);
     jd_dex_ins *target_ins = (jd_dex_ins *) ins_of_offset(ins->method, jump_offset);
-    ladd_obj(ins->targets, target_ins);
-    ladd_obj(ins->jumps, target_ins);
+    ladd_obj(ins_targets((jd_ins *) ins), target_ins);
+    ladd_obj(ins_jumps((jd_ins *) ins), target_ins);
 }
 
 static void init_dex_ins_conditional_jump(jd_dex_ins *ins)
 {
     u4 jump_offset = (s2)(ins->param[1]) + ins->offset;
-    jd_dex_ins *next = ins->next;
-    if (next != NULL)
-        ladd_obj_no_dup(ins->targets, next);
-
     jd_dex_ins *jump_to_ins = (jd_dex_ins *) ins_of_offset(ins->method, jump_offset);
-    ladd_obj(ins->targets, jump_to_ins);
-    ladd_obj(ins->jumps, jump_to_ins);
+    ladd_obj(ins_targets((jd_ins *) ins), jump_to_ins);
+    ladd_obj(ins_jumps((jd_ins *) ins), jump_to_ins);
 }
 
-static void init_dex_ins_default_jump(jd_dex_ins *ins)
-{
-    jd_dex_ins *next = ins->next;
-    if (next == NULL)
-        return;
-    ladd_obj(ins->targets, next);
-}
 
 static void init_dex_packed_switch_jump(jd_dex_ins *ins)
 {
@@ -84,13 +73,13 @@ static void init_dex_packed_switch_jump(jd_dex_ins *ins)
         int offset = packed_ins->param[5 + i * 2] << 16 |
                      packed_ins->param[4 + i * 2];
         jd_dex_ins *target_ins = (jd_dex_ins *) ins_of_offset(m, ins->offset+offset);
-        ladd_obj(ins->targets, target_ins);
-        ladd_obj(ins->jumps, target_ins);
+        ladd_obj(ins_targets((jd_ins *) ins), target_ins);
+        ladd_obj(ins_jumps((jd_ins *) ins), target_ins);
         DEBUG_PRINT("key: %d, goto_offset: %d\n",
                 first_key+i, offset+ins->offset);
     }
     if (ins->next != NULL)
-        ladd_obj_no_dup(ins->targets, ins->next);
+        ladd_obj_no_dup(ins_targets((jd_ins *) ins), ins->next);
 }
 
 static void init_dex_sparse_switch_jump(jd_dex_ins *ins)
@@ -107,12 +96,12 @@ static void init_dex_sparse_switch_jump(jd_dex_ins *ins)
         int val = params[3+size*2+i*2] << 16 | params[2+size*2+i*2];
         int target_id = hget_i2i(m->offset2id_map, ins->offset + val);
         jd_dex_ins *target_ins = get_dex_ins(m, target_id);
-        ladd_obj(ins->targets, target_ins);
-        ladd_obj(ins->jumps, target_ins);
+        ladd_obj(ins_targets((jd_ins *) ins), target_ins);
+        ladd_obj(ins_jumps((jd_ins *) ins), target_ins);
         DEBUG_PRINT("key is: %d -> val: %d\n", key, val);
     }
     if (ins->next != NULL)
-        ladd_obj_no_dup(ins->targets, ins->next);
+        ladd_obj_no_dup(ins_targets((jd_ins *) ins), ins->next);
 }
 
 static void init_dex_instruction_graph(jd_method *m)
@@ -135,13 +124,10 @@ static void init_dex_instruction_graph(jd_method *m)
         else if (dex_ins_is_return_op(ins) || dex_ins_is_throw(ins)) {
 
         }
-        else {
-            init_dex_ins_default_jump(ins);
-        }
 
-        for (int j = 0; j < ins->jumps->size; ++j) {
+        for (int j = 0; ins->jumps != NULL && j < ins->jumps->size; ++j) {
             jd_dex_ins *jump_to_ins = lget_obj(ins->jumps, j);
-            ladd_obj(jump_to_ins->comings, ins);
+            ladd_obj(ins_comings((jd_ins *) jump_to_ins), ins);
         }
     }
 }
@@ -150,6 +136,7 @@ static void dex_code_item_instruction(jd_method *m, dex_code_item *code)
 {
     m->instructions = linit_object();
     m->offset2id_map = hashmap_init((hcmp_fn) i2i_cmp, 0);
+    m->ins_fn = ((jd_dex*)(m->meta))->ins_fn;
     jd_dex_ins *prev = NULL;
     uint32_t offset = 0;
     for (int i = 0; i < code->insns_size; ++i) {
@@ -162,17 +149,12 @@ static void dex_code_item_instruction(jd_method *m, dex_code_item *code)
         ins->format = dex_opcode_fmt(opcode);
         ins->idx = m->instructions->size;
         ins->offset = offset;
-        ins->type = m->type;
-        ins->targets = linit_object_with_capacity(1);
-        ins->jumps = linit_object_with_capacity(2);
-        ins->comings = linit_object_with_capacity(1);
         ins->extra = NULL;
 
         ins->method = m;
         ins->param = &code->insns[i];
         ins->uses = bitset_create_with_capacity(m->max_locals);
         ins->defs = bitset_create_with_capacity(m->max_locals);
-        ins->fn = ((jd_dex*)(m->meta))->ins_fn;
         ladd_obj(m->instructions, ins);
         hset_i2i(m->offset2id_map, offset, ins->idx);
         dex_ins_use_def_init(ins);

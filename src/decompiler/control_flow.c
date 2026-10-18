@@ -335,7 +335,7 @@ jd_bblock* dup_basic_block(jd_method *m, jd_bblock *src)
     memcpy(nb, src_nb, sizeof(jd_nblock));
 
     jd_ins *end_ins = src_nb->end_ins;
-    jd_ins_fn *fn = end_ins->fn;
+    jd_ins_fn *fn = ins_fn_of(end_ins);
     if (fn->is_goto(end_ins) && end_ins->prev != NULL) {
         nb->end_offset = end_ins->prev->offset;
         nb->end_idx = end_ins->prev->idx;
@@ -568,7 +568,7 @@ static void cfg_create_normal_blocks(jd_method *m)
     cfg_default_block(m);
 
     int block_id = NORMAL_BLOCK_START_ID;
-    jd_ins_fn *fn = get_ins(m, 0)->fn;
+    jd_ins_fn *fn = ins_fn_of(get_ins(m, 0));
     for (int i = 0; i < m->instructions->size; ++i) {
         jd_ins *start_ins = get_ins(m, i);
         jd_exc *start_exc = closest_exception_of(m, start_ins->offset);
@@ -670,7 +670,7 @@ static void cfg_link_normal_block(jd_method *m)
             continue;
         jd_nblock *nblock = block->ub->nblock;
         jd_ins *end_ins = nblock->end_ins;
-        jd_ins_fn *fn = end_ins->fn;
+        jd_ins_fn *fn = ins_fn_of(end_ins);
         if (fn->is_return(end_ins) ||
             (end_ins->idx == method_end_ins->idx &&
              !fn->is_unconditional_jump(end_ins))) {
@@ -682,7 +682,19 @@ static void cfg_link_normal_block(jd_method *m)
             continue;
         }
 
-        for (int j = 0; j < end_ins->targets->size; ++j) {
+        if (fn->is_unconditional_jump == NULL ||
+            !fn->is_unconditional_jump(end_ins)) {
+            if (fn->is_switch == NULL || !fn->is_switch(end_ins)) {
+                if (end_ins->next != NULL) {
+                    jd_bblock *fall = block_by_offset(m,
+                                                      end_ins->next->offset);
+                    if (fall != NULL)
+                        create_link_edge(block, fall);
+                }
+            }
+        }
+
+        for (int j = 0; end_ins->targets != NULL && j < end_ins->targets->size; ++j) {
             jd_ins *target_ins = lget_obj(end_ins->targets, j);
             jd_bblock *target = block_by_offset(m, target_ins->offset);
             assert(target != NULL);
@@ -751,7 +763,7 @@ static void cfg_link_exception_block(jd_method *m)
             }
         }
 
-        jd_ins_fn *fn = end_ins->fn;
+        jd_ins_fn *fn = ins_fn_of(end_ins);
         if (fn->is_athrow(end_ins) && _eblock == NULL) {
             jd_bblock *exception_exit_block = block_exception_exit(m);
             create_link_edge(block, exception_exit_block);

@@ -1036,6 +1036,7 @@ static int smali_write_class_by_desc(jd_meta_dex *meta, string class_desc, strin
             output_open_failed(path);
             return -1;
         }
+        output_set_buffer(stream);
         dex_class_def_to_smali(meta, cf, stream);
         output_close(stream, path);
         return 0;

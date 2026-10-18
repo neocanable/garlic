@@ -153,9 +153,9 @@ static void optimize_goto_to_return(jd_method *m)
         end_ins->format = target_ins->format;
         end_ins->param_length = target_ins->param_length;
 
-        lclear_object(end_ins->targets);
-        lclear_object(end_ins->jumps);
-        ldel_object(target_ins->comings, end_ins);
+        if (end_ins->targets) lclear_object(end_ins->targets);
+        if (end_ins->jumps) lclear_object(end_ins->jumps);
+        if (target_ins->comings) ldel_object(target_ins->comings, end_ins);
         DEBUG_PRINT("[replace goto to return]: %s %d\n",
                     end_ins->name,
                     end_ins->offset);
@@ -252,12 +252,12 @@ static void optimize_share_suffix_v2(jd_method *m)
                 }
                 dex_setup_goto_offset(goto_ins, out_start_ins->offset);
 
-                lclear_object(goto_ins->jumps);
-                lclear_object(goto_ins->targets);
-                ladd_obj_no_dup(goto_ins->jumps, out_start_ins);
-                ladd_obj_no_dup(goto_ins->targets, out_start_ins);
-                ldel_object(start_ins->comings, goto_ins);
-                ladd_obj_no_dup(out_start_ins->comings, goto_ins);
+                if (goto_ins->jumps) lclear_object(goto_ins->jumps);
+                if (goto_ins->targets) lclear_object(goto_ins->targets);
+                ladd_obj_no_dup(ins_jumps((jd_ins *) goto_ins), out_start_ins);
+                ladd_obj_no_dup(ins_targets((jd_ins *) goto_ins), out_start_ins);
+                if (start_ins->comings) ldel_object(start_ins->comings, goto_ins);
+                ladd_obj_no_dup(ins_comings((jd_ins *) out_start_ins), goto_ins);
 
                 jd_dex_ins *goto_copy = dup_dex_ins(goto_ins);
                 goto_copy->state_flag = 0;

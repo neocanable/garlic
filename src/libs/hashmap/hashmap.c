@@ -68,7 +68,8 @@ unsigned int memihash_cont(unsigned int seed, const void *buf, size_t len)
 	return hash;
 }
 
-#define HASHMAP_INITIAL_SIZE 256
+// original is 256, now replace to 16
+#define HASHMAP_INITIAL_SIZE 16
 /* grow / shrink by 2^2 */
 #define HASHMAP_RESIZE_BITS 2
 /* load factor in percent */

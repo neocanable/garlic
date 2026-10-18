@@ -22,32 +22,47 @@
 
 static inline string str_create(string fmt, ...)
 {
+    char stack[256];
     va_list args;
-    string str;
-    va_start(args, fmt);
     va_list args2;
+    va_start(args, fmt);
     va_copy(args2, args);
-    int len = vsnprintf(NULL, 0, fmt, args2);
-    str = x_alloc(len+1);
-    vsnprintf(str, len+1, fmt, args);
+    int len = vsnprintf(stack, sizeof(stack), fmt, args);
     va_end(args);
+    if (len < 0) {
+        va_end(args2);
+        return NULL;
+    }
 
+    string str = x_alloc((size_t) len + 1);
+    if ((size_t) len < sizeof(stack))
+        memcpy(str, stack, (size_t) len + 1);
+    else
+        vsnprintf(str, (size_t) len + 1, fmt, args2);
+    va_end(args2);
     return str;
 }
 
 static inline string str_create_in(mem_pool *pool, string fmt, ...)
 {
+    char stack[256];
     va_list args;
-    string str;
-    va_start(args, fmt);
     va_list args2;
+    va_start(args, fmt);
     va_copy(args2, args);
-    int len = vsnprintf(NULL, 0, fmt, args2);
-    str = x_alloc_in(pool, len+1);
-    vsnprintf(str, len+1, fmt, args);
-    str[len] = '\0';
+    int len = vsnprintf(stack, sizeof(stack), fmt, args);
     va_end(args);
+    if (len < 0) {
+        va_end(args2);
+        return NULL;
+    }
 
+    string str = x_alloc_in(pool, (size_t) len + 1);
+    if ((size_t) len < sizeof(stack))
+        memcpy(str, stack, (size_t) len + 1);
+    else
+        vsnprintf(str, (size_t) len + 1, fmt, args2);
+    va_end(args2);
     return str;
 }
 

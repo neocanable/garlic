@@ -3,7 +3,15 @@
 
 #include <unistd.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <sys/stat.h>
+
+#define OUTPUT_BUFFER_SIZE (64 * 1024)
+static inline void output_set_buffer(FILE *stream)
+{
+    if (stream != NULL)
+        setvbuf(stream, NULL, _IOFBF, OUTPUT_BUFFER_SIZE);
+}
 
 static bool inline file_exist(const char *path)
 {
