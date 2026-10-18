@@ -30,7 +30,6 @@ struct jd_dex {
 
 struct jd_dex_ins {
     // same as jd_ins
-    jd_support_type     type;
     u2                  code;
     string              name;
     u2                  state_flag;
@@ -57,8 +56,6 @@ struct jd_dex_ins {
 
     bitset_t            *uses;
     bitset_t            *defs;
-
-    jd_ins_fn           *fn;
 
     void                *extra;
 
