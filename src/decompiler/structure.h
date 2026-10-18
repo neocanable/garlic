@@ -241,7 +241,6 @@ typedef struct {
 } jd_ins_fn;
 
 struct jd_ins {
-    jd_support_type     type;
     u2                  code;
     string              name;
     u2                  state_flag;
@@ -268,8 +267,6 @@ struct jd_ins {
 
     bitset_t            *uses;
     bitset_t            *defs;
-
-    jd_ins_fn           *fn;
 
     void                *extra;
     int                 format;
@@ -554,7 +551,8 @@ typedef struct {
 
 typedef struct {
     jd_exp_list *list;
-    string          class_name;
+    string      class_name;
+    int         dimensions;
 } jd_exp_new_array;
 
 typedef struct {
@@ -759,6 +757,7 @@ typedef struct jd_case {
     u4 start_idx;
     u4 end_idx;
     int key;
+    list_int *keys;
     int is_default;
     jd_bblock  *block;
     list_object *blocks;
@@ -887,6 +886,8 @@ struct jd_method {
 
     jd_method_fn    *fn;
 
+    jd_ins_fn       *ins_fn;
+
 //    jd_access_flag_fn           access_flags_fn;
 //    jd_meth_param_val_fn        param_val_fn;
 //    jd_meth_param_annotation_fn param_annotation_fn;
@@ -908,6 +909,8 @@ struct jd_method {
     int             variable_counter;
 
     hashmap         *slot_counter_map;
+
+    hashmap         *slot_name_map;
 
     hashmap         *offset2id_map;
 
