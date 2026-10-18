@@ -13,7 +13,7 @@ void flatten_empty_if_branches(jd_method *m);
 
 void empty_if_branch_stat(int *promoted, int *merged, int *shared_target);
 
-void attach_dropped_terminals(jd_method *m);
+bool attach_dropped_terminals(jd_method *m);
 
 void empty_if_left_report(void);
 

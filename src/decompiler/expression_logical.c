@@ -85,8 +85,9 @@ static jd_bblock *chain_terminus_block(jd_method *m,
 
         jd_nblock *nb = block->ub->nblock;
         jd_ins *end = nb->end_ins;
-        if (end == NULL || end->fn == NULL || end->next == NULL ||
-            !end->fn->is_conditional_jump(end))
+        jd_ins_fn *end_fn = ins_fn_of(end);
+        if (end == NULL || end_fn == NULL || end->next == NULL ||
+            !end_fn->is_conditional_jump(end))
             return NULL;
 
         jd_exp *end_exp = get_exp(m, nb->end_idx);
@@ -238,10 +239,12 @@ bool identify_reverse_logical_operation(jd_method *m)
             if (!basic_block_is_normal_live(basic_block))
                 continue;
 
+            jd_ins_fn *if_fn = ins_fn_of(ins);
             if (!exp_is_if(exp) ||
                 exp_is_nopped(exp) ||
                 if_expression_is_assert(exp) ||
-                ins->fn->is_goto_back(ins))
+                if_fn == NULL ||
+                if_fn->is_goto_back(ins))
                 continue;
 
             jd_exp_if *if_exp = exp->data;
@@ -344,8 +347,8 @@ void identify_cmp_after_if(jd_method *m)
     for (int i = 0; i < m->expressions->size - 1; ++i) {
         jd_exp *exp = lget_obj(m->expressions, i);
         jd_ins *ins = exp->ins;
-        jd_ins_fn *fn = ins->fn;
-        if (!fn->is_compare(ins))
+        jd_ins_fn *fn = ins_fn_of(ins);
+        if (fn == NULL || !fn->is_compare(ins))
             continue;
         jd_exp *second_exp = lget_obj(m->expressions, i + 1);
         if (!exp_is_if(second_exp))

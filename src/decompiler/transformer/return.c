@@ -6,7 +6,7 @@
 static bool return_object_writes_null(jd_exp *expression)
 {
     jd_ins *ins = expression->ins;
-    if (ins == NULL || ins->type != JD_TYPE_DALVIK)
+    if (ins == NULL || ins_method_type(ins) != JD_TYPE_DALVIK)
         return false;
     if (!dex_ins_is_return_object((jd_dex_ins *) ins))
         return false;

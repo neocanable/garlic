@@ -128,7 +128,7 @@ static jd_exp* find_monitor_enter_back(jd_method *m, int index, int *out_distanc
 
 static int monitor_expression_register(jd_exp *exp)
 {
-    if (exp == NULL || exp->ins == NULL || exp->ins->type != JD_TYPE_DALVIK)
+    if (exp == NULL || exp->ins == NULL || ins_method_type(exp->ins) != JD_TYPE_DALVIK)
         return -1;
     if (!exp_is_monitor_exit(exp) && !exp_is_monitor_enter(exp))
         return -1;

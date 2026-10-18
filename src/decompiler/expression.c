@@ -1,4 +1,5 @@
 #include "common/str_tools.h"
+#include "decompiler/instruction.h"
 #include "decompiler/expression.h"
 #include "jvm/jvm_expression_builder.h"
 
@@ -24,7 +25,7 @@ void nop_empty_expression(jd_method *m)
         jd_ins *ins = exp->ins;
         jd_ins_fn *fn = NULL;
         if (ins != NULL)
-            fn = ins->fn;
+            fn = ins_fn_of(ins);
 
 //        if (exp_is_empty(exp))
 //            exp_mark_nopped(exp);

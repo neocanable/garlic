@@ -1,6 +1,7 @@
 #include "expression_copy_propgation.h"
 #include "expression.h"
 #include "control_flow.h"
+#include "decompiler/dominator_tree.h"
 
 static bool do_copy_propagation(jd_exp *expression, jd_exp *other);
 
@@ -150,6 +151,38 @@ bool copy_propagation_of_expression(jd_method *m)
     return result;
 }
 
+static bool store_dominates_use(jd_exp *store, jd_exp *use)
+{
+    jd_bblock *sb = store->block;
+    jd_bblock *ub = use->block;
+    if (sb == NULL || ub == NULL)
+        return false;
+    if (sb == ub)
+        return store->idx < use->idx;
+    if (sb->dominates == NULL)
+        return false;
+    return lcontains_obj(sb->dominates, ub);
+}
+
+static bool exp_writes_var(jd_exp *exp, jd_var *var)
+{
+    if (var == NULL)
+        return false;
+    if (exp_is_store(exp)) {
+        jd_exp_store *store = exp->data;
+        jd_val *val = (&store->list->args[0])->data;
+        return val != NULL && val->stack_var == var;
+    }
+    if (exp_is_assignment(exp)) {
+        jd_exp_assignment *assign = exp->data;
+        if (exp_is_local_variable(assign->left)) {
+            jd_val *val = assign->left->data;
+            return val != NULL && val->stack_var == var;
+        }
+    }
+    return false;
+}
+
 bool copy_propagation_of_dup_local_variable(jd_method *m)
 {
     bool result = false;
@@ -169,14 +202,24 @@ bool copy_propagation_of_dup_local_variable(jd_method *m)
             !duped_store_exp_can_copy(exp))
             continue;
 
+        if (exp->block != NULL)
+            compute_dominates_block(m, exp->block);
 
+        jd_val *store_val = (&store->list->args[0])->data;
+        jd_var *var = store_val != NULL ? store_val->stack_var : NULL;
+
+        bool redefined = false;
         bool tmp = false;
         for (int j = i+1; j < m->expressions->size; ++j) {
             jd_exp *other = lget_obj(m->expressions, j);
             if (exp_is_nopped(other))
                 continue;
-
-            tmp |= do_copy_propagation(exp, other);
+            if (redefined)
+                continue;
+            if (store_dominates_use(exp, other))
+                tmp |= do_copy_propagation(exp, other);
+            if (exp_writes_var(other, var))
+                redefined = true;
         }
 
         if (tmp) {

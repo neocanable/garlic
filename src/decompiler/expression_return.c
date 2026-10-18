@@ -1,4 +1,5 @@
 #include "decompiler/expression_return.h"
+#include "decompiler/instruction.h"
 #include "decompiler/control_flow.h"
 
 static jd_node* get_parent(jd_node *n)
@@ -22,7 +23,7 @@ void nop_node_last_return(jd_method *m)
         jd_ins *ins = exp->ins;
         jd_ins_fn *fn = NULL;
         if (ins != NULL)
-            fn = ins->fn;
+            fn = ins_fn_of(ins);
 
         if (fn == NULL || !fn->is_void_return(ins))
             continue;

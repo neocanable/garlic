@@ -300,14 +300,20 @@ static bool optimize_goto_core(jd_method *m, jd_node *node)
     else if (has_case_parent(node)) {
         optimize_goto_in_case(m, node, target_idx);
     }
+    else if (parent_next != NULL &&
+             (goto_target_is_next_written(parent_next, target_idx) ||
+              goto_target_is_next_block(m, parent_next, target_idx))) {
+        DEBUG_GOTO_OPTIMIZE_PRINT("[goto optimized]: %s %d\n",
+                                  m->name,
+                                  exp->ins->offset);
+        exp_mark_nopped(exp);
+    }
     else if (target_idx < exp->idx) {
         DEBUG_PRINT("[goto] %s %d backward target_idx=%d exp_idx=%d\n",
                     m->name, exp->ins->offset, target_idx, exp->idx);
         goto_trace_kept("backward", m, node, parent, parent_next, target_idx);
     }
     else if (parent_next == NULL ||
-             goto_target_is_next_written(parent_next, target_idx) ||
-             goto_target_is_next_block(m, parent_next, target_idx) ||
              nothing_runs_between(m, exp->idx, target_idx)) {
         DEBUG_GOTO_OPTIMIZE_PRINT("[goto optimized]: %s %d\n",
                                   m->name,

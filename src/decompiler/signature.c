@@ -58,6 +58,9 @@ string field_type_sig_to_s(field_type_sig *fts)
                 simple_class_type_sig *ss = lget_obj(cts->path, i);
                 string s1 = simple_class_signature_to_s(ss);
                 str_concat(list, s1);
+                // nested classes: Outer<T>.Inner
+                if (i != cts->path->size - 1)
+                    str_concat(list, ("."));
             }
             return str_join(list);
         }
@@ -156,18 +159,15 @@ string formal_type_parameters_to_s(list_object *formal_type_parameters)
         formal_type_parameter *ftp = lget_obj(formal_type_parameters, i);
         str_concat(list, ftp->name);
 
+        bool wrote_bound = false;
         for (int j = 0; j < ftp->bounds->size; ++j) {
             field_type_sig *fts = lget_obj(ftp->bounds, j);
             string fts_str = field_type_sig_to_s(fts);
-            if (j == 0 && !STR_EQL(fts_str, "Object")) {
-                str_concat(list, " extends ");
-                str_concat(list, fts_str);
-            }
-            else if (j != ftp->bounds->size - 1 && 
-                    !STR_EQL(fts_str, "Object")) {
-                str_concat(list, " & ");
-                str_concat(list, fts_str);
-            }
+            if (STR_EQL(fts_str, "Object"))
+                continue;
+            str_concat(list, wrote_bound ? " & " : " extends ");
+            str_concat(list, fts_str);
+            wrote_bound = true;
         }
 
         if (i != formal_type_parameters->size - 1)
@@ -192,7 +192,7 @@ string interfaces_to_s(class_signature *cs)
             string sss = simple_class_signature_to_s(ss);
             str_concat(list, sss);
             if (j != cts->path->size - 1)
-                str_concat(list, (", "));
+                str_concat(list, ("."));
         }
         if (i != cs->interfaces->size - 1)
             str_concat(list, (", "));

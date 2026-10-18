@@ -3,6 +3,7 @@
 #include "decompiler/expression.h"
 #include "decompiler/expression_node.h"
 #include "decompiler/expression_visitor.h"
+#include "decompiler/expression_logical.h"
 #include "jvm/jvm_expression_builder.h"
 
 static jd_exp* loop_condition_exp(jd_method *m, jd_loop *loop)
@@ -116,6 +117,7 @@ static void loop_to_do_while_structure(jd_method *m, jd_loop *loop)
     jd_exp_do_while *do_while = make_obj(jd_exp_while);
     do_while->list = make_exp_list(1);
     memcpy(&do_while->list->args[0], condition, sizeof(jd_exp));
+    make_logic_not(&do_while->list->args[0]);
     do_while->start_idx = loop->start_idx;
     do_while->end_idx = loop->end_idx;
     do_while->offset = if_exp->offset;
@@ -124,6 +126,50 @@ static void loop_to_do_while_structure(jd_method *m, jd_loop *loop)
     exp->data = do_while;
 
     loop->type = JD_LOOP_DO_WHILE;
+}
+
+static string initializer_var_name(jd_exp *exp)
+{
+    if (exp_is_store(exp)) {
+        jd_exp_store *store = exp->data;
+        jd_val *val = (&store->list->args[0])->data;
+        return val != NULL ? val->name : NULL;
+    }
+    if (exp_is_define_stack_var(exp)) {
+        jd_exp_def_var *def = exp->data;
+        jd_var *var = (&def->list->args[0])->data;
+        return var != NULL ? var->name : NULL;
+    }
+    if (exp_is_assignment(exp)) {
+        jd_exp_assignment *assign = exp->data;
+        if (exp_is_local_variable(assign->left)) {
+            jd_val *val = assign->left->data;
+            return val != NULL ? val->name : NULL;
+        }
+    }
+    return NULL;
+}
+
+static bool for_initializer_escapes(jd_method *m,
+                                    jd_exp *initial_exp,
+                                    jd_node *loop_node)
+{
+    if (m->declarations == NULL ||
+        !bitset_get(m->declarations, initial_exp->idx))
+        return false;
+
+    string name = initializer_var_name(initial_exp);
+    if (name == NULL)
+        return false;
+
+    for (int i = loop_node->end_idx + 1; i < m->expressions->size; ++i) {
+        jd_exp *e = lget_obj(m->expressions, i);
+        if (exp_is_nopped(e))
+            continue;
+        if (expression_reads_name(e, name))
+            return true;
+    }
+    return false;
 }
 
 static void loop_to_for_structure(jd_method *m, jd_loop *loop)
@@ -164,6 +210,9 @@ static void loop_to_for_structure(jd_method *m, jd_loop *loop)
         return;
     DEBUG_PRINT("[for loop]: found initial exp: %d\n",
                 initial_exp->idx);
+
+    if (for_initializer_escapes(m, initial_exp, loop_node))
+        return;
 
     jd_exp *last_exp = loop_last_valid_exp(m, loop_node);
     if (last_exp == NULL)

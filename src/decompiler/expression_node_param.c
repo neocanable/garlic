@@ -97,7 +97,7 @@ static void setup_catch_node_param(jd_method *m, jd_node *node)
     }
 
     jd_ins *ins = exp == NULL ? NULL : exp->ins;
-    if (ins != NULL && ins->type == JD_TYPE_DALVIK && ins->stack_in != NULL &&
+    if (ins != NULL && ins_method_type(ins) == JD_TYPE_DALVIK && ins->stack_in != NULL &&
         dex_ins_is_move_exception((jd_dex_ins *) ins)) {
         int reg = move_exception_reg_num((jd_dex_ins *) ins);
         if (reg < 0 || reg >= ins->stack_in->local_vars_count)

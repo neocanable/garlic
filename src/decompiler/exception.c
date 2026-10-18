@@ -13,6 +13,19 @@
 #include "dex_ins_helper.h"
 #include "dalvik/dex_ins.h"
 
+static bool ins_operands_identical(jd_method *m, jd_ins *a, jd_ins *b);
+static bool ins_is_throw_of(jd_method *m, jd_ins *ins, int reg);
+
+static bool handler_body_has_monitor_exit(jd_method *m, int start, int end)
+{
+    for (int i = start; i <= end; ++i) {
+        jd_dex_ins *ins = (jd_dex_ins *) get_ins(m, i);
+        if (ins != NULL && dex_ins_is_monitor_exit(ins))
+            return true;
+    }
+    return false;
+}
+
 static void print_cfg_exception_table(jd_method *m)
 {
     if (!DEBUG_EXCEPTION)
@@ -332,7 +345,7 @@ static void merge_exception_split_by_branch_without_finally(jd_method *m)
             else
                 branch_prev = split_branch->prev;
 
-            jd_ins_fn *fn = split_branch->fn;
+            jd_ins_fn *fn = ins_fn_of(split_branch);
             if (!fn->is_block_end(split_branch))
                 continue;
 
@@ -614,6 +627,54 @@ static jd_exc* smallest_try_of_range(jd_method *m, jd_range *r)
     return result;
 }
 
+static jd_ins* finally_copy_exit(jd_method *m, jd_exc *finally)
+{
+    if (m->type != JD_TYPE_DALVIK || finally == NULL ||
+        finally->catch_type_index != 0)
+        return NULL;
+
+    int hstart = finally->handler_start_idx;
+    int hend = finally->handler_end_idx;
+    if (hstart < 0 || hend <= hstart ||
+        hend >= (int) m->instructions->size)
+        return NULL;
+
+    jd_dex_ins *prologue = (jd_dex_ins *) get_ins(m, hstart);
+    if (prologue == NULL || !dex_ins_is_move_exception(prologue))
+        return NULL;
+    int reg = (int) dex_ins_parameter(prologue, 0);
+    hstart++;
+
+    if (!ins_is_throw_of(m, get_ins(m, hend), reg))
+        return NULL;
+    hend--;
+
+    int len = hend - hstart + 1;
+    if (len <= 0)
+        return NULL;
+    if (handler_body_has_monitor_exit(m, hstart, hend))
+        return NULL;
+
+    int start = finally->try_end_idx;
+    if (start < 0 || start >= (int) m->instructions->size)
+        return NULL;
+    for (int p = start; p + len <= (int) m->instructions->size; ++p) {
+        bool match = true;
+        for (int k = 0; k < len; ++k) {
+            if (!ins_operands_identical(m, get_ins(m, p + k),
+                                           get_ins(m, hstart + k))) {
+                match = false;
+                break;
+            }
+        }
+        if (match)
+            return get_ins(m, p + len);
+        if (p > start + 4)
+            break;
+    }
+    return NULL;
+}
+
 static void fix_same_try_end_offset(jd_method *m)
 {
     if (m->closed_exceptions->size == 0)
@@ -625,14 +686,48 @@ static void fix_same_try_end_offset(jd_method *m)
         jd_exc *smallest = smallest_try_of_range(m, &range);
 //         if (other == exception)
 //             continue;
+        if (smallest == NULL)
+            continue;
         int small_idx = smallest->handler_start_idx;
         jd_ins *other_handler_start = get_ins(m, small_idx);
-        jd_ins *other_handler_start_prev = other_handler_start->prev;
+        jd_ins *other_handler_start_prev = other_handler_start != NULL
+                                           ? other_handler_start->prev : NULL;
 
-        while (other != NULL && other_handler_start_prev != NULL) {
-            if (other->try_end != other_handler_start_prev->offset) {
-                other->try_end = other_handler_start_prev->offset;
-                other->try_end_idx = other_handler_start_prev->idx;
+        jd_exc *finally = NULL;
+        for (int k = 0; k < m->closed_exceptions->size; ++k) {
+            jd_exc *e = lget_obj(m->closed_exceptions, k);
+            if (e->catch_type_index == 0 &&
+                e->try_start == range.start_offset &&
+                e->try_end == range.end_offset) {
+                finally = e;
+                break;
+            }
+        }
+
+        jd_ins *extension = other_handler_start_prev;
+        if (extension != NULL) {
+            bool crosses = false;
+            for (int k = 0; k < m->closed_exceptions->size; ++k) {
+                jd_exc *e2 = lget_obj(m->closed_exceptions, k);
+                if (e2 == exception)
+                    continue;
+                if (e2->try_start > range.end_offset &&
+                    e2->try_start <= extension->offset) {
+                    crosses = true;
+                    break;
+                }
+            }
+            if (crosses) {
+                jd_ins *copy_exit = finally_copy_exit(m, finally);
+                if (copy_exit != NULL)
+                    extension = copy_exit;
+            }
+        }
+
+        while (other != NULL && extension != NULL) {
+            if (other->try_end != extension->offset) {
+                other->try_end = extension->offset;
+                other->try_end_idx = extension->idx;
                 other = same_try_exception_by_range(m, &range);
             }
             else
@@ -802,7 +897,7 @@ static void fix_same_try_edge(jd_method *m)
             if (smallest_handler_start_prev != exception_try_end_next) 
                 continue;
 
-            jd_ins_fn *fn = smallest_handler_start_prev->fn;
+            jd_ins_fn *fn = ins_fn_of(smallest_handler_start_prev);
             if (fn->is_return(smallest_handler_start_prev) ||
                 fn->is_branch(smallest_handler_start_prev)) {
                 new_range.start_offset = exception->try_start;
@@ -1068,7 +1163,7 @@ static void expand_exception_with_jump(jd_method *m)
 /* The register a monitor instruction works on, or -1 for anything else. */
 static int monitor_ins_register(jd_ins *ins)
 {
-    if (ins == NULL || ins->type != JD_TYPE_DALVIK)
+    if (ins == NULL || ins_method_type(ins) != JD_TYPE_DALVIK)
         return -1;
     if (!dex_ins_is_monitor_enter((jd_dex_ins *) ins) && !dex_ins_is_monitor_exit((jd_dex_ins *) ins))
         return -1;
@@ -1083,7 +1178,7 @@ static int exception_handler_monitor_register(jd_method *m, jd_exc *exc)
 
     for (int i = exc->handler_start_idx; i <= exc->handler_end_idx; ++i) {
         jd_ins *ins = get_ins(m, i);
-        if (ins == NULL || ins->type != JD_TYPE_DALVIK)
+        if (ins == NULL || ins_method_type(ins) != JD_TYPE_DALVIK)
             continue;
         if (dex_ins_is_monitor_exit((jd_dex_ins *) ins))
             return monitor_ins_register(ins);
@@ -1097,7 +1192,7 @@ static int exception_handler_monitor_register(jd_method *m, jd_exc *exc)
         jd_nblock *nb = block->ub->nblock;
         for (int k = nb->start_idx; k <= nb->end_idx; ++k) {
             jd_ins *ins = get_ins(m, k);
-            if (ins == NULL || ins->type != JD_TYPE_DALVIK)
+            if (ins == NULL || ins_method_type(ins) != JD_TYPE_DALVIK)
                 continue;
             if (dex_ins_is_monitor_exit((jd_dex_ins *) ins))
                 return monitor_ins_register(ins);
@@ -1296,6 +1391,7 @@ static void expand_synchronized_exception_block_range(jd_method *m)
             sib->try_start_idx = after->idx;
         }
     }
+
 }
 
 typedef void (*exc_pass_fn)(jd_method *);
@@ -1376,6 +1472,103 @@ static void exc_watch_after(jd_method *m, const char *pass)
         if (exc_on) { double t0 = exc_now_ms(); call; exc_time_add(name, exc_now_ms() - t0); } \
         else call; \
         exc_watch_after(m, name); } while (0)
+
+static bool ins_operands_identical(jd_method *m, jd_ins *a, jd_ins *b)
+{
+    if (a == NULL || b == NULL || a == b)
+        return false;
+    if (a->code != b->code || a->param_length != b->param_length)
+        return false;
+    if (a->param_length == 0)
+        return true;
+    size_t width = m->type == JD_TYPE_DALVIK ? sizeof(u2) : sizeof(u1);
+    return memcmp(a->param, b->param, a->param_length * width) == 0;
+}
+
+static bool ins_is_throw_of(jd_method *m, jd_ins *ins, int reg)
+{
+    if (ins == NULL || !dex_ins_is_throw((jd_dex_ins *) ins))
+        return false;
+    return (int) dex_ins_parameter((jd_dex_ins *) ins, 0) == reg;
+}
+
+static void remove_normal_path_finally_copy(jd_method *m)
+{
+    if (m->type != JD_TYPE_DALVIK || m->mix_exceptions == NULL)
+        return;
+
+    for (int i = 0; i < m->mix_exceptions->size; ++i) {
+        jd_mix_exception *mix = lget_obj(m->mix_exceptions, i);
+        jd_range *finally = mix->finally;
+        jd_range *try = mix->try;
+        if (finally == NULL || try == NULL)
+            continue;
+
+        int hstart = finally->start_idx;
+        int hend = finally->end_idx;
+        if (hstart < 0 || hend <= hstart)
+            continue;
+
+        jd_dex_ins *prologue = (jd_dex_ins *) get_ins(m, hstart);
+        if (prologue == NULL || !dex_ins_is_move_exception(prologue))
+            continue;
+        int exception_reg = (int) dex_ins_parameter(prologue, 0);
+        hstart++;
+
+        if (!ins_is_throw_of(m, get_ins(m, hend), exception_reg)) {
+            while (hend >= hstart && ins_is_nopped(get_ins(m, hend)))
+                hend--;
+            if (!ins_is_throw_of(m, get_ins(m, hend), exception_reg))
+                continue;
+        }
+        // exclude rethrow
+        hend--;
+
+        int body_len = hend - hstart + 1;
+        if (body_len <= 0)
+            continue;
+        if (handler_body_has_monitor_exit(m, hstart, hend))
+            continue;
+
+        int tstart = try->start_idx;
+        int tend = MIN(try->end_idx, hstart - 1);
+        if (tstart < 0 || tend < tstart)
+            continue;
+
+        for (int p = tend - body_len + 1; p >= tstart; --p) {
+            bool match = true;
+            for (int k = 0; k < body_len; ++k) {
+                if (!ins_operands_identical(m, get_ins(m, p + k),
+                                               get_ins(m, hstart + k))) {
+                    match = false;
+                    break;
+                }
+            }
+            if (!match)
+                continue;
+
+            int after = p + body_len;
+            if (after < tend) {
+                jd_ins *next = get_ins(m, after);
+                jd_ins_fn *fn = ins_fn_of(next);
+                bool exits = fn != NULL &&
+                             ((fn->is_unconditional_jump != NULL &&
+                               fn->is_unconditional_jump(next)) ||
+                              (fn->is_return != NULL &&
+                               fn->is_return(next)));
+                if (!exits)
+                    continue;
+            }
+
+            for (int k = 0; k < body_len; ++k) {
+                jd_ins *copy = get_ins(m, p + k);
+                if (copy != NULL)
+                    ins_mark_nopped(copy);
+            }
+            break;
+        }
+    }
+}
 
 void cleanup_full_exception_table(jd_method *m)
 {
@@ -1474,6 +1667,21 @@ static jd_range* exception_catch_range(jd_method *m, jd_exc *exception,
 
     if (handler_is_continuation(m, exception, next))
         catch->end_idx = catch->start_idx - 1;
+
+    if (m->type == JD_TYPE_JVM && exception->catch_type_index == 0 &&
+        catch->end_idx > catch->start_idx + 1) {
+        jd_ins *first = get_ins(m, catch->start_idx);
+        jd_ins *last = get_ins(m, catch->end_idx);
+        jd_ins *load = get_ins(m, catch->end_idx - 1);
+        if (first != NULL && last != NULL && load != NULL &&
+            jvm_ins_is_store(first) && jvm_ins_is_load(load) &&
+            jvm_ins_is_athrow(last) &&
+            jvm_ins_load_slot(load) == jvm_ins_store_slot(first)) {
+            ins_mark_nopped(first);
+            ins_mark_nopped(load);
+            ins_mark_nopped(last);
+        }
+    }
 
     return catch;
 }
@@ -1632,13 +1840,13 @@ void flatten_exceptions(jd_method *m)
                                                      next_exception);
 
             if (handler_is_finally(m, exception)) {
-                if (handler_tail_is_rethrow(m, exception) &&
-                    handler->end_idx == handler->start_idx + 1) {
-                    handler->end_idx = handler->start_idx - 1;
+                if (handler_tail_is_rethrow(m, exception)) {
                     jd_dex_ins *tail = exception_ins_at(m,
                                                 exception->handler_end_idx);
                     if (tail != NULL)
                         ins_mark_nopped((jd_ins *) tail);
+                    if (handler->end_idx == handler->start_idx + 1)
+                        handler->end_idx = handler->start_idx - 1;
                 }
                 current->finally = handler;
             }
@@ -1679,6 +1887,9 @@ void flatten_exceptions(jd_method *m)
             printf("----------------- end ------------------------\n");
         }
     }
+
+    // mix_exceptions now exist; drop the normal-path copy of each finally
+    remove_normal_path_finally_copy(m);
 }
 
 jd_exc* closest_exception_of(jd_method *m, uint32_t offset)

@@ -106,8 +106,8 @@ static bool ternary_on_basic_block(jd_method *m, jd_bblock *block)
         condition->data = if_exp->expression->data;
         condition->ins  = if_exp->expression->ins;
 
-        memcpy(ternary_true_val_exp, true_val_exp, sizeof(jd_exp));
-        memcpy(ternary_false_val_exp, false_val_exp, sizeof(jd_exp));
+        memcpy(ternary_true_val_exp, false_val_exp, sizeof(jd_exp));
+        memcpy(ternary_false_val_exp, true_val_exp, sizeof(jd_exp));
 
         jd_exp *out_expression = make_obj(jd_exp);
         out_expression->type = JD_EXPRESSION_TERNARY;
@@ -144,8 +144,8 @@ static bool ternary_on_basic_block(jd_method *m, jd_bblock *block)
         jd_exp *ternary_true_val_exp = &ternary_exp->list->args[1];
         jd_exp *ternary_false_val_exp = &ternary_exp->list->args[2];
         memcpy(condition, if_exp->expression, sizeof(jd_exp));
-        memcpy(ternary_true_val_exp, true_save_right, sizeof(jd_exp));
-        memcpy(ternary_false_val_exp, false_save_right, sizeof(jd_exp));
+        memcpy(ternary_true_val_exp, false_save_right, sizeof(jd_exp));
+        memcpy(ternary_false_val_exp, true_save_right, sizeof(jd_exp));
 
         true_save_right->type = JD_EXPRESSION_TERNARY;
         true_save_right->data = ternary_exp;
@@ -168,8 +168,8 @@ static bool ternary_on_basic_block(jd_method *m, jd_bblock *block)
         jd_exp *ternary_false_val_exp = &ternary_exp->list->args[2];
 
         memcpy(condition, if_exp->expression, sizeof(jd_exp));
-        memcpy(ternary_true_val_exp, true_val_exp, sizeof(jd_exp));
-        memcpy(ternary_false_val_exp, false_val_exp, sizeof(jd_exp));
+        memcpy(ternary_true_val_exp, false_val_exp, sizeof(jd_exp));
+        memcpy(ternary_false_val_exp, true_val_exp, sizeof(jd_exp));
 
         jd_exp_assignment *assignment = make_obj(jd_exp_assignment);
         assignment->left = make_obj(jd_exp);
@@ -270,10 +270,9 @@ static bool ternary_in_if_condition(jd_method *m, jd_bblock *block)
     jd_exp *true_exp = &ternary->list->args[1];
     jd_exp *false_exp = &ternary->list->args[2];
 
-
     memcpy(condition, first_if->expression, sizeof(jd_exp));
-    memcpy(true_exp, fourth_if->expression, sizeof(jd_exp));
-    memcpy(false_exp, second_if->expression, sizeof(jd_exp));
+    memcpy(true_exp, second_if->expression, sizeof(jd_exp));
+    memcpy(false_exp, fourth_if->expression, sizeof(jd_exp));
 
     jd_exp *ternary_exp = make_obj(jd_exp);
     ternary_exp->type = JD_EXPRESSION_TERNARY;

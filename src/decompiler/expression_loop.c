@@ -352,7 +352,7 @@ static void loop_content_with_exit_block(jd_method *m,
             // if source's end instruction is swith
             // then switch's default target is loop's header
             if (source_end_ins != NULL &&
-                source_end_ins->fn->is_switch(source_end_ins) &&
+                ins_fn_of(source_end_ins)->is_switch(source_end_ins) &&
                 switch_contains_offset(source_nblock->end_ins,
                                        exit_start_exp->ins->offset)) {
                 compute_dominates_block(m, loop->exit_block);
@@ -402,7 +402,7 @@ static void loop_content_with_exit_blocks(jd_method *m,
     jd_exp *end_exp = lget_obj(m->expressions, snb->end_idx);
     jd_ins *end_ins = end_exp->ins;
     if (end_ins != NULL &&
-        end_ins->fn->is_switch(end_ins) &&
+        ins_fn_of(end_ins)->is_switch(end_ins) &&
         switch_contains_offset(end_ins,
                                exit_start_exp->ins->offset)) {
         compute_dominates_block(m, source_block);
@@ -447,7 +447,7 @@ static void loop_content_with_preheader(jd_method *m,
         jd_exp *end_exp = lget_obj(m->expressions, snb->end_idx);
         jd_ins *end_ins = end_exp->ins;
         if (end_ins != NULL &&
-            end_ins->fn->is_switch(end_ins) &&
+            ins_fn_of(end_ins)->is_switch(end_ins) &&
             switch_contains_offset(end_ins,
                                    exit_start_exp->ins->offset)) {
             compute_dominates_block(m, source_block);

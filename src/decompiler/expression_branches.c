@@ -849,6 +849,23 @@ static jd_node* if_branch_to_node(jd_method *m,
     return if_node;
 }
 
+static bool ins_falls_through(jd_ins *ins)
+{
+    jd_ins_fn *fn = ins_fn_of(ins);
+    if (fn == NULL)
+        return true;
+    if (fn->is_return != NULL && fn->is_return(ins))
+        return false;
+    if (fn->is_athrow != NULL && fn->is_athrow(ins))
+        return false;
+    if (fn->is_unconditional_jump != NULL &&
+        fn->is_unconditional_jump(ins))
+        return false;
+    if (fn->is_switch != NULL && fn->is_switch(ins))
+        return false;
+    return true;
+}
+
 static bool block_falls_into(jd_bblock *pred, jd_bblock *target)
 {
     if (pred == NULL || pred->ub == NULL || pred->ub->nblock == NULL)
@@ -857,7 +874,26 @@ static bool block_falls_into(jd_bblock *pred, jd_bblock *target)
         return false;
 
     jd_ins *end = pred->ub->nblock->end_ins;
-    if (end == NULL || end->next == NULL)
+    if (end == NULL)
+        return false;
+
+    jd_ins_fn *fn = ins_fn_of(end);
+    bool unconditional_jump = fn != NULL &&
+                              fn->is_unconditional_jump != NULL &&
+                              fn->is_unconditional_jump(end);
+    if (unconditional_jump) {
+        // a goto flows into the block it jumps at, not into whatever happens
+        // to be laid out next; using the layout successor here mistakes the
+        // else of `if (c) ...; else ...;` for the then-body's continuation
+        if (end->expression == NULL || !exp_is_goto(end->expression))
+            return false;
+        jd_exp_goto *goto_exp = end->expression->data;
+        return goto_exp->goto_offset == target->ub->nblock->start_offset;
+    }
+
+    if (!ins_falls_through(end))
+        return false;
+    if (end->next == NULL)
         return false;
     return end->next == target->ub->nblock->start_ins;
 }
@@ -875,10 +911,11 @@ static bool block_has_falling_predecessor(jd_bblock *target)
     return false;
 }
 
-void attach_dropped_terminals(jd_method *m)
+bool attach_dropped_terminals(jd_method *m)
 {
+    bool attached = false;
     if (m->branches == NULL)
-        return;
+        return false;
 
     for (int i = 0; i < m->branches->size; ++i) {
         jd_if_branch *branch = lget_obj(m->branches, i);
@@ -900,13 +937,27 @@ void attach_dropped_terminals(jd_method *m)
             condition_target = exp_block(exp_of_offset(m, condition_if->offset));
         }
 
-        if (condition_target != dropped) {
+        if (condition_target == dropped &&
+            dropped_side_class(m, dropped) != 'T') {
             jd_node *block_node = dropped->node;
             if (block_node == NULL || block_node->type == JD_NODE_DELETED)
                 continue;
 
+            if (block_node->parent != NULL &&
+                block_node->parent->type == JD_NODE_ELSE)
+                continue;
+
             jd_node *grand = branch->node->parent;
             if (grand == NULL || grand->children == NULL)
+                continue;
+
+            jd_node *anchor = branch->node;
+            while (anchor->parent != grand && anchor->parent != NULL)
+                anchor = anchor->parent;
+            if (anchor->parent != grand)
+                continue;
+            int anchor_index = lfind_object(grand->children, anchor);
+            if (anchor_index < 0)
                 continue;
 
             jd_node *else_node = make_obj_zero(jd_node);
@@ -918,14 +969,14 @@ void attach_dropped_terminals(jd_method *m)
             else_node->end_idx = dropped->ub->nblock->end_idx;
             ladd_obj(m->nodes, else_node);
 
-            size_t index = lfind_object(grand->children, branch->node);
-            ladd_obj_at(grand->children, else_node, index + 1);
+            ladd_obj_at(grand->children, else_node, (size_t) anchor_index + 1);
             else_node->parent = grand;
 
             if (block_node->parent != NULL)
                 ldel_obj(block_node->parent->children, block_node);
             ladd_obj(else_node->children, block_node);
             block_node->parent = else_node;
+            attached = true;
             continue;
         }
 
@@ -944,7 +995,9 @@ void attach_dropped_terminals(jd_method *m)
         ladd_obj(m->nodes, ret_node);
         ladd_obj(branch->node->children, ret_node);
         ret_node->parent = branch->node;
+        attached = true;
     }
+    return attached;
 }
 
 static jd_node* switch_to_node(jd_method *m, jd_node *parent, jd_switch *sw)
@@ -1010,13 +1063,24 @@ static bool identify_branches_recursive(jd_method *m, jd_node *node);
 static void debug_switch_target_offset(jd_method *m, jd_exp *exp, jd_ins *ins)
 {
     jd_exp_switch *exp_switch = exp->data;
-    for (int i = 0; i < ins->targets->size; ++i) {
+    for (int i = 0; ins->targets != NULL && i < ins->targets->size; ++i) {
         jd_ins *target_start_ins = lget_obj(ins->targets, i);
         uint32_t jump_off = target_start_ins->offset;
         int key = switch_key_by_offset(exp_switch, jump_off);
         printf("target_start_ins: %d offset: %d\n", 
                 key, target_start_ins->offset);
     }
+}
+
+static list_int* switch_keys_of(jd_exp_switch *exp_switch, uint32_t offset)
+{
+    list_int *keys = linit_int();
+    for (int i = 0; i < exp_switch->targets->size; ++i) {
+        jd_switch_param *param = lget_obj(exp_switch->targets, i);
+        if (param->offset == offset)
+            ladd_int(keys, param->ikey);
+    }
+    return keys;
 }
 
 static bool identify_switch_branches(jd_method *m, jd_node *node, jd_bblock *b)
@@ -1040,7 +1104,7 @@ static bool identify_switch_branches(jd_method *m, jd_node *node, jd_bblock *b)
     jd_bblock *dominates_block = NULL;
 
     int default_block_after_switch = 0;
-    for (int j = 0; j < end_ins->targets->size; ++j) {
+    for (int j = 0; end_ins->targets != NULL && j < end_ins->targets->size; ++j) {
         jd_ins *target_start_ins = lget_obj(end_ins->targets, j);
         jd_exp *target_start_exp = target_start_ins->expression;
         jd_bblock *target = exp_block(target_start_exp);
@@ -1060,6 +1124,9 @@ static bool identify_switch_branches(jd_method *m, jd_node *node, jd_bblock *b)
         jd_case *case_block = make_obj(jd_case);
         uint32_t jump_off = target_start_ins->offset;
         case_block->key = switch_key_by_offset(exp_switch, jump_off);
+        case_block->keys = switch_keys_of(exp_switch, jump_off);
+        if (case_block->keys->size == 0)
+            ladd_int(case_block->keys, case_block->key);
 
         if (target_start_ins->offset < end_ins->offset) {
             DEBUG_PRINT("[switch] case b jump "
@@ -1096,6 +1163,7 @@ static bool identify_switch_branches(jd_method *m, jd_node *node, jd_bblock *b)
         default_case->block = default_block;
         default_case->start_idx = default_block->ub->nblock->start_idx;
         default_case->is_default = 1;
+        default_case->keys = switch_keys_of(exp_switch, default_offset);
         compute_dominates_block(m, default_block);
         for (int k = 0; k < default_block->dominates->size; ++k) {
             dominates_block = lget_obj(default_block->dominates, k);

@@ -495,16 +495,21 @@ static void write_class_annotation(jsource_file *jf)
     FILE *stream = file_output(jf);
     for (int i = 0; i < jf->annotations->size; ++i) {
         jd_annotation *ano = lget_obj(jf->annotations, i);
-        for (int j = 0; j < strlen(ano->str); ++j) {
-            unsigned char c = ano->str[j];
-            if (iscntrl(c)) {
-                fprintf(stream, "\\%02X", c);
+        string s = ano->str;
+        if (s == NULL) {
+            fputc('\n', stream);
+            continue;
+        }
+        for (const unsigned char *p = (const unsigned char *) s;
+             *p != '\0'; ++p) {
+            if (iscntrl(*p)) {
+                fprintf(stream, "\\%02X", *p);
             }
             else {
-                fprintf(stream, "%c", c);
+                fputc(*p, stream);
             }
         }
-        fprintf(stream, "\n");
+        fputc('\n', stream);
     }
 }
 
@@ -528,7 +533,7 @@ static void write_enum_constants(jsource_file *jf, jd_node *node)
         return;
 
     FILE *stream = file_output(jf);
-    fprintf(stream, "%s", get_node_ident(node));
+    fputs(get_node_ident(node), stream);
     expression_to_stream(stream, node, jf->enum_constants);
     fprintf(stream, ";\n\n");
 }
@@ -631,7 +636,7 @@ static void write_expression_node(FILE *stream, jsource_file *jf, jd_node *n)
         exp_is_empty(exp))
         return;
     string ident = get_node_ident(n);
-    fprintf(stream, "%s", ident);
+    fputs(ident, stream);
     write_expression(jf, n, exp, exp->ins, true);
 }
 
@@ -643,7 +648,7 @@ static void write_basic_block(FILE *stream, jsource_file *jf, jd_node *n)
         if (exp_is_nopped(exp) ||
             exp_is_empty(exp))
             continue;
-        fprintf(stream, "%s", ident);
+        fputs(ident, stream);
         write_expression(jf, n, exp, exp->ins, true);
     }
 }
@@ -661,7 +666,7 @@ static void write_if_return_node(FILE *stream, jsource_file *jf, jd_node *n)
         if (exp_is_nopped(exp) ||
             exp_is_empty(exp))
             continue;
-        fprintf(stream, "%s", ident);
+        fputs(ident, stream);
         write_expression(jf, n, exp, exp->ins, true);
     }
 }
@@ -671,7 +676,7 @@ static void write_if_node(FILE *stream, jsource_file *jf, jd_node *n)
     if (n->children->size == 0)
         return;
     string ident = get_node_ident(n);
-    fprintf(stream, "%s", ident);
+    fputs(ident, stream);
     fprintf(stream, "%s (", node_name(n));
     write_expression(jf, n, n->param_exp, n->param_exp->ins, false);
     fprintf(stream, ") {");
@@ -753,12 +758,25 @@ static void write_case(FILE *stream, jsource_file *jf, jd_node *n)
 {
     string ident = get_node_ident(n);
     jd_case *_case = n->data;
-    if (_case->is_default)
+    int count = _case->keys != NULL ? (int) _case->keys->size : 0;
+
+    if (_case->is_default) {
+        // cases that jump at the default body keep their labels
+        for (int i = 0; i < count; ++i)
+            fprintf(stream, "%s%s %d:\n", ident, node_name(n),
+                    lget_int(_case->keys, i));
         fprintf(stream, "%sdefault: {", ident);
+    }
+    else if (count > 0) {
+        // one body can carry several labels: case 0:\ncase 1: {
+        for (int i = 0; i < count; ++i) {
+            fprintf(stream, "%s%s %d:%s", ident, node_name(n),
+                    lget_int(_case->keys, i),
+                    i + 1 < count ? "\n" : " {");
+        }
+    }
     else {
-        fprintf(stream, "%s%s ", ident, node_name(n));
-        fprintf(stream, "%d", _case->key);
-        fprintf(stream, ": {");
+        fprintf(stream, "%s%s %d: {", ident, node_name(n), _case->key);
     }
     write_node_debug_info(jf, n);
     writter_for_class(jf, n);
@@ -780,7 +798,7 @@ static void write_synchronized(FILE *stream, jsource_file *jf, jd_node *n)
 static void write_default(FILE *stream, jsource_file *jf, jd_node *n)
 {
     string ident = get_node_ident(n);
-    fprintf(stream, "%s", ident);
+    fputs(ident, stream);
     fprintf(stream, "%s {", node_name(n));
     write_node_debug_info(jf, n);
     writter_for_class(jf, n);

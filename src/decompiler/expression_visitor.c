@@ -197,6 +197,67 @@ void visit_expression_for_loop(jd_exp *expression, list_object *list)
     }
 }
 
+bool expression_reads_name(jd_exp *expression, string name)
+{
+    if (expression == NULL || name == NULL)
+        return false;
+
+    switch (expression->type) {
+        case JD_EXPRESSION_LOCAL_VARIABLE:
+        case JD_EXPRESSION_STACK_VAR:
+        case JD_EXPRESSION_STACK_VALUE: {
+            jd_val *val = expression->data;
+            return val != NULL && val->name != NULL &&
+                   STR_EQL(val->name, name);
+        }
+        case JD_EXPRESSION_LVALUE: {
+            jd_exp_lvalue *lvalue = expression->data;
+            return lvalue->stack_var != NULL &&
+                   lvalue->stack_var->name != NULL &&
+                   STR_EQL(lvalue->stack_var->name, name);
+        }
+        case JD_EXPRESSION_ASSIGNMENT: {
+            jd_exp_assignment *assign = expression->data;
+            return expression_reads_name(assign->right, name);
+        }
+        case JD_EXPRESSION_IF:
+        case JD_EXPRESSION_IF_BREAK: {
+            jd_exp_if *if_exp = expression->data;
+            return expression_reads_name(if_exp->expression, name);
+        }
+        case JD_EXPRESSION_CONST:
+        case JD_EXPRESSION_EMPTY:
+        case JD_EXPRESSION_UNKNOWN:
+        case JD_EXPRESSION_GOTO:
+        case JD_EXPRESSION_BREAK:
+        case JD_EXPRESSION_CONTINUE:
+        case JD_EXPRESSION_LABEL:
+        case JD_EXPRESSION_DECLARATION:
+        case JD_EXPRESSION_ANNOTATION:
+        case JD_EXPRESSION_LITERAL:
+        case JD_EXPRESSION_SWAP:
+        case JD_EXPRESSION_DUP:
+        case JD_EXPRESSION_POP:
+        case JD_EXPRESSION_MONITOR_ENTER:
+        case JD_EXPRESSION_MONITOR_EXIT:
+        case JD_EXPRESSION_STRING_CONCAT:
+        case JD_EXPRESSION_ENUM:
+        case JD_EXPRESSION_ASSERT:
+        case JD_EXPRESSION_ASSIGNMENT_CHAIN:
+            return false;
+        default: {
+            jd_exp_reader *reader = expression->data;
+            if (reader == NULL || reader->list == NULL)
+                return false;
+            for (int i = 0; i < reader->list->len; ++i) {
+                if (expression_reads_name(&reader->list->args[i], name))
+                    return true;
+            }
+            return false;
+        }
+    }
+}
+
 bool has_stack_var(jd_exp *expression, jd_var *var)
 {
     switch (expression->type) {

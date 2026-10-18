@@ -90,7 +90,7 @@ static void insert_declaration_to(jd_method *m,
                 node_is_finally(next) ||
                 node_is_case(next))) {
             insert_idx = i;
-            continue;
+            break;
         }
     }
     ladd_obj_at(node->children, new_block, insert_idx);
@@ -289,16 +289,18 @@ static void variables_scope(jd_method *m)
                         end_idx = e->idx;
                     }
                 }
-                else {
+                else if (exp_is_assignment(e)) {
                     jd_exp_assignment *assign = e->data;
                     jd_exp *r = assign->right;
-                    if (!exp_is_local_variable(r))
-                        continue;
-                    jd_val *v = r->data;
-                    if (STR_EQL(val->name, v->name)) {
-                        end_idx = e->idx;
+                    if (exp_is_local_variable(r)) {
+                        jd_val *v = r->data;
+                        if (STR_EQL(val->name, v->name)) {
+                            end_idx = e->idx;
+                        }
                     }
                 }
+                if (expression_reads_name(e, val->name))
+                    end_idx = MAX(end_idx, e->idx);
             }
             range->end_idx = end_idx == 0 ? exp->idx : end_idx;
 
