@@ -483,8 +483,8 @@ static void build_cmp_expression(jd_exp *exp, jd_ins *ins)
     jd_exp *left_cmp = &compare->list->args[0];
     jd_exp *right_cmp = &compare->list->args[1];
 
-    build_stack_var_exp(left_cmp, ins->stack_in->vals[0]);
-    build_stack_var_exp(right_cmp, ins->stack_in->vals[1]);
+    build_stack_var_exp(left_cmp, ins->stack_in->vals[1]);
+    build_stack_var_exp(right_cmp, ins->stack_in->vals[0]);
 
     jd_exp_assignment *assignment = make_obj(jd_exp_assignment);
     assignment->left = left;
@@ -525,7 +525,7 @@ static void build_switch_expression(jd_exp *exp, jd_ins *ins)
     switch_exp->default_offset = jvm_switch_default_offset(ins);
     switch_exp->targets = linit_object();
 
-    for (int i = 0; i < ins->targets->size; ++i) {
+    for (int i = 0; ins->targets != NULL && i < ins->targets->size; ++i) {
         jd_ins *target_ins = lget_obj(ins->targets, i);
         jd_switch_param *param = make_obj(jd_switch_param);
         param->offset = target_ins->offset;
@@ -543,7 +543,18 @@ static void build_new_array_expression(jd_exp *exp, jd_ins *ins)
     jd_exp_assignment *assignment = exp->data;
 
     string class_name = NULL;
-    if (jvm_ins_is_newarray(ins)) {
+    int dimensions = 1;
+    if (jvm_ins_is_multianewarray(ins)) {
+        dimensions = ins->param[2];
+        u2 index = be16toh((ins->param[0] << 8) | ins->param[1]);
+        jcp_info *info = pool_item(ins->method->meta, index);
+        string full = class_simple_name(get_class_name(ins->method->meta, info));
+        char *brackets = strchr(full, '[');
+        class_name = brackets == NULL ? full
+                                      : str_create("%.*s",
+                                                   (int) (brackets - full), full);
+    }
+    else if (jvm_ins_is_newarray(ins)) {
         switch (ins->param[0]) {
             case 4:
                 class_name = (string)g_str_boolean;
@@ -585,16 +596,19 @@ static void build_new_array_expression(jd_exp *exp, jd_ins *ins)
     jd_exp *right = assignment->right;
     right->type = JD_EXPRESSION_NEW_ARRAY;
     jd_exp_new_array *new_array = make_obj_zero(jd_exp_new_array);
-    jd_val *push0 = ins->stack_in->vals[0];
     new_array->class_name = class_name;
-    new_array->list = make_exp_list(1);
-    jd_exp *count_exp = &new_array->list->args[0];
-    count_exp->type = JD_EXPRESSION_CONST;
-    jd_exp_const *const_exp = make_obj(jd_exp_const);
-    const_exp->val = push0;
-    count_exp->data = const_exp;
+    new_array->dimensions = dimensions;
+    new_array->list = make_exp_list(dimensions);
 
-    build_stack_var_exp(count_exp, ins->stack_in->vals[0]);
+    for (int i = 0; i < dimensions; ++i) {
+        jd_val *count_val = ins->stack_in->vals[dimensions - 1 - i];
+        jd_exp *count_exp = &new_array->list->args[i];
+        count_exp->type = JD_EXPRESSION_CONST;
+        jd_exp_const *const_exp = make_obj(jd_exp_const);
+        const_exp->val = count_val;
+        count_exp->data = const_exp;
+        build_stack_var_exp(count_exp, count_val);
+    }
     right->data = new_array;
 }
 
@@ -786,10 +800,15 @@ static void build_iinc_expression(jd_exp *exp, jd_ins *ins)
 {
     jd_val *local_var = NULL;
     uint16_t slot;
-    if (jvm_ins_is_wide(ins))
-        slot = ins->param[1] << 8 | ins->param[2];
-    else
+    s2 increment;
+    if (jvm_ins_is_wide(ins)) {
+        slot = (ins->param[1] << 8) | ins->param[2];
+        increment = (s2) ((ins->param[3] << 8) | ins->param[4]);
+    }
+    else {
         slot = ins->param[0];
+        increment = (s1) ins->param[1];
+    }
 
     local_var = find_local_variable(ins->stack_out, slot);
     assert(local_var != NULL);
@@ -807,7 +826,7 @@ static void build_iinc_expression(jd_exp *exp, jd_ins *ins)
     local_variable_exp->data = local_var;
 
     jd_val *val = stack_make_primitive_val(JD_VAR_INT_T);
-    val->data->primitive->int_val = ins->param[1];
+    val->data->primitive->int_val = increment;
     const_exp->val = val;
 
     exp->type = JD_EXPRESSION_IINC;

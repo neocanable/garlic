@@ -40,6 +40,26 @@ static inline bool is_hide_int_class(string class_name)
            STR_EQL(class_name, g_str_short);
 }
 
+static bool is_int_constant_ins(jd_ins *ins)
+{
+    switch (ins->code) {
+        case INS_ICONST_M1:
+        case INS_ICONST_0:
+        case INS_ICONST_1:
+        case INS_ICONST_2:
+        case INS_ICONST_3:
+        case INS_ICONST_4:
+        case INS_ICONST_5:
+        case INS_BIPUSH:
+        case INS_SIPUSH:
+        case INS_LDC:
+        case INS_LDC_W:
+            return true;
+        default:
+            return false;
+    }
+}
+
 static void add_stack_val_type(jd_ins *ins,
                                jd_var *var,
                                string type,
@@ -113,8 +133,11 @@ void jvm_int_type_analyze(jd_ins *ins)
             jd_descriptor *descriptor = jvm_invoke_descriptor(ins);
 
             for (int i = 0; i < descriptor->list->size; ++i) {
+                int idx = descriptor->list->size - 1 - i;
+                if (idx < 0 || idx >= stack_in->depth)
+                    continue;
                 string type = lget_string(descriptor->list, i);
-                jd_val *val = stack_in->vals[i];
+                jd_val *val = stack_in->vals[idx];
                 jd_ins *vins = val->ins;
                 jd_var *var = val->stack_var;
                 string val_class_name = val->data->cname;
@@ -130,7 +153,7 @@ void jvm_int_type_analyze(jd_ins *ins)
                 if (jvm_ins_is_xiload(vins))
                     slot = jvm_ins_load_slot(vins);
 
-                if (jvm_ins_is_xiload(vins) || jvm_ins_is_boolean_const(vins))
+                if (jvm_ins_is_xiload(vins) || is_int_constant_ins(vins))
                     add_stack_val_type(vins, var, simple_name, slot);
 
             }

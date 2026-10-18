@@ -508,7 +508,7 @@ void build_jvm_ins_dup2_x1_action(jd_ins *ins)
     else {
         // ..., value3, value2, value1 →
         // ..., value2, value1, value3, value2, value1
-        dup_copy_action(ins, 2, 2);
+        dup_copy_action(ins, 3, 2);
     }
 }
 
@@ -531,7 +531,7 @@ void build_jvm_ins_dup2_x2_action(jd_ins *ins)
         jd_stack_val_is_compute_category1(item2)) {
         // ..., value3, value2, value1 →
         // ..., value1, value3, value2, value1
-        build_jvm_ins_dup_x1_action(ins);
+        dup_copy_action(ins, 3, 1);
         return;
     }
 

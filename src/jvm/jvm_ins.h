@@ -582,8 +582,8 @@ static inline int jvm_ins_iconst_value(jd_ins *ins)
         case INS_ICONST_4: /*iconst_4*/ return 4;
         case INS_ICONST_5: /*iconst_5*/ return 5;
         case INS_ICONST_M1: /*iconst_m1*/ return -1;
-        case INS_BIPUSH: /*bipush*/ return ins->param[0];
-        case INS_SIPUSH: /*sipush*/ return  ins->param[0] << 8 | ins->param[1];
+        case INS_BIPUSH: /*bipush*/ return (s1) ins->param[0];
+        case INS_SIPUSH: /*sipush*/ return (s2) ((ins->param[0] << 8) | ins->param[1]);
         default: return -100;
     }
 }

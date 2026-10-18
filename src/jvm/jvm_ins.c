@@ -105,7 +105,7 @@ void jvm_rename_goto2return(jd_method *m)
     for (int i = 0; i < m->instructions->size; ++i) {
         jd_ins *ins = lget_obj(m->instructions, i);
         if (jvm_ins_is_goto(ins) || jvm_ins_is_goto_w(ins)) {
-            jd_ins *target_ins = lget_obj_first(ins->jumps);
+            jd_ins *target_ins = ins->jumps != NULL ? lget_obj_first(ins->jumps) : NULL;
 
             if (jvm_ins_is_return(target_ins)) {
                 ins->name = str_dup(target_ins->name);
@@ -115,9 +115,9 @@ void jvm_rename_goto2return(jd_method *m)
                 ins->param = target_ins->param;
                 ins->param_length = target_ins->param_length;
 
-                ldel_obj(ins->jumps, target_ins);
-                ldel_obj(ins->targets, target_ins);
-                ldel_obj(target_ins->comings, ins);
+                if (ins->jumps) ldel_obj(ins->jumps, target_ins);
+                if (ins->targets) ldel_obj(ins->targets, target_ins);
+                if (target_ins->comings) ldel_obj(target_ins->comings, ins);
             }
         }
     }

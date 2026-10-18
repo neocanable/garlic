@@ -110,6 +110,10 @@ void optimize_jvm_method(jd_method *m)
 
     setup_expression_node_param(m);
 
+    attach_dropped_terminals(m);
+
+    optimize_goto_expression(m);
+
     optimize_exception_block(m);
 }
 
