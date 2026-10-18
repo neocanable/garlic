@@ -15,6 +15,8 @@ void empty_if_branch_stat(int *promoted, int *merged, int *shared_target);
 
 bool attach_dropped_terminals(jd_method *m);
 
+bool flatten_else_after_terminating_if(jd_method *m);
+
 void empty_if_left_report(void);
 
 void add_basic_blocks_to_node(jd_method *m,

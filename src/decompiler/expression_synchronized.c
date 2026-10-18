@@ -150,6 +150,25 @@ static void nop_monitor_exits_of(jd_method *m, int reg)
     }
 }
 
+static void nop_basic_block_at(jd_method *m, jd_node *node, int start_idx)
+{
+    if (node == NULL)
+        return;
+    if (node_is_basic_block(node)) {
+        if (node->start_idx == start_idx) {
+            jd_bblock *block = node->data;
+            jd_nblock *nb = block->ub->nblock;
+            for (int i = nb->start_idx; i <= nb->end_idx; ++i)
+                exp_mark_nopped(get_exp(m, i));
+        }
+        return;
+    }
+    if (node->children == NULL)
+        return;
+    for (int i = 0; i < node->children->size; ++i)
+        nop_basic_block_at(m, lget_obj(node->children, i), start_idx);
+}
+
 static void nop_monitor_exit_recursive(jd_method *m, jd_node *node)
 {
     if (node_is_expression(node)) {
@@ -318,6 +337,10 @@ int identify_synchronized(jd_method *m)
 
         nop_monitor_exit_recursive(m, try);
         nop_monitor_exits_of(m, monitor_expression_register(exp));
+        /* the catch-all handler block can also sit inside the try range
+         * (d8 places it between loop blocks); its move-exception/goto must
+         * not be written into the synchronized body */
+        nop_basic_block_at(m, try, finally->start_idx);
 
         bool keeps_catch = false;
         for (int k = 0; k < node->children->size; ++k) {

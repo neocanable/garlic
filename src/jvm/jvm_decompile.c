@@ -74,7 +74,7 @@ void jvm_init_method_fn(jsource_file *jf)
 void jvm_analyse_class_file_inside(jsource_file *jf)
 {
     jclass_file *jc = jf->jclass;
-    jf->fname = pool_str(jc, jc->this_class);
+    jf->fname = java_class_path(pool_str(jc, jc->this_class));
     jf->super_cname = jc->super_class > 0
                       ? class_simple_name(pool_str(jc, jc->super_class))
                       : (string) g_str_Object;

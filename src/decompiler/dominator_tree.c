@@ -232,6 +232,7 @@ void create_dominator_tree(jd_method *m)
 {
     dominator_tree(m);
     dominance_frontier(m);
+    verify_dominator_tree(m);
     // dominate_blocks(m, NULL);
 }
 

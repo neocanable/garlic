@@ -39,6 +39,8 @@ void instruction_stack_action(jd_ins *ins);
 
 void jvm_simulator(jd_method *m);
 
+void jvm_run_instruction_action(jd_ins *ins);
+
 static inline jd_val* find_local_variable(jd_stack *stack, int slot)
 {
     return stack->local_vars[slot];

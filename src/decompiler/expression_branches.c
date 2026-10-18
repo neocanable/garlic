@@ -1000,6 +1000,133 @@ bool attach_dropped_terminals(jd_method *m)
     return attached;
 }
 
+static bool expression_terminates(jd_exp *exp)
+{
+    if (exp == NULL || exp_is_nopped(exp) || exp_is_empty(exp))
+        return false;
+    return exp_is_return(exp) || exp_is_athrow(exp);
+}
+
+static bool last_statement_terminates(jd_method *m, jd_node *node)
+{
+    if (node == NULL || node->type == JD_NODE_DELETED)
+        return false;
+
+    if (node->type == JD_NODE_IF_RETURN)
+        return true;
+
+    if (node_is_expression(node)) {
+        jd_exp *exp = node->data;
+        return expression_terminates(exp);
+    }
+
+    if (node->type == JD_NODE_BASIC_BLOCK) {
+        for (int i = node->end_idx; i >= node->start_idx; --i) {
+            jd_exp *exp = get_exp(m, i);
+            if (exp == NULL || exp_is_nopped(exp) || exp_is_empty(exp))
+                continue;
+            return expression_terminates(exp);
+        }
+        return false;
+    }
+
+    if (node->children == NULL)
+        return false;
+    for (int i = node->children->size - 1; i >= 0; --i) {
+        jd_node *child = lget_obj(node->children, i);
+        if (child == NULL || child->type == JD_NODE_DELETED)
+            continue;
+        if (node_is_expression(child)) {
+            jd_exp *exp = child->data;
+            if (exp == NULL || exp_is_nopped(exp) || exp_is_empty(exp))
+                continue;
+            return expression_terminates(exp);
+        }
+        if (last_statement_terminates(m, child))
+            return true;
+    }
+    return false;
+}
+
+static bool if_body_terminates(jd_method *m, jd_node *if_node)
+{
+    if (if_node == NULL || if_node->children == NULL)
+        return false;
+
+    for (int i = if_node->children->size - 1; i >= 0; --i) {
+        jd_node *child = lget_obj(if_node->children, i);
+        if (child == NULL || child->type == JD_NODE_DELETED)
+            continue;
+        if (node_is_expression(child)) {
+            jd_exp *exp = child->data;
+            if (exp == NULL || exp == if_node->param_exp ||
+                exp_is_nopped(exp) || exp_is_empty(exp))
+                continue;
+            return expression_terminates(exp);
+        }
+        if (node_draws_nothing(m, child))
+            continue;
+        return last_statement_terminates(m, child);
+    }
+    return false;
+}
+
+/*
+ * `if (c) { return; } else { rest }` can lose the else: control cannot fall
+ * into the else block from the then block, so the rest belongs to the parent.
+ * Flatten it when the then body always returns or throws.
+ */
+bool flatten_else_after_terminating_if(jd_method *m)
+{
+    if (m->nodes == NULL)
+        return false;
+
+    list_object *targets = linit_object();
+    for (int i = 0; i < m->nodes->size; ++i) {
+        jd_node *if_node = lget_obj(m->nodes, i);
+        if (node_is_not_if(if_node) && node_is_not_else_if(if_node))
+            continue;
+
+        jd_node *else_node = else_branch_of(if_node);
+        if (else_node == NULL || else_node->type != JD_NODE_ELSE)
+            continue;
+        if (!if_body_terminates(m, if_node))
+            continue;
+
+        jd_node **pair = make_obj(jd_node *[2]);
+        pair[0] = if_node;
+        pair[1] = else_node;
+        ladd_obj(targets, pair);
+    }
+
+    bool changed = false;
+    for (int i = 0; i < targets->size; ++i) {
+        jd_node **pair = lget_obj(targets, i);
+        jd_node *if_node = pair[0];
+        jd_node *else_node = pair[1];
+        jd_node *parent = if_node->parent;
+        if (parent == NULL || parent->children == NULL)
+            continue;
+
+        int else_index = lfind_object(parent->children, else_node);
+        if (else_index < 0)
+            continue;
+
+        ldel_obj(parent->children, else_node);
+        for (int j = 0; j < else_node->children->size; ++j) {
+            jd_node *child = lget_obj(else_node->children, j);
+            ladd_obj_at(parent->children, child,
+                        (size_t) (else_index + j));
+            child->parent = parent;
+        }
+
+        ldel_obj(m->nodes, else_node);
+        else_node->type = JD_NODE_DELETED;
+        changed = true;
+    }
+    return changed;
+}
+
 static jd_node* switch_to_node(jd_method *m, jd_node *parent, jd_switch *sw)
 {
     jd_node *switch_node = make_obj_zero(jd_node);

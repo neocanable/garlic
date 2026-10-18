@@ -347,7 +347,7 @@ jd_matched_debug *matched_local_variable(jd_method *m, jd_ins *ins, int slot)
 
     if (ltv != NULL || lv != NULL) {
         jd_matched_debug *r = make_obj(jd_matched_debug);
-        r->name = name;
+        r->name = java_variable_identifier(name);
         r->signature = signature;
         type_sig *ts = parse_field_signature(signature);
         string full = field_type_sig_to_s(ts);
@@ -378,7 +378,7 @@ void jvm_debug(jd_method *m, jd_ins *ins, jd_val *val, int slot)
     }
 
     if (ltv != NULL || lv != NULL) {
-        val->name = name;
+        val->name = java_variable_identifier(name);
         val->name_type = JD_VAR_NAME_DEBUG;
         type_sig *ts = parse_field_signature(signature);
         string full = field_type_sig_to_s(ts);

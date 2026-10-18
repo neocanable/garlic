@@ -183,6 +183,10 @@ void optimize_dex_method(jd_method *m)
 
     attach_dropped_terminals(m);
 
+    flatten_else_after_terminating_if(m);
+
+    fix_exception_handler_blocks(m);
+
     optimize_goto_expression(m);
 
     optimize_exception_block(m);

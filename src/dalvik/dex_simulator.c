@@ -55,7 +55,7 @@ static void dex_seed_slot_names(jd_method *m)
             continue;
         if (hget_i2s(m->slot_name_map, item->reg_num) == NULL)
             hset_i2s(m->slot_name_map, item->reg_num,
-                     dex_str_of_idx(meta, item->name_idx));
+                     java_variable_identifier(dex_str_of_idx(meta, item->name_idx)));
     }
 }
 

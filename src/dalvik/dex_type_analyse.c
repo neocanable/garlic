@@ -2,6 +2,7 @@
 #include "dalvik/dex_meta_helper.h"
 #include "common/debug.h"
 #include "decompiler/method.h"
+#include "decompiler/klass.h"
 
 bool match_dex_debug(jd_method *m, jd_dex_ins *ins, jd_val *val, int slot)
 {
@@ -30,7 +31,7 @@ bool match_dex_debug(jd_method *m, jd_dex_ins *ins, jd_val *val, int slot)
             s = method_is_member(m) ? s - 1 : s;
             if (s == i) {
                 string name = dex_str_of_idx(meta, name_idx);
-                val->name = name;
+                val->name = java_variable_identifier(name);
                 val->name_type = JD_VAR_NAME_DEBUG;
                 return true;
             }
@@ -55,7 +56,7 @@ bool match_dex_debug(jd_method *m, jd_dex_ins *ins, jd_val *val, int slot)
             string name = dex_str_of_idx(meta, item->name_idx);
             DEBUG_PRINT("\t[MATCH_DBG_ITEM]: %d %d %s\n",
                         item->offset, item->reg_num, name);
-            val->name = name;
+            val->name = java_variable_identifier(name);
             val->name_type = JD_VAR_NAME_DEBUG;
             return true;
         }
@@ -80,7 +81,7 @@ bool match_dex_parameter(jd_method *m, jd_stack *stack)
             continue;
         string name = dex_str_of_idx(meta, name_idx);
         jd_val *val = stack->local_vars[param_itor];
-        val->name = name;
+        val->name = java_variable_identifier(name);
     }
     return true;
 }

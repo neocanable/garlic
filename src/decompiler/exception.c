@@ -688,6 +688,14 @@ static void fix_same_try_end_offset(jd_method *m)
 //             continue;
         if (smallest == NULL)
             continue;
+        /* d8 can place a handler block inside its own try range (the normal
+         * path jumps over it).  Narrowing the try to handler_start - 1 in
+         * that case moves the rest of the normal body into the handler and
+         * duplicates its returns.  Only narrow when the handler is already
+         * outside the try. */
+        if (smallest == exception &&
+            exception->handler_start_idx < exception->try_end_idx)
+            continue;
         int small_idx = smallest->handler_start_idx;
         jd_ins *other_handler_start = get_ins(m, small_idx);
         jd_ins *other_handler_start_prev = other_handler_start != NULL
@@ -883,6 +891,14 @@ static void fix_same_try_edge(jd_method *m)
         jd_exc *exception = lget_obj(m->closed_exceptions, i);
         jd_exc *smallest = find_first_handler(m, exception);
         if (smallest == NULL)
+            continue;
+        /* d8 can place a handler block inside its own try range (the normal
+         * path jumps over it).  Narrowing the try to handler_start - 1 in
+         * that case moves the rest of the normal body into the handler and
+         * duplicates its returns.  Only narrow when the handler is already
+         * outside the try. */
+        if (smallest == exception &&
+            exception->handler_start_idx < exception->try_end_idx)
             continue;
         jd_ins *exception_try_end = get_ins(m,
                                             exception->try_end_idx);

@@ -167,7 +167,10 @@ static string jar_dir_of(string path)
 static void jar_entry_source_file(jclass_file *jc, string dir, string name)
 {
     struct stat sb;
-    string full_dir = str_create("%s/%s", dir, jar_dir_of(name));
+    string package = jar_dir_of(name);
+    if (strcmp(package, ".") != 0 && strcmp(package, "/") != 0)
+        package = java_class_path(package);
+    string full_dir = str_create("%s/%s", dir, package);
     if (stat(full_dir, &sb) == -1)
         make_dir(full_dir);
 
@@ -193,10 +196,13 @@ static void jar_reserve_output_paths(jd_jar *jar)
         if (entry->is_inner || entry->is_anoymous)
             continue;
 
-        string full_dir = str_create("%s/%s", jar->save,
-                                     jar_dir_of(entry->path));
+        string package = jar_dir_of(entry->path);
+        if (strcmp(package, ".") != 0 && strcmp(package, "/") != 0)
+            package = java_class_path(package);
+        string full_dir = str_create("%s/%s", jar->save, package);
         if (output_path_reserve(
-                    full_dir, str_create("%s.java", entry->cname)))
+                    full_dir,
+                    str_create("%s.java", java_identifier(entry->cname))))
             collided++;
     }
 

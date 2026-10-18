@@ -16,6 +16,161 @@ static bool is_java_identifier_part(char c)
     return (isalnum(c) || c == '_' || c == '$');
 }
 
+static bool java_ident_start(unsigned char c)
+{
+    return (c == '_' || c == '$' ||
+            (c >= 'a' && c <= 'z') ||
+            (c >= 'A' && c <= 'Z') ||
+            c >= 0x80);
+}
+
+static bool java_ident_part(unsigned char c)
+{
+    return java_ident_start(c) || (c >= '0' && c <= '9');
+}
+
+static bool java_keyword(const char *name)
+{
+    static const char *keywords[] = {
+        "abstract", "assert", "boolean", "break", "byte", "case", "catch",
+        "char", "class", "const", "continue", "default", "do", "double",
+        "else", "enum", "extends", "final", "finally", "float", "for",
+        "goto", "if", "implements", "import", "instanceof", "int",
+        "interface", "long", "native", "new", "package", "private",
+        "protected", "public", "return", "short", "static", "strictfp",
+        "super", "switch", "synchronized", "this", "throw", "throws",
+        "transient", "try", "void", "volatile", "while",
+        "true", "false", "null", "_",
+    };
+    for (int i = 0; i < (int) (sizeof(keywords) / sizeof(keywords[0])); ++i) {
+        if (strcmp(name, keywords[i]) == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool java_primitive_type_name(const char *name)
+{
+    static const char *types[] = {
+        "boolean", "byte", "char", "short", "int", "long", "float",
+        "double", "void",
+    };
+    for (int i = 0; i < (int) (sizeof(types) / sizeof(types[0])); ++i) {
+        if (strcmp(name, types[i]) == 0)
+            return true;
+    }
+    return false;
+}
+
+static string sanitize_java_identifier(string name, bool variable)
+{
+    if (name == NULL || name[0] == '\0')
+        return (string) "__";
+
+    size_t len = strlen(name);
+    bool prefix = !java_ident_start((unsigned char) name[0]);
+    bool changed = prefix;
+    for (size_t i = 1; i < len; ++i) {
+        if (!java_ident_part((unsigned char) name[i]))
+            changed = true;
+    }
+    bool keyword = java_keyword(name) &&
+                   (variable || !java_primitive_type_name(name));
+    if (!changed && !keyword)
+        return name;
+
+    char *result = x_alloc(len + (prefix ? 2 : 1));
+    size_t pos = 0;
+    if (prefix)
+        result[pos++] = '_';
+    for (size_t i = 0; i < len; ++i) {
+        unsigned char c = (unsigned char) name[i];
+        result[pos++] = java_ident_part(c) ? (char) c : '_';
+    }
+    result[pos] = '\0';
+
+    if (java_keyword(result) &&
+        (variable || !java_primitive_type_name(result))) {
+        char *prefixed = x_alloc(pos + 2);
+        prefixed[0] = '_';
+        memcpy(prefixed + 1, result, pos + 1);
+        return prefixed;
+    }
+    return result;
+}
+
+/*
+ * DEX permits arbitrary class names; Java identifiers do not.  Prefix a
+ * leading digit/illegal start with '_' and replace every other illegal byte
+ * with '_'.  Primitive type names stay as they are: `int` is a legal type.
+ */
+string java_identifier(string name)
+{
+    return sanitize_java_identifier(name, false);
+}
+
+/* Same, but a keyword is never legal here: used for variable/field names. */
+string java_variable_identifier(string name)
+{
+    return sanitize_java_identifier(name, true);
+}
+
+/* Sanitize every '/'-separated segment, e.g. "0pkg/004t" -> "_0pkg/_004t". */
+string java_class_path(string path)
+{
+    if (path == NULL || path[0] == '\0')
+        return path;
+
+    bool changed = false;
+    size_t start = 0;
+    size_t len = strlen(path);
+    for (size_t i = 0; i <= len; ++i) {
+        if (path[i] != '/' && path[i] != '\0')
+            continue;
+
+        size_t seglen = i - start;
+        char segment[256];
+        if (seglen >= sizeof(segment)) {
+            changed = true;
+            start = i + 1;
+            continue;
+        }
+        memcpy(segment, path + start, seglen);
+        segment[seglen] = '\0';
+        string sanitized = java_identifier(segment);
+        if (sanitized != segment &&
+            strcmp(sanitized, segment) != 0)
+            changed = true;
+        start = i + 1;
+    }
+    if (!changed)
+        return path;
+
+    char *result = x_alloc(len * 2 + 2);
+    size_t pos = 0;
+    start = 0;
+    for (size_t i = 0; i <= len; ++i) {
+        if (path[i] != '/' && path[i] != '\0')
+            continue;
+
+        size_t seglen = i - start;
+        char segment[256];
+        if (seglen >= sizeof(segment))
+            seglen = sizeof(segment) - 1;
+        memcpy(segment, path + start, seglen);
+        segment[seglen] = '\0';
+        string sanitized = java_identifier(segment);
+        size_t n = strlen(sanitized);
+        memcpy(result + pos, sanitized, n);
+        pos += n;
+        if (path[i] == '/')
+            result[pos++] = '/';
+        start = i + 1;
+    }
+    result[pos] = '\0';
+    return result;
+}
+
 static bool is_valid_java_identifier(const char *str,
                                      int start_pos,
                                      int end_pos)
@@ -96,7 +251,7 @@ string class_path_to_short(string class_name)
     string simple_name = x_alloc(len + 1);
     strncpy(simple_name, start, len);
     simple_name[len] = '\0';
-    return simple_name;
+    return java_identifier(simple_name);
 }
 
 void cut_generic_type_from_class_name(string class_name)
@@ -140,9 +295,9 @@ string class_full_name(string descriptor)
                     memcpy(class_name, descriptor + depth + 1, class_name_len);
                     cut_generic_type_from_class_name(class_name);
                     size_t _tmp_len = strlen(class_name);
-                    if (class_name[_tmp_len-1] == ';')
+                    if (_tmp_len > 0 && class_name[_tmp_len-1] == ';')
                         class_name[_tmp_len-1] = '\0';
-                    return class_name;
+                    return java_class_path(class_name);
                 }
                 case 'I': return class_type_array_name((string)g_str_int, depth);
                 case 'J': return class_type_array_name((string)g_str_long, depth);
@@ -163,9 +318,9 @@ string class_full_name(string descriptor)
             class_name[len - 1] = '\0';
             cut_generic_type_from_class_name(class_name);
             size_t _tmp_len = strlen(class_name);
-            if (class_name[_tmp_len-1] == ';')
+            if (_tmp_len > 0 && class_name[_tmp_len-1] == ';')
                 class_name[_tmp_len-1] = '\0';
-            return class_name;
+            return java_class_path(class_name);
         }
         default:
             return descriptor;
@@ -196,6 +351,8 @@ string class_simple_name_without_primitive(string full)
             }
         }
         default:
+            if (strchr(full, '[') != NULL)
+                return full;
             return class_path_to_short(full);
     }
 }
@@ -239,6 +396,8 @@ string class_simple_name(string full)
             }
         }
         default:
+            if (strchr(full, '[') != NULL)
+                return full;
             return class_path_to_short(full);
     }
 }
@@ -258,7 +417,7 @@ string class_package_name_of(string path)
     memcpy(package, path, start);
     package[start] = '\0';
     // str_replace_char(package, '/', '.');
-    return package;
+    return java_class_path(package);
 }
 
 string class_package_name(jsource_file *jf)
@@ -283,6 +442,14 @@ string class_package_name(jsource_file *jf)
 
 void class_import(jsource_file *jf, string path)
 {
+    if (path == NULL)
+        return;
+
+    if (path[0] == '[')
+        return;
+
+    path = java_class_path(path);
+
     if (is_synthetic_lambda_class(path))
         return;
 

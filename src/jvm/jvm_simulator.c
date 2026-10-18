@@ -221,7 +221,7 @@ static void jvm_run_stable_instruction_action(jd_ins *ins)
     jvm_stack_var_defination(ins);
 }
 
-static void jvm_run_instruction_action(jd_ins *ins)
+void jvm_run_instruction_action(jd_ins *ins)
 {
     switch (ins->code) {
         case INS_DUP: // dup

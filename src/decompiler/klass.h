@@ -47,6 +47,12 @@ static inline bool class_is_interface(jsource_file *jf)
     return class_has_flag((jclass_file *)jf->jclass, CLASS_ACC_INTERFACE);
 }
 
+string java_identifier(string name);
+
+string java_variable_identifier(string name);
+
+string java_class_path(string path);
+
 string class_path_to_short(string class_name);
 
 string class_simple_name(string full);
