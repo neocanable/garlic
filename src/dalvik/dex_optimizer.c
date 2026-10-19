@@ -189,6 +189,8 @@ void optimize_dex_method(jd_method *m)
 
     optimize_goto_expression(m);
 
+    nop_catch_handler_gotos(m);
+
     optimize_exception_block(m);
 
     sync_stat_count_leftover(m);

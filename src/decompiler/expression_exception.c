@@ -152,3 +152,54 @@ void fix_exception_handler_blocks(jd_method *m)
         }
     }
 }
+
+void nop_catch_handler_gotos(jd_method *m)
+{
+    for (int i = 0; i < m->nodes->size; ++i) {
+        jd_node *exception = lget_obj(m->nodes, i);
+        if (!node_is_exception(exception))
+            continue;
+
+        int starts[32];
+        int start_count = 0;
+        for (int j = 0; j < exception->children->size &&
+                        start_count < 32; ++j) {
+            jd_node *child = lget_obj(exception->children, j);
+            if (child->type == JD_NODE_CATCH)
+                starts[start_count++] = child->start_idx;
+        }
+        if (start_count == 0)
+            continue;
+
+        for (int j = 0; j < exception->children->size; ++j) {
+            jd_node *catch_node = lget_obj(exception->children, j);
+            if (catch_node->type != JD_NODE_CATCH ||
+                catch_node->children == NULL)
+                continue;
+            for (int k = 0; k < catch_node->children->size; ++k) {
+                jd_node *block_node = lget_obj(catch_node->children, k);
+                if (!node_is_basic_block(block_node))
+                    continue;
+                bool handler_start = false;
+                for (int s = 0; s < start_count; ++s) {
+                    if (block_node->start_idx == starts[s]) {
+                        handler_start = true;
+                        break;
+                    }
+                }
+                if (!handler_start)
+                    continue;
+                jd_bblock *block = block_node->data;
+                if (block == NULL || block->ub == NULL ||
+                    block->ub->nblock == NULL)
+                    continue;
+                jd_nblock *nb = block->ub->nblock;
+                for (int e = nb->start_idx; e <= nb->end_idx; ++e) {
+                    jd_exp *exp = get_exp(m, e);
+                    if (exp != NULL && exp_is_goto(exp))
+                        exp_mark_nopped(exp);
+                }
+            }
+        }
+    }
+}
