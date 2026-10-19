@@ -1480,11 +1480,6 @@ static void identify_if_and_switch(jd_method *m)
     m->switches = linit_object();
     m->branches = linit_object();
 
-    /* Converting a branch removes its basic-block node from m->nodes, so
-     * indices shift while we walk the list and nodes after the removed
-     * block are skipped. Walk a snapshot of the non-atomic nodes instead:
-     * nodes created along the way are visited by identify_branches_recursive
-     * when their parent is built. */
     list_object *nodes = linit_object();
     for (int i = 0; i < m->nodes->size; ++i) {
         jd_node *node = lget_obj(m->nodes, i);

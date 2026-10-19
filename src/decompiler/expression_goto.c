@@ -58,11 +58,32 @@ static bool has_loop_parent(jd_node *n)
     return closest_loop(n) != NULL;
 }
 
+static bool node_is_last_child(jd_node *parent, jd_node *node)
+{
+    for (int i = 0; i < parent->children->size; ++i) {
+        jd_node *child = lget_obj(parent->children, i);
+        if (child == node || child->type == JD_NODE_DELETED)
+            continue;
+        if (child->start_idx > node->start_idx)
+            return false;
+    }
+    return true;
+}
+
 static bool goto_is_loop_last(jd_node *loop,
                               jd_node *node,
                               jd_node *target)
 {
-    return node == lget_obj_last(loop->children);
+    jd_node *n = node;
+    while (n != NULL && n != loop) {
+        jd_node *parent = n->parent;
+        if (parent == NULL)
+            return false;
+        if (!node_is_last_child(parent, n))
+            return false;
+        n = parent;
+    }
+    return n == loop;
 }
 
 static jd_node* loop_header_node(jd_node *loop)
@@ -169,10 +190,15 @@ static void optimize_goto_in_loop(jd_method *m, jd_node *node, int target_idx)
 
     jd_node *loop = closest_loop(node);
     if (goto_jump_to_loop_header(loop, target_idx)) {
-        DEBUG_GOTO_OPTIMIZE_PRINT("[goto] %s continue: %d\n",
-                                  m->name,
-                                  exp->ins->offset);
-        goto_to_continue(exp);
+        if (goto_is_loop_last(loop, node, NULL)) {
+            exp_mark_nopped(exp);
+        }
+        else {
+            DEBUG_GOTO_OPTIMIZE_PRINT("[goto] %s continue: %d\n",
+                                      m->name,
+                                      exp->ins->offset);
+            goto_to_continue(exp);
+        }
     }
     else if (has_case_parent(node) && loop->end_idx < target_idx) {
         DEBUG_PRINT("[goto] %s %d leaves the loop from inside a switch\n",
