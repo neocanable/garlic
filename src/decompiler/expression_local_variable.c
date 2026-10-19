@@ -1,5 +1,6 @@
 #include "common/str_tools.h"
 #include "decompiler/expression_local_variable.h"
+#include "decompiler/klass.h"
 #include "decompiler/expression.h"
 #include "decompiler/expression_node.h"
 #include "expression_visitor.h"
@@ -152,6 +153,10 @@ static string gen_variable_name(jd_method *m, jd_exp *exp, string cname)
     int count = hget_s2i(m->class_counter_map, stem);
     if (count == -1)
         count = 0;
+
+    if (!numbered && count == 0 &&
+        (java_keyword(stem) || (cname != NULL && STR_EQL(stem, cname))))
+        count = 1;
 
     string name = NULL;
     do {

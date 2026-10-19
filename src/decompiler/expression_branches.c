@@ -1406,15 +1406,6 @@ static bool identify_if_branches(jd_method *m, jd_node *node, jd_bblock *block)
     if (branch->dropped_true_block != NULL ||
         branch->dropped_false_block != NULL) {
         branch_target_shared_one();
-        if (getenv("GARLIC_BRANCH_TRACE") != NULL) {
-            fprintf(stderr, "[garlic] branch dropped: %s ins %u "
-                            "-> offset %u, preds %zu/%zu, t=%c f=%c\n",
-                    m->name, end_ins->offset, jump_offset,
-                    true_block->in->size,
-                    false_block != NULL ? false_block->in->size : 0,
-                    dropped_side_class(m, branch->dropped_true_block),
-                    dropped_side_class(m, branch->dropped_false_block));
-        }
     }
 
     jd_node *if_node = if_branch_to_node(m, node, branch);
@@ -1473,15 +1464,21 @@ static void identify_if_and_switch(jd_method *m)
 {
     m->switches = linit_object();
     m->branches = linit_object();
+
+    /* Converting a branch removes its basic-block node from m->nodes, so
+     * indices shift while we walk the list and nodes after the removed
+     * block are skipped. Walk a snapshot of the non-atomic nodes instead:
+     * nodes created along the way are visited by identify_branches_recursive
+     * when their parent is built. */
+    list_object *nodes = linit_object();
     for (int i = 0; i < m->nodes->size; ++i) {
         jd_node *node = lget_obj(m->nodes, i);
-        if (node_is_atomic(node))
-            continue;
-        bool founded = identify_branches_recursive(m, node);
-        if (founded) {
-            i--;
-        }
+        if (!node_is_atomic(node))
+            ladd_obj(nodes, node);
     }
+
+    for (int i = 0; i < nodes->size; ++i)
+        identify_branches_recursive(m, lget_obj(nodes, i));
 }
 
 void identify_branches(jd_method *m)

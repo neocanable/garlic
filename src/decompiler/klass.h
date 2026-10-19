@@ -51,6 +51,8 @@ string java_identifier(string name);
 
 string java_variable_identifier(string name);
 
+bool java_keyword(const char *name);
+
 string java_class_path(string path);
 
 string class_path_to_short(string class_name);

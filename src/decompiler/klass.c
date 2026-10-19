@@ -29,7 +29,7 @@ static bool java_ident_part(unsigned char c)
     return java_ident_start(c) || (c >= '0' && c <= '9');
 }
 
-static bool java_keyword(const char *name)
+bool java_keyword(const char *name)
 {
     static const char *keywords[] = {
         "abstract", "assert", "boolean", "break", "byte", "case", "catch",
