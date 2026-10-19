@@ -911,6 +911,8 @@ static bool block_has_falling_predecessor(jd_bblock *target)
     return false;
 }
 
+static bool if_body_terminates(jd_method *m, jd_node *if_node);
+
 bool attach_dropped_terminals(jd_method *m)
 {
     bool attached = false;
@@ -982,6 +984,24 @@ bool attach_dropped_terminals(jd_method *m)
 
         if (dropped_side_class(m, dropped) != 'T')
             continue;
+
+        jd_node *dropped_node = dropped->node;
+        if (dropped_node != NULL &&
+            dropped_node->type != JD_NODE_DELETED &&
+            !node_is_ancestor_of(branch->node, dropped_node) &&
+            dropped_node->start_idx > branch->node->end_idx) {
+            bool adjacent = true;
+            for (int e = branch->node->end_idx + 1;
+                 e < dropped_node->start_idx; ++e) {
+                jd_exp *x = get_exp(m, e);
+                if (x != NULL && !exp_is_nopped(x) && !exp_is_empty(x)) {
+                    adjacent = false;
+                    break;
+                }
+            }
+            if (adjacent && if_body_terminates(m, branch->node))
+                continue;
+        }
 
         jd_nblock *nb = dropped->ub->nblock;
         jd_node *ret_node = make_obj_zero(jd_node);
@@ -1071,11 +1091,6 @@ static bool if_body_terminates(jd_method *m, jd_node *if_node)
     return false;
 }
 
-/*
- * `if (c) { return; } else { rest }` can lose the else: control cannot fall
- * into the else block from the then block, so the rest belongs to the parent.
- * Flatten it when the then body always returns or throws.
- */
 bool flatten_else_after_terminating_if(jd_method *m)
 {
     if (m->nodes == NULL)
