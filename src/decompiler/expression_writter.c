@@ -671,16 +671,67 @@ static void write_if_return_node(FILE *stream, jsource_file *jf, jd_node *n)
     }
 }
 
+static bool if_node_draws_body(jd_node *n)
+{
+    for (int i = 0; i < n->children->size; ++i) {
+        jd_node *child = lget_obj(n->children, i);
+        if (child->type == JD_NODE_DELETED)
+            continue;
+        if (node_is_expression(child)) {
+            jd_exp *exp = child->data;
+            if (exp == n->param_exp ||
+                exp_is_nopped(exp) || exp_is_empty(exp))
+                continue;
+            return true;
+        }
+        if (child->type == JD_NODE_BASIC_BLOCK) {
+            jd_method *m = child->method;
+            if (m == NULL)
+                return true;
+            for (int j = child->start_idx; j <= child->end_idx; ++j) {
+                jd_exp *exp = get_exp(m, j);
+                if (exp != NULL && !exp_is_nopped(exp) && !exp_is_empty(exp))
+                    return true;
+            }
+            continue;
+        }
+        return true;
+    }
+    return false;
+}
+
+static void write_condition(FILE *stream, jsource_file *jf,
+                            jd_node *n, jd_exp *exp)
+{
+    if (exp == NULL)
+        return;
+    if (exp->type == JD_EXPRESSION_IF_BREAK) {
+        jd_exp_if *if_exp = exp->data;
+        write_expression(jf, n, if_exp->expression,
+                         if_exp->expression->ins, false);
+        return;
+    }
+    write_expression(jf, n, exp, exp->ins, false);
+}
+
 static void write_if_node(FILE *stream, jsource_file *jf, jd_node *n)
 {
     if (n->children->size == 0)
         return;
     string ident = get_node_ident(n);
+    bool break_condition = n->param_exp != NULL &&
+                           n->param_exp->type == JD_EXPRESSION_IF_BREAK;
+    bool has_body = break_condition && if_node_draws_body(n);
     fputs(ident, stream);
     fprintf(stream, "%s (", node_name(n));
-    write_expression(jf, n, n->param_exp, n->param_exp->ins, false);
+    write_condition(stream, jf, n, n->param_exp);
     fprintf(stream, ") {");
     write_node_debug_info(jf, n);
+    if (break_condition && !has_body) {
+        fprintf(stream, "%s    break;", ident);
+        fprintf(stream, "\n%s}\n", ident);
+        return;
+    }
     writter_for_class(jf, n);
     fprintf(stream, "%s}\n", ident);
 }
@@ -700,7 +751,7 @@ static void write_for_loop_node(FILE *stream, jsource_file *jf, jd_node *n)
 {
     string ident = get_node_ident(n);
     fprintf(stream, "%s%s (", ident, node_name(n));
-    write_expression(jf, n, n->param_exp, n->param_exp->ins, false);
+    write_condition(stream, jf, n, n->param_exp);
     fprintf(stream, ") {");
     write_node_debug_info(jf, n);
     writter_for_class(jf, n);
@@ -711,7 +762,7 @@ static void write_while_node(FILE *stream, jsource_file *jf, jd_node *n)
 {
     string ident = get_node_ident(n);
     fprintf(stream, "%s%s (", ident, node_name(n));
-    write_expression(jf, n, n->param_exp, n->param_exp->ins, false);
+    write_condition(stream, jf, n, n->param_exp);
     fprintf(stream, ") {");
     write_node_debug_info(jf, n);
     writter_for_class(jf, n);
@@ -725,7 +776,7 @@ static void write_do_while_node(FILE *stream, jsource_file *jf, jd_node *n)
     write_node_debug_info(jf, n);
     writter_for_class(jf, n);
     fprintf(stream, "%s} while(", ident);
-    write_expression(jf, n, n->param_exp, n->param_exp->ins, false);
+    write_condition(stream, jf, n, n->param_exp);
     fprintf(stream, ");\n");
 }
 
