@@ -233,6 +233,18 @@ static jd_node* goto_target_node(jd_method *m, jd_node *node, int *out_idx)
         return NULL;
 
     int at = target_exp->idx;
+    jd_nblock *target_nb = target->ub == NULL ? NULL : target->ub->nblock;
+    if (target_nb != NULL) {
+        int visible = at;
+        while (visible <= target_nb->end_idx) {
+            jd_exp *e = get_exp(m, visible);
+            if (e != NULL && !exp_is_nopped(e) && !exp_is_empty(e))
+                break;
+            visible++;
+        }
+        if (visible <= target_nb->end_idx)
+            at = visible;
+    }
     if (out_idx != NULL)
         *out_idx = at;
 

@@ -126,9 +126,6 @@ static bool identify_initialize_of_store(jd_method *m, jd_exp *exp, int i)
                    invoke->list->args,
                    size);
         }
-        invoke_exp->data = initialize;
-        invoke_exp->type = JD_EXPRESSION_INITIALIZE;
-
         jd_val *val = left->data;
         jd_var *var = val->stack_var;
         if (var != NULL)
@@ -147,7 +144,9 @@ static bool identify_initialize_of_store(jd_method *m, jd_exp *exp, int i)
             right->data = initialize;
         }
 
-        exp_mark_nopped(invoke_exp);
+        invoke_exp->type = exp->type;
+        invoke_exp->data = exp->data;
+        exp_mark_nopped(exp);
         found = true;
         break;
     }
