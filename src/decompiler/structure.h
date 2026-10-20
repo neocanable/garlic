@@ -1148,6 +1148,9 @@ struct jsource_file {
 
     string          fname; // full class cname
 
+    // dex or class come from
+    string          source_name;
+
     bool            is_inner;
 
     bool            is_anonymous;

@@ -1170,10 +1170,12 @@ static jd_node* switch_to_node(jd_method *m, jd_node *parent, jd_switch *sw)
         if (exp_is_nopped(e) || exp_is_empty(e))
             continue;
         jd_node *exp_node = create_expression_node(m, e);
+        exp_node->parent = parent;
         ladd_obj(parent->children, exp_node);
     }
     jd_exp *last = get_exp(m, nb->end_idx);
     jd_node *last_exp_node = create_expression_node(m, last);
+    last_exp_node->parent = switch_node;
     ladd_obj(switch_node->children, last_exp_node);
 
 

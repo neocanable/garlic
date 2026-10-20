@@ -130,9 +130,13 @@ static void apk_process_dex_from_zip(jd_apk *apk, struct zip_t *zip)
         size_t buf_size = zip_entry_size(zip);
         char *buf = x_alloc_in(apk->pool, buf_size * sizeof(unsigned char));
         zip_entry_noallocread(zip, (void *)buf, buf_size);
+        size_t name_len = strlen(path_in_zip);
+        char *source_name = x_alloc_in(apk->pool, name_len + 1);
+        memcpy(source_name, path_in_zip, name_len + 1);
         zip_entry_close(zip);
 
         jd_meta_dex *meta = parse_dex_from_buffer(buf, buf_size);
+        meta->source_name = source_name;
         apk_run_dex_tasks(apk, meta);
     }
 }

@@ -263,6 +263,7 @@ jsource_file* dex_class_inside(jd_dex *dex,
     jsource_file *jf = make_obj_zero(jsource_file);
     string desc = dex_str_of_type_id(dex->meta, cf->class_idx);
     jf->fname = class_full_name(desc);
+    jf->source_name = dex->meta->source_name;
     jf->sname = class_simple_name_without_primitive(jf->fname);
     jf->pname = class_package_name(jf);
     if (jf->pname == NULL)

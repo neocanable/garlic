@@ -903,6 +903,19 @@ static void init_dex_extract_data(jd_meta_dex *dex)
     dex->class_name_map = hashmap_init_in(dex->pool, (hcmp_fn) s2o_cmp, 0);
 }
 
+static string dex_basename(mem_pool *pool, string path)
+{
+    string name = path;
+    for (string p = path; *p != '\0'; ++p) {
+        if (*p == '/' || *p == '\\')
+            name = p + 1;
+    }
+    size_t len = strlen(name);
+    char *copy = x_alloc_in(pool, len + 1);
+    memcpy(copy, name, len + 1);
+    return copy;
+}
+
 jd_meta_dex* parse_dex_file(string path)
 {
 //    init_dex_opcode_hashmap();
@@ -910,6 +923,7 @@ jd_meta_dex* parse_dex_file(string path)
     mem_pool *pool = mem_create_pool();
 
     jd_meta_dex *dex = init_dex_content(pool, path);
+    dex->source_name = dex_basename(pool, path);
 
     init_dex_extract_data(dex);
 

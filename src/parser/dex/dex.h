@@ -573,6 +573,7 @@ typedef struct jd_meta_dex {
     pthread_mutex_t lambda_lock;
     mem_pool *pool;
     string source_dir;
+    string source_name;
 } jd_meta_dex;
 
 

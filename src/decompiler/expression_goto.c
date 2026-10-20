@@ -74,6 +74,8 @@ static bool goto_is_loop_last(jd_node *loop,
                               jd_node *node,
                               jd_node *target)
 {
+    if (node->parent == loop && lget_obj_last(loop->children) == node)
+        return true;
     jd_node *n = node;
     while (n != NULL && n != loop) {
         jd_node *parent = n->parent;
@@ -113,6 +115,35 @@ static bool goto_target_is_next_written(jd_node *next, int target_idx)
         return false;
 
     return next->start_idx <= target_idx && target_idx <= next->end_idx;
+}
+
+static bool goto_target_is_next_node(jd_node *node, int target_idx)
+{
+    jd_node *next = parent_next_node(node);
+    return next != NULL && next->start_idx == target_idx;
+}
+
+static jd_node* next_written_node(jd_node *node)
+{
+    jd_node *n = node;
+    while (n != NULL && n->parent != NULL) {
+        jd_node *next = parent_next_node(n);
+        if (next != NULL)
+            return next;
+        jd_node *parent = n->parent;
+        if (node_is_loop(parent) || node_is_switch(parent) ||
+            node_is_case(parent))
+            return NULL;
+        n = parent;
+    }
+    return NULL;
+}
+
+static bool goto_target_is_next_ancestor(jd_node *node, int target_idx)
+{
+    jd_node *next = next_written_node(node);
+    return next != NULL &&
+           next->start_idx <= target_idx && target_idx <= next->end_idx;
 }
 
 static bool goto_target_is_next_block(jd_method *m,
@@ -168,6 +199,8 @@ static void optimize_goto_in_case(jd_method *m, jd_node *node, int target_idx)
     }
     else if (parent_next == NULL ||
              goto_target_is_next_written(parent_next, target_idx) ||
+             goto_target_is_next_node(node, target_idx) ||
+             goto_target_is_next_ancestor(node, target_idx) ||
              nothing_runs_between(m, exp->idx, target_idx)) {
         DEBUG_GOTO_OPTIMIZE_PRINT("[goto optimized]: %s %d\n",
                                   m->name,
@@ -222,6 +255,8 @@ static void optimize_goto_in_loop(jd_method *m, jd_node *node, int target_idx)
     }
     else if (parent_next == NULL ||
              goto_target_is_next_written(parent_next, target_idx) ||
+             goto_target_is_next_node(node, target_idx) ||
+             goto_target_is_next_ancestor(node, target_idx) ||
              nothing_runs_between(m, exp->idx, target_idx)) {
         DEBUG_GOTO_OPTIMIZE_PRINT("[goto optimized]: %s %d\n",
                                   m->name,
@@ -341,6 +376,13 @@ static bool optimize_goto_core(jd_method *m, jd_node *node)
     else if (parent_next != NULL &&
              (goto_target_is_next_written(parent_next, target_idx) ||
               goto_target_is_next_block(m, parent_next, target_idx))) {
+        DEBUG_GOTO_OPTIMIZE_PRINT("[goto optimized]: %s %d\n",
+                                  m->name,
+                                  exp->ins->offset);
+        exp_mark_nopped(exp);
+    }
+    else if (goto_target_is_next_node(node, target_idx) ||
+             goto_target_is_next_ancestor(node, target_idx)) {
         DEBUG_GOTO_OPTIMIZE_PRINT("[goto optimized]: %s %d\n",
                                   m->name,
                                   exp->ins->offset);

@@ -465,8 +465,8 @@ static void write_notice(jsource_file *jf)
     FILE *stream = file_output(jf);
 
     fprintf(stream, "/*\n");
-    fprintf(stream, " * Decompiled by Garlic\n");
-    fprintf(stream, " * Version: 1.8\n");
+    fprintf(stream, " * decompiled by garlic version: 1.8\n");
+    fprintf(stream, " * https://github.com/neocanable/garlic\n");
     fprintf(stream, " */ \n");
 }
 
@@ -592,7 +592,13 @@ static void write_class(FILE *stream, jd_node *n)
 {
     string ident = get_node_ident(n);
     jsource_file *_source_file = n->data;
-    fprintf(stream, "%s// class: %s\n", ident, _source_file->fname);
+    if (_source_file->source_name != NULL) {
+        fprintf(stream, "%s/* load from: %s, dex: %s */\n",
+                ident, _source_file->fname, _source_file->source_name);
+    }
+    else {
+        fprintf(stream, "%s// class: %s\n", ident, _source_file->fname);
+    }
     write_class_annotation(_source_file);
     fprintf(stream, "%s%s {\n", ident, _source_file->defination);
     writter_for_class(_source_file, n);

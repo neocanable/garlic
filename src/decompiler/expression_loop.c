@@ -2,6 +2,7 @@
 #include "decompiler/control_flow.h"
 #include "decompiler/expression.h"
 #include "decompiler/expression_node.h"
+#include "decompiler/expression_visitor.h"
 #include "decompiler/dominator_tree.h"
 
 static bool loop_already_exist(jd_method *m, jd_loop *loop)
@@ -112,6 +113,58 @@ static int count_jumps(jd_loop *loop, jd_bblock *target, jd_exp *exp)
     return jump;
 }
 
+static bool loop_backedge_condition(jd_method *m,
+                                    jd_loop *loop,
+                                    jd_bblock *header)
+{
+    jd_bblock *last = loop_last_block(loop);
+    if (last == NULL)
+        return false;
+    jd_exp *exp = get_exp(m, last->node->end_idx);
+    if (exp == NULL || !exp_is_if(exp))
+        return false;
+    jd_exp_if *if_exp = exp->data;
+    jd_exp *target = exp_of_offset(m, if_exp->offset);
+    if (target != NULL && target->block == header)
+        return true;
+    jd_ins *ins = exp->ins;
+    if (ins != NULL && ins->next != NULL) {
+        jd_exp *next = ins->next->expression;
+        if (next != NULL && next->block == header)
+            return true;
+    }
+    return false;
+}
+
+static bool loop_header_condition_only(jd_method *m,
+                                       jd_node *node,
+                                       jd_exp *condition_if)
+{
+    jd_exp_if *if_exp = condition_if->data;
+    jd_exp *condition = if_exp->expression;
+    if (condition == NULL)
+        return false;
+
+    for (int i = node->start_idx; i < node->end_idx; ++i) {
+        jd_exp *exp = get_exp(m, i);
+        if (exp == NULL || exp_is_nopped(exp) || exp_is_empty(exp))
+            continue;
+        if (!exp_is_store(exp))
+            return false;
+        jd_exp_store *store = exp->data;
+        jd_exp *left = &store->list->args[0];
+        jd_exp *right = &store->list->args[1];
+        if (!exp_is_local_variable(left) || !exp_is_const(right))
+            return false;
+        jd_val *val = left->data;
+        if (val == NULL || val->name == NULL)
+            return false;
+        if (expression_reads_name(condition, val->name))
+            return false;
+    }
+    return true;
+}
+
 static void find_loop_condition(jd_method *m, jd_loop *loop, jd_bblock *header)
 {
     jd_bblock *first = loop_first_block(loop);
@@ -119,6 +172,7 @@ static void find_loop_condition(jd_method *m, jd_loop *loop, jd_bblock *header)
 
     for (int i = 0; i <= 1; ++i) {
         bool is_post_condition = i == 1;
+        bool relaxed = false;
         jd_bblock *block = NULL;
         jd_node *node = NULL;
         bool found_condition = false;
@@ -134,8 +188,17 @@ static void find_loop_condition(jd_method *m, jd_loop *loop, jd_bblock *header)
             node = block->node;
             last_exp = get_exp(m, node->end_idx);
             found_condition = exp_is_if(last_exp);
-            found_condition = found_condition &&
-                              node_valid_exp_count(m, node) == 1;
+            if (found_condition && node_valid_exp_count(m, node) == 1) {
+                relaxed = false;
+            }
+            else if (found_condition &&
+                     !loop_backedge_condition(m, loop, header) &&
+                     loop_header_condition_only(m, node, last_exp)) {
+                relaxed = true;
+            }
+            else {
+                found_condition = false;
+            }
         }
         if (!found_condition)
             continue;
@@ -153,6 +216,20 @@ static void find_loop_condition(jd_method *m, jd_loop *loop, jd_bblock *header)
                 (!lcontains_obj(loop->blocks, true_target) ||
                  lcontains_obj(loop->blocks, false_target))) {
             continue;
+        }
+
+        if (relaxed) {
+            jd_bblock *inside = lcontains_obj(loop->blocks, false_target)
+                                ? false_target : true_target;
+            jd_exp *body_end = inside->node == NULL ? NULL :
+                               get_exp(m, inside->node->end_idx);
+            if (body_end != NULL && exp_is_if(body_end)) {
+                jd_exp_if *body_if = body_end->data;
+                jd_exp *body_target = exp_of_offset(m, body_if->offset);
+                if (body_target != NULL && body_target->block != NULL &&
+                    !lcontains_obj(loop->blocks, body_target->block))
+                    continue;
+            }
         }
 
         loop->condition = block;
