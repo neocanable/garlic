@@ -573,6 +573,8 @@ static void parse_dex_code_debug_item(jd_meta_dex *dex, dex_code_item *code)
     u4 itor = 0;
     for (int i = 0; i < debug_info->parameters_size; ++i) {
         u4 name_idx = read_unsigned_leb128(dex) - 1;
+        if (name_idx != NO_INDEX && name_idx >= dex->header->string_ids_size)
+            name_idx = NO_INDEX;
         debug_info->parameter_name[i] = name_idx;
         if (name_idx != NO_INDEX) {
             string param_name = dex_str_of_idx(dex, name_idx);
@@ -610,6 +612,9 @@ static void parse_dex_code_debug_item(jd_meta_dex *dex, dex_code_item *code)
                 s4 reg = read_unsigned_leb128(dex);
                 u4 name_idx = read_unsigned_leb128(dex) - 1;
                 u4 type_idx = read_unsigned_leb128(dex) - 1;
+                if (name_idx != NO_INDEX &&
+                    name_idx >= dex->header->string_ids_size)
+                    name_idx = NO_INDEX;
 
                 dex_dbg_item *dbg_item = &items[itor];
                 dbg_item->code = DBG_START_LOCAL;
@@ -624,6 +629,9 @@ static void parse_dex_code_debug_item(jd_meta_dex *dex, dex_code_item *code)
                 u4 name_idx = read_unsigned_leb128(dex) - 1;
                 u4 type_idx = read_unsigned_leb128(dex) - 1;
                 u4 sig_idx = read_unsigned_leb128(dex) -1;
+                if (name_idx != NO_INDEX &&
+                    name_idx >= dex->header->string_ids_size)
+                    name_idx = NO_INDEX;
 
                 dex_dbg_item *dbg_item = &items[itor];
                 dbg_item->code = DBG_START_LOCAL;

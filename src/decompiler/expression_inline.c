@@ -35,6 +35,66 @@ static bool assignment_exp_can_inline_round2(jd_exp *exp)
 
 static bool inline_variable_for_expression(jd_exp *expression, jd_exp *other);
 
+bool expression_contains(jd_exp *expression, jd_exp *needle)
+{
+    if (expression == NULL || expression->data == NULL)
+        return false;
+    if (expression == needle)
+        return true;
+
+    switch (expression->type) {
+        case JD_EXPRESSION_ASSIGNMENT: {
+            jd_exp_assignment *assignment = expression->data;
+            return expression_contains(assignment->left, needle) ||
+                   expression_contains(assignment->right, needle);
+        }
+        case JD_EXPRESSION_IF: {
+            jd_exp_if *if_exp = expression->data;
+            return expression_contains(if_exp->expression, needle);
+        }
+        case JD_EXPRESSION_RETURN:
+        case JD_EXPRESSION_ARRAY_LOAD:
+        case JD_EXPRESSION_GET_STATIC:
+        case JD_EXPRESSION_COMPARE:
+        case JD_EXPRESSION_SINGLE_OPERATOR:
+        case JD_EXPRESSION_SINGLE_LIST:
+        case JD_EXPRESSION_INVOKE:
+        case JD_EXPRESSION_NEW_ARRAY:
+        case JD_EXPRESSION_LAMBDA:
+        case JD_EXPRESSION_NEW_OBJ:
+        case JD_EXPRESSION_ARRAY_STORE:
+        case JD_EXPRESSION_SWITCH:
+        case JD_EXPRESSION_TERNARY:
+        case JD_EXPRESSION_PUT_STATIC:
+        case JD_EXPRESSION_GET_FIELD:
+        case JD_EXPRESSION_PUT_FIELD:
+        case JD_EXPRESSION_DEFINE_STACK_VAR:
+        case JD_EXPRESSION_STORE:
+        case JD_EXPRESSION_ATHROW:
+        case JD_EXPRESSION_OPERATOR:
+        case JD_EXPRESSION_INSTANCEOF:
+        case JD_EXPRESSION_IINC:
+        case JD_EXPRESSION_CAST:
+        case JD_EXPRESSION_INITIALIZE:
+        case JD_EXPRESSION_ARRAYLENGTH:
+        case JD_EXPRESSION_MONITOR_ENTER:
+        case JD_EXPRESSION_MONITOR_EXIT:
+        case JD_EXPRESSION_STRING_CONCAT: {
+            jd_exp_reader *reader_exp = expression->data;
+            jd_exp_list *list = reader_exp->list;
+            if (list == NULL)
+                return false;
+            for (int i = 0; i < list->len; ++i) {
+                if (expression_contains(&list->args[i], needle))
+                    return true;
+            }
+            return false;
+        }
+        default:
+            return false;
+    }
+}
+
 static bool replace_expression_with_lvalue(jd_exp *exp, int len, jd_exp *args)
 {
     bool replaced = false;
@@ -47,6 +107,8 @@ static bool replace_expression_with_lvalue(jd_exp *exp, int len, jd_exp *args)
         if (exp_is_stack_var(arg)) {
             jd_var *other_var = arg->data;
             if (stack_var == other_var) {
+                if (expression_contains(right, arg))
+                    continue;
                 arg->type = right->type;
                 arg->ins = right->ins;
                 arg->data = right->data;

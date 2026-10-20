@@ -175,6 +175,35 @@ static jd_node* next_written_node(jd_method *m, jd_node *node)
     return NULL;
 }
 
+static bool exp_is_simple_value(jd_exp *exp)
+{
+    switch (exp->type) {
+        case JD_EXPRESSION_LITERAL:
+        case JD_EXPRESSION_STACK_VAR:
+        case JD_EXPRESSION_STACK_VALUE:
+        case JD_EXPRESSION_LVALUE:
+        case JD_EXPRESSION_LOCAL_VARIABLE:
+        case JD_EXPRESSION_CONST:
+        case JD_EXPRESSION_GET_STATIC:
+        case JD_EXPRESSION_GET_FIELD:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static string terminal_text_of_exp(jd_exp *exp)
+{
+    if (!exp_is_return(exp))
+        return NULL;
+    jd_exp_return *ret = exp->data;
+    if (ret->list == NULL || ret->list->len == 0)
+        return (string) "return;";
+    if (!exp_is_simple_value(&ret->list->args[0]))
+        return NULL;
+    return exp_to_s(exp);
+}
+
 static string terminal_text_of_range(jd_method *m, int start_idx, int end_idx)
 {
     jd_exp *terminal = NULL;
@@ -186,10 +215,9 @@ static string terminal_text_of_range(jd_method *m, int start_idx, int end_idx)
             return NULL;
         terminal = exp;
     }
-    if (terminal == NULL ||
-        (!exp_is_return(terminal) && !exp_is_athrow(terminal)))
+    if (terminal == NULL)
         return NULL;
-    return exp_to_s(terminal);
+    return terminal_text_of_exp(terminal);
 }
 
 static string terminal_text_of_node(jd_method *m, jd_node *node)
@@ -202,9 +230,7 @@ static string terminal_text_of_node(jd_method *m, jd_node *node)
         jd_exp *exp = node->data;
         if (exp == NULL || exp_is_nopped(exp) || exp_is_empty(exp))
             return NULL;
-        if (!exp_is_return(exp) && !exp_is_athrow(exp))
-            return NULL;
-        return exp_to_s(exp);
+        return terminal_text_of_exp(exp);
     }
     return NULL;
 }

@@ -1,5 +1,6 @@
 #include "expression_copy_propgation.h"
 #include "expression.h"
+#include "expression_inline.h"
 #include "control_flow.h"
 #include "decompiler/dominator_tree.h"
 
@@ -48,6 +49,8 @@ static bool replace_expression_with_local_variable(jd_exp *expression,
             jd_val *other_val = arg->data;
             jd_var *other_var = other_val->stack_var;
             if (var == other_var) {
+                if (expression_contains(right, arg))
+                    continue;
                 arg->type = right->type;
                 arg->ins = right->ins;
                 arg->data = right->data;

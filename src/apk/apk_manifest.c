@@ -277,8 +277,8 @@ void parse_manifest_binary(FILE *stream, const u1* buffer, size_t buffer_size) {
                         u4 attr_name_idx = read_uint32_le(attr_ptr + 4);
                         u4 attr_raw_idx = read_uint32_le(attr_ptr + 8);
                         u4 attr_val_size = read_uint32_le(attr_ptr + 12);
-                        u1  attr_res0 = attr_ptr[16];
-                        u1  attr_val_type = attr_ptr[17];
+                        u1 attr_res0 = attr_ptr[16];
+                        u1 attr_val_type = attr_ptr[17];
                         u4 attr_val_data = read_uint32_le(attr_ptr + 18);
 
                         const char* attr_name = get_string(&str_table, attr_name_idx);

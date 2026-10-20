@@ -3,6 +3,8 @@
 
 #include "decompiler/structure.h"
 
+bool expression_contains(jd_exp *expression, jd_exp *needle);
+
 bool inline_variables(jd_method *m);
 
 bool inline_variables_v2(jd_method *m);
