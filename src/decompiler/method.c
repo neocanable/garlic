@@ -120,7 +120,11 @@ static void create_method_defination_with_signature(jd_method *m,
     }
     str_concat(list, (")"));
 
-    if (!is_list_empty(exception_types)) {
+    if (m->throws_types != NULL) {
+        str_concat(list, (" throws "));
+        str_concat(list, m->throws_types);
+    }
+    else if (!is_list_empty(exception_types)) {
         str_concat(list, (" throws "));
         for (int i = 0; i < exception_types->size; ++i) {
             field_type_sig *fts = lget_obj(exception_types, i);
@@ -174,6 +178,11 @@ static void create_method_defination_without_signature(jd_method *m,
             str_concat(list, (", "));
     }
     str_concat(list, (")"));
+
+    if (m->throws_types != NULL) {
+        str_concat(list, (" throws "));
+        str_concat(list, m->throws_types);
+    }
 }
 
 string create_method_defination(jd_method *m)

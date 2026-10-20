@@ -126,6 +126,35 @@ string encoded_signature_to_s(jd_meta_dex *meta, encoded_annotation *en_anno)
     return str_join(list);
 }
 
+static string encoded_throws_to_s(jd_meta_dex *meta,
+                                  jsource_file *jf,
+                                  encoded_annotation *en_anno)
+{
+    if (en_anno->size != 1)
+        return NULL;
+    encoded_value *ev = en_anno->elements[0].value;
+
+    if (ev->value_type != kDexAnnotationArray)
+        return NULL;
+
+    encoded_array *ea = (encoded_array *) ev->value;
+    str_list *list = str_list_init();
+    for (int i = 0; i < (int) ea->size; ++i) {
+        encoded_value *v = &ea->values[i];
+        if (v->value_type != kDexAnnotationType)
+            continue;
+        u4 id = 0;
+        for (int j = 0; j < (int) v->value_length; ++j)
+            id = id | (u4) v->value[j] << (j * 8);
+        string desc = dex_str_of_type_id(meta, id);
+        class_import(jf, class_full_name(desc));
+        str_concat(list, class_simple_name(desc));
+    }
+    if (list->count == 0)
+        return NULL;
+    return str_join_with(list, ", ");
+}
+
 string encoded_annotation_to_s(jd_meta_dex *meta, encoded_annotation *ea)
 {
     str_list *list = str_list_init();
@@ -297,6 +326,9 @@ void dex_method_annotation(jd_method *m)
                     string sig = encoded_signature_to_s(meta, ea);
                     m->signature = sig;
                     DEBUG_PRINT("m: %s sig: %s\n", m->name, sig);
+                }
+                else if (STR_EQL(ea_str, "Ldalvik/annotation/Throws;")) {
+                    m->throws_types = encoded_throws_to_s(meta, m->jfile, ea);
                 }
                 continue;
             }

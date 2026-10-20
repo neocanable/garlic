@@ -206,6 +206,159 @@ static void dex_code_item_instruction(jd_method *m, dex_code_item *code)
     }
 }
 
+static bool dex_method_signature_equal(jd_meta_dex *meta,
+                                       dex_method_id *a,
+                                       dex_method_id *b)
+{
+    if (a->name_idx != b->name_idx)
+        return false;
+    dex_proto_id *pa = &meta->proto_ids[a->proto_idx];
+    dex_proto_id *pb = &meta->proto_ids[b->proto_idx];
+    if (pa->return_type_idx != pb->return_type_idx)
+        return false;
+    u4 sa = pa->type_list == NULL ? 0 : pa->type_list->size;
+    u4 sb = pb->type_list == NULL ? 0 : pb->type_list->size;
+    if (sa != sb)
+        return false;
+    for (u4 i = 0; i < sa; ++i) {
+        if (pa->type_list->list[i].type_idx !=
+            pb->type_list->list[i].type_idx)
+            return false;
+    }
+    return true;
+}
+
+static bool dex_ancestor_method_accessible(jd_method *m,
+                                           dex_class_def *ancestor,
+                                           encoded_method *am)
+{
+    if ((am->access_flags & (ACC_DEX_PRIVATE | ACC_DEX_STATIC)) != 0)
+        return false;
+    if (am->access_flags & (ACC_DEX_PUBLIC | ACC_DEX_PROTECTED))
+        return true;
+
+    jd_meta_dex *meta = ((jd_dex *) m->meta)->meta;
+    string desc = dex_str_of_type_id(meta, ancestor->class_idx);
+    string anc_pkg = class_package_name_of(class_full_name(desc));
+    if (anc_pkg == NULL)
+        anc_pkg = (string) g_str_default;
+    string my_pkg = m->jfile->pname;
+    return my_pkg != NULL && STR_EQL(anc_pkg, my_pkg);
+}
+
+static bool dex_class_declares_override(jd_method *m,
+                                        dex_class_def *ancestor,
+                                        dex_method_id *mid)
+{
+    if (ancestor->class_data == NULL)
+        return false;
+    jd_meta_dex *meta = ((jd_dex *) m->meta)->meta;
+    dex_class_data_item *data = ancestor->class_data;
+    encoded_method *lists[2] = {data->virtual_methods, data->direct_methods};
+    u4 sizes[2] = {data->virtual_methods_size, data->direct_methods_size};
+    for (int l = 0; l < 2; ++l) {
+        for (u4 i = 0; i < sizes[l]; ++i) {
+            encoded_method *am = &lists[l][i];
+            dex_method_id *amid = &meta->method_ids[am->method_id];
+            if (!dex_method_signature_equal(meta, amid, mid))
+                continue;
+            if (dex_ancestor_method_accessible(m, ancestor, am))
+                return true;
+        }
+    }
+    return false;
+}
+
+static void dex_push_ancestors(jd_meta_dex *meta,
+                               dex_class_def *cf,
+                               dex_class_def **queue,
+                               int *tail)
+{
+    if (cf->superclass_idx != NO_INDEX) {
+        string desc = dex_str_of_type_id(meta, cf->superclass_idx);
+        dex_class_def *parent = hget_s2o(meta->class_name_map, desc);
+        if (parent != NULL && *tail < 32)
+            queue[(*tail)++] = parent;
+    }
+    if (cf->interfaces == NULL)
+        return;
+    for (u4 i = 0; i < cf->interfaces->size && *tail < 32; ++i) {
+        string desc = dex_str_of_type_id(meta,
+                                         cf->interfaces->list[i].type_idx);
+        dex_class_def *parent = hget_s2o(meta->class_name_map, desc);
+        if (parent != NULL)
+            queue[(*tail)++] = parent;
+    }
+}
+
+static bool dex_method_is_object_override(jd_meta_dex *meta,
+                                          dex_method_id *mid)
+{
+    string name = dex_str_of_idx(meta, mid->name_idx);
+    dex_proto_id *proto = &meta->proto_ids[mid->proto_idx];
+    string ret = dex_str_of_type_id(meta, proto->return_type_idx);
+    u4 count = proto->type_list == NULL ? 0 : proto->type_list->size;
+
+    if (STR_EQL(name, "toString"))
+        return count == 0 && STR_EQL(ret, "Ljava/lang/String;");
+    if (STR_EQL(name, "hashCode"))
+        return count == 0 && STR_EQL(ret, "I");
+    if (STR_EQL(name, "equals"))
+        return count == 1 && STR_EQL(ret, "Z") &&
+               STR_EQL(dex_str_of_type_id(meta,
+                       proto->type_list->list[0].type_idx),
+                       "Ljava/lang/Object;");
+    if (STR_EQL(name, "clone"))
+        return count == 0 && STR_EQL(ret, "Ljava/lang/Object;");
+    if (STR_EQL(name, "finalize"))
+        return count == 0 && STR_EQL(ret, "V");
+    return false;
+}
+
+static bool dex_method_overrides(jd_method *m, encoded_method *em)
+{
+    if ((em->access_flags & (ACC_DEX_PRIVATE | ACC_DEX_STATIC |
+                             ACC_DEX_SYNTHETIC)) != 0)
+        return false;
+
+    jd_dex *dex = m->meta;
+    jd_meta_dex *meta = dex->meta;
+    dex_method_id *mid = &meta->method_ids[em->method_id];
+    string name = dex_str_of_idx(meta, mid->name_idx);
+    if (name == NULL || name[0] == '<')
+        return false;
+
+    dex_class_def *queue[32];
+    dex_class_def *visited[32];
+    int head = 0, tail = 0, visited_count = 0;
+    dex_class_def *cf = (dex_class_def *) m->jfile->jclass;
+    if ((cf->access_flags & ACC_DEX_INTERFACE) == 0 &&
+        dex_method_is_object_override(meta, mid))
+        return true;
+
+    dex_push_ancestors(meta, cf, queue, &tail);
+
+    while (head < tail) {
+        dex_class_def *ancestor = queue[head++];
+        bool seen = false;
+        for (int i = 0; i < visited_count; ++i) {
+            if (visited[i] == ancestor) {
+                seen = true;
+                break;
+            }
+        }
+        if (seen)
+            continue;
+        if (visited_count < 32)
+            visited[visited_count++] = ancestor;
+
+        if (dex_class_declares_override(m, ancestor, mid))
+            return true;
+        dex_push_ancestors(meta, ancestor, queue, &tail);
+    }
+    return false;
+}
+
 void dex_method_init(jsource_file *jf, jd_method *m, encoded_method *em)
 {
     jd_dex *dex = jf->meta;
@@ -220,6 +373,8 @@ void dex_method_init(jsource_file *jf, jd_method *m, encoded_method *em)
     m->fn = dex->method_fn;
 
     dex_method_descriptor(m);
+
+    m->is_override = dex_method_overrides(m, em);
 
     if (em->code == NULL)
         return;

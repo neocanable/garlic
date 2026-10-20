@@ -1,6 +1,7 @@
 #include "expression_goto.h"
 #include "control_flow.h"
 #include "expression_writter.h"
+#include "transformer/transformer.h"
 
 static void goto_to_continue(jd_exp *e)
 {
@@ -123,14 +124,49 @@ static bool goto_target_is_next_node(jd_node *node, int target_idx)
     return next != NULL && next->start_idx == target_idx;
 }
 
-static jd_node* next_written_node(jd_node *node)
+static jd_node* containing_node(jd_method *m, jd_node *node, int *out_index)
+{
+    for (int i = 0; i < m->nodes->size; ++i) {
+        jd_node *n = lget_obj(m->nodes, i);
+        if (n->children == NULL || n == node)
+            continue;
+        int index = lfind_object(n->children, node);
+        if (index >= 0) {
+            if (out_index != NULL)
+                *out_index = index;
+            return n;
+        }
+    }
+    return NULL;
+}
+
+static jd_node* next_written_node(jd_method *m, jd_node *node)
 {
     jd_node *n = node;
-    while (n != NULL && n->parent != NULL) {
-        jd_node *next = parent_next_node(n);
+    while (n != NULL) {
+        int index = -1;
+        jd_node *parent = containing_node(m, n, &index);
+        if (parent == NULL)
+            return NULL;
+
+        jd_node *next = NULL;
+        if (index + 1 < (int) parent->children->size)
+            next = lget_obj(parent->children, index + 1);
+        while (next != NULL &&
+               (next->type == JD_NODE_ELSE ||
+                next->type == JD_NODE_ELSE_IF ||
+                (node_is_exception(parent) && node_is_catch(next)))) {
+            int next_index = lfind_object(parent->children, next);
+            if (next_index < 0 ||
+                next_index + 1 >= (int) parent->children->size) {
+                next = NULL;
+                break;
+            }
+            next = lget_obj(parent->children, next_index + 1);
+        }
         if (next != NULL)
             return next;
-        jd_node *parent = n->parent;
+
         if (node_is_loop(parent) || node_is_switch(parent) ||
             node_is_case(parent))
             return NULL;
@@ -139,11 +175,98 @@ static jd_node* next_written_node(jd_node *node)
     return NULL;
 }
 
-static bool goto_target_is_next_ancestor(jd_node *node, int target_idx)
+static string terminal_text_of_range(jd_method *m, int start_idx, int end_idx)
 {
-    jd_node *next = next_written_node(node);
-    return next != NULL &&
-           next->start_idx <= target_idx && target_idx <= next->end_idx;
+    jd_exp *terminal = NULL;
+    for (int i = start_idx; i <= end_idx; ++i) {
+        jd_exp *exp = get_exp(m, i);
+        if (exp == NULL || exp_is_nopped(exp) || exp_is_empty(exp))
+            continue;
+        if (terminal != NULL)
+            return NULL;
+        terminal = exp;
+    }
+    if (terminal == NULL ||
+        (!exp_is_return(terminal) && !exp_is_athrow(terminal)))
+        return NULL;
+    return exp_to_s(terminal);
+}
+
+static string terminal_text_of_node(jd_method *m, jd_node *node)
+{
+    if (node == NULL)
+        return NULL;
+    if (node_is_basic_block(node))
+        return terminal_text_of_range(m, node->start_idx, node->end_idx);
+    if (node_is_expression(node)) {
+        jd_exp *exp = node->data;
+        if (exp == NULL || exp_is_nopped(exp) || exp_is_empty(exp))
+            return NULL;
+        if (!exp_is_return(exp) && !exp_is_athrow(exp))
+            return NULL;
+        return exp_to_s(exp);
+    }
+    return NULL;
+}
+
+static bool node_has_loop_scope(jd_node *node)
+{
+    for (jd_node *n = node; n != NULL; n = n->parent) {
+        if (node_is_loop(n) || node_is_switch(n) || node_is_case(n))
+            return true;
+    }
+    return false;
+}
+
+static bool goto_target_is_next_ancestor(jd_method *m,
+                                         jd_node *node,
+                                         int target_idx)
+{
+    jd_node *next = next_written_node(m, node);
+    if (next == NULL)
+        return false;
+    if (next->start_idx <= target_idx && target_idx <= next->end_idx)
+        return true;
+
+    if (node_is_finally(next)) {
+        jd_node *after = next_written_node(m, next);
+        if (after != NULL &&
+            after->start_idx <= target_idx && target_idx <= after->end_idx)
+            return true;
+        if (after == NULL && !node_has_loop_scope(node) &&
+            (target_idx > next->end_idx ||
+             (next->start_idx <= target_idx &&
+              target_idx <= next->start_idx + 2)))
+            return true;
+    }
+
+    jd_exp *target = get_exp(m, target_idx);
+    if (target == NULL)
+        return false;
+
+    if (exp_is_nopped(target) || exp_is_empty(target)) {
+        int visible = target_idx;
+        int limit = target_idx + 8;
+        while (visible < m->expressions->size && visible <= limit) {
+            jd_exp *e = get_exp(m, visible);
+            if (e != NULL && !exp_is_nopped(e) && !exp_is_empty(e))
+                break;
+            visible++;
+        }
+        if (visible != target_idx &&
+            visible >= next->start_idx && visible <= next->end_idx)
+            return true;
+    }
+
+    jd_bblock *target_block = target->block;
+    if (target_block == NULL || target_block->ub == NULL ||
+        target_block->ub->nblock == NULL)
+        return false;
+    jd_nblock *nb = target_block->ub->nblock;
+    string target_text = terminal_text_of_range(m, nb->start_idx, nb->end_idx);
+    string next_text = terminal_text_of_node(m, next);
+    return target_text != NULL && next_text != NULL &&
+           STR_EQL(target_text, next_text);
 }
 
 static bool goto_target_is_next_block(jd_method *m,
@@ -200,7 +323,7 @@ static void optimize_goto_in_case(jd_method *m, jd_node *node, int target_idx)
     else if (parent_next == NULL ||
              goto_target_is_next_written(parent_next, target_idx) ||
              goto_target_is_next_node(node, target_idx) ||
-             goto_target_is_next_ancestor(node, target_idx) ||
+             goto_target_is_next_ancestor(m, node, target_idx) ||
              nothing_runs_between(m, exp->idx, target_idx)) {
         DEBUG_GOTO_OPTIMIZE_PRINT("[goto optimized]: %s %d\n",
                                   m->name,
@@ -256,7 +379,7 @@ static void optimize_goto_in_loop(jd_method *m, jd_node *node, int target_idx)
     else if (parent_next == NULL ||
              goto_target_is_next_written(parent_next, target_idx) ||
              goto_target_is_next_node(node, target_idx) ||
-             goto_target_is_next_ancestor(node, target_idx) ||
+             goto_target_is_next_ancestor(m, node, target_idx) ||
              nothing_runs_between(m, exp->idx, target_idx)) {
         DEBUG_GOTO_OPTIMIZE_PRINT("[goto optimized]: %s %d\n",
                                   m->name,
@@ -323,36 +446,6 @@ static jd_node* goto_target_node(jd_method *m, jd_node *node, int *out_idx)
     return found;
 }
 
-static void goto_trace_kept(const char *why, jd_method *m, jd_node *node,
-                            jd_node *parent, jd_node *parent_next,
-                            int target_idx)
-{
-    if (getenv("GARLIC_GOTO_TRACE") == NULL)
-        return;
-
-    jd_exp *exp = get_exp(m, node->end_idx);
-    jd_exp *te = (target_idx >= 0 && target_idx < m->expressions->size)
-                 ? get_exp(m, target_idx) : NULL;
-    jd_exp *ne = (parent_next != NULL && parent_next->start_idx >= 0 &&
-                  parent_next->start_idx < m->expressions->size)
-                 ? get_exp(m, parent_next->start_idx) : NULL;
-    fprintf(stderr,
-            "[garlic] goto kept (%s) %s ins %u: node %d %s [%d..%d], "
-            "parent %s [%d..%d], next %s [%d..%d], target %d exp %d "
-            "| target off %x, next off %x\n",
-            why, m->name, exp->ins->offset,
-            node->node_id, node_name(node), node->start_idx, node->end_idx,
-            parent == NULL ? "null" : node_name(parent),
-            parent == NULL ? -1 : parent->start_idx,
-            parent == NULL ? -1 : parent->end_idx,
-            parent_next == NULL ? "null" : node_name(parent_next),
-            parent_next == NULL ? -1 : parent_next->start_idx,
-            parent_next == NULL ? -1 : parent_next->end_idx,
-            target_idx, exp->idx,
-            te == NULL || te->ins == NULL ? 0 : te->ins->offset,
-            ne == NULL || ne->ins == NULL ? 0 : ne->ins->offset);
-}
-
 static bool optimize_goto_core(jd_method *m, jd_node *node)
 {
     jd_exp *exp = get_exp(m, node->end_idx);
@@ -363,7 +456,6 @@ static bool optimize_goto_core(jd_method *m, jd_node *node)
 
     if (target == NULL) {
         DEBUG_PRINT("[goto] %s %d no target\n", m->name, exp->ins->offset);
-        goto_trace_kept("no target", m, node, parent, parent_next, target_idx);
         return false;
     }
 
@@ -382,7 +474,7 @@ static bool optimize_goto_core(jd_method *m, jd_node *node)
         exp_mark_nopped(exp);
     }
     else if (goto_target_is_next_node(node, target_idx) ||
-             goto_target_is_next_ancestor(node, target_idx)) {
+             goto_target_is_next_ancestor(m, node, target_idx)) {
         DEBUG_GOTO_OPTIMIZE_PRINT("[goto optimized]: %s %d\n",
                                   m->name,
                                   exp->ins->offset);
@@ -391,7 +483,6 @@ static bool optimize_goto_core(jd_method *m, jd_node *node)
     else if (target_idx < exp->idx) {
         DEBUG_PRINT("[goto] %s %d backward target_idx=%d exp_idx=%d\n",
                     m->name, exp->ins->offset, target_idx, exp->idx);
-        goto_trace_kept("backward", m, node, parent, parent_next, target_idx);
     }
     else if (parent_next == NULL ||
              nothing_runs_between(m, exp->idx, target_idx)) {
@@ -403,8 +494,6 @@ static bool optimize_goto_core(jd_method *m, jd_node *node)
     else {
         DEBUG_PRINT("[goto] %s %d forward, next is not the target\n",
                     m->name, exp->ins->offset);
-        goto_trace_kept("forward, next is not the target",
-                        m, node, parent, parent_next, target_idx);
     }
 
     return false;

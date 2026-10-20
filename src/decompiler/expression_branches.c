@@ -1493,6 +1493,427 @@ static void identify_if_and_switch(jd_method *m)
         identify_branches_recursive(m, lget_obj(nodes, i));
 }
 
+static bool expression_reads_var(jd_exp *exp, string name)
+{
+    if (exp == NULL || exp_is_nopped(exp) || exp_is_empty(exp))
+        return false;
+    if (exp_is_store(exp)) {
+        jd_exp_store *store = exp->data;
+        return expression_reads_name(&store->list->args[1], name);
+    }
+    return expression_reads_name(exp, name);
+}
+
+static bool block_stores_var(jd_method *m, jd_node *block_node, string name)
+{
+    for (int i = block_node->start_idx; i <= block_node->end_idx; ++i) {
+        jd_exp *exp = get_exp(m, i);
+        if (exp == NULL || exp_is_nopped(exp) || exp_is_empty(exp))
+            continue;
+        if (!exp_is_store(exp))
+            continue;
+        jd_exp_store *store = exp->data;
+        jd_exp *left = &store->list->args[0];
+        if (!exp_is_local_variable(left))
+            continue;
+        jd_val *val = left->data;
+        if (val != NULL && val->name != NULL && STR_EQL(val->name, name))
+            return true;
+    }
+    return false;
+}
+
+static bool node_in_chain(jd_node **chain, int count, jd_node *node)
+{
+    for (int i = 0; i < count; ++i) {
+        if (node == chain[i])
+            return true;
+        if (node->start_idx >= chain[i]->start_idx &&
+            node->end_idx <= chain[i]->end_idx)
+            return true;
+        if (node_is_ancestor_of(chain[i], node))
+            return true;
+    }
+    return false;
+}
+
+static bool node_is_branch_last(jd_node *node, jd_node *stop)
+{
+    jd_node *n = node;
+    while (n != NULL && n != stop) {
+        jd_node *parent = n->parent;
+        if (parent == NULL || lget_obj_last(parent->children) != n)
+            return false;
+        n = parent;
+    }
+    return n == stop;
+}
+
+static jd_exp* node_condition_expression(jd_node *node)
+{
+    for (int i = 0; i < node->children->size; ++i) {
+        jd_node *child = lget_obj(node->children, i);
+        if (!node_is_expression(child))
+            continue;
+        jd_exp *exp = child->data;
+        if (exp != NULL && exp_is_if(exp) && !exp_is_nopped(exp))
+            return exp;
+    }
+    return NULL;
+}
+
+void hoist_shared_else_block(jd_method *m)
+{
+    int existing = m->nodes->size;
+    for (int i = 0; i < existing; ++i) {
+        jd_node *goto_node = lget_obj(m->nodes, i);
+        if (!node_is_basic_block(goto_node) ||
+            goto_node->type == JD_NODE_DELETED)
+            continue;
+        jd_exp *exp = get_exp(m, goto_node->end_idx);
+        if (exp == NULL || !exp_is_goto(exp) || exp_is_nopped(exp))
+            continue;
+
+        jd_node *if_node = goto_node->parent;
+        while (if_node != NULL && !node_is_if(if_node) &&
+               !node_is_else_if(if_node))
+            if_node = if_node->parent;
+        if (if_node == NULL || if_node->parent == NULL)
+            continue;
+        if (!node_is_branch_last(goto_node, if_node))
+            continue;
+
+        jd_node *parent = if_node->parent;
+        int index = lfind_object(parent->children, if_node);
+        if (index < 0)
+            continue;
+        int head_index = index;
+        while (head_index > 0) {
+            jd_node *cur = lget_obj(parent->children, head_index);
+            jd_node *prev = lget_obj(parent->children, head_index - 1);
+            if (cur->type == JD_NODE_ELSE_IF &&
+                (prev->type == JD_NODE_ELSE_IF || prev->type == JD_NODE_IF))
+                head_index--;
+            else
+                break;
+        }
+        jd_node *head = lget_obj(parent->children, head_index);
+        if (head->type != JD_NODE_IF)
+            continue;
+
+        int chain_end = head_index;
+        while (chain_end + 1 < (int) parent->children->size) {
+            jd_node *next = lget_obj(parent->children, chain_end + 1);
+            if (next->type == JD_NODE_ELSE_IF ||
+                next->type == JD_NODE_ELSE)
+                chain_end++;
+            else
+                break;
+        }
+        if (chain_end + 1 >= (int) parent->children->size)
+            continue;
+        jd_node *target_block_node = lget_obj(parent->children, chain_end + 1);
+        if (target_block_node->type != JD_NODE_BASIC_BLOCK ||
+            target_block_node->data == NULL)
+            continue;
+
+        jd_exp_goto *goto_data = exp->data;
+        jd_exp *goto_target = exp_of_offset(m, goto_data->goto_offset);
+        if (goto_target == NULL ||
+            goto_target->idx != target_block_node->end_idx + 1)
+            continue;
+
+        jd_node *chain[16];
+        int chain_count = chain_end - head_index + 1;
+        if (chain_count > 16)
+            continue;
+        for (int j = 0; j < chain_count; ++j)
+            chain[j] = lget_obj(parent->children, head_index + j);
+
+        string names[8];
+        int name_count = 0;
+        bool simple = true;
+        for (int j = target_block_node->start_idx;
+             j <= target_block_node->end_idx; ++j) {
+            jd_exp *e = get_exp(m, j);
+            if (e == NULL || exp_is_nopped(e) || exp_is_empty(e))
+                continue;
+            if (!exp_is_store(e)) {
+                simple = false;
+                break;
+            }
+            jd_exp_store *store = e->data;
+            jd_exp *left = &store->list->args[0];
+            jd_exp *right = &store->list->args[1];
+            if (!exp_is_local_variable(left) || !exp_is_const(right) ||
+                name_count >= 8) {
+                simple = false;
+                break;
+            }
+            jd_val *val = left->data;
+            if (val == NULL || val->name == NULL) {
+                simple = false;
+                break;
+            }
+            names[name_count++] = val->name;
+        }
+        if (!simple || name_count == 0)
+            continue;
+
+        bool safe = true;
+        for (int j = 0; j < chain_count && safe; ++j) {
+            if (chain[j]->type == JD_NODE_ELSE)
+                continue;
+            jd_exp *condition_if = node_condition_expression(chain[j]);
+            if (condition_if == NULL) {
+                safe = false;
+                break;
+            }
+            jd_exp_if *condition_data = condition_if->data;
+            for (int k = 0; k < name_count; ++k) {
+                if (expression_reads_name(condition_data->expression,
+                                          names[k])) {
+                    safe = false;
+                    break;
+                }
+            }
+        }
+        if (!safe)
+            continue;
+
+        int node_count = m->nodes->size;
+        for (int j = 0; j < node_count && safe; ++j) {
+            jd_node *block_node = lget_obj(m->nodes, j);
+            if (!node_is_basic_block(block_node) ||
+                block_node->type == JD_NODE_DELETED)
+                continue;
+            if (!node_in_chain(chain, chain_count, block_node))
+                continue;
+
+            for (int k = block_node->start_idx;
+                 k <= block_node->end_idx && safe; ++k) {
+                jd_exp *e = get_exp(m, k);
+                for (int n = 0; n < name_count; ++n) {
+                    if (expression_reads_var(e, names[n])) {
+                        safe = false;
+                        break;
+                    }
+                }
+            }
+            if (!safe)
+                break;
+
+            bool covered = true;
+            for (int n = 0; n < name_count; ++n) {
+                if (!block_stores_var(m, block_node, names[n])) {
+                    covered = false;
+                    break;
+                }
+            }
+
+            jd_exp *end = get_exp(m, block_node->end_idx);
+            if (end != NULL && exp_is_goto(end)) {
+                jd_exp_goto *ge = end->data;
+                jd_exp *t = exp_of_offset(m, ge->goto_offset);
+                if (t == NULL) {
+                    safe = false;
+                    break;
+                }
+                if (t->idx != target_block_node->start_idx &&
+                    t->idx != target_block_node->end_idx + 1) {
+                    safe = false;
+                    break;
+                }
+            }
+
+            jd_bblock *B_block = target_block_node->data;
+            jd_bblock *block = block_node->data;
+            if (block != NULL) {
+                for (int e = 0; e < block->out->size; ++e) {
+                    jd_edge *edge = lget_obj(block->out, e);
+                    jd_bblock *target = edge->target_block;
+                    if (target == B_block) {
+                        if (covered) {
+                            safe = false;
+                            break;
+                        }
+                    }
+                    else if (target != NULL && target->node != NULL &&
+                             !node_in_chain(chain, chain_count,
+                                            target->node) &&
+                             !covered) {
+                        safe = false;
+                        break;
+                    }
+                }
+            }
+            if (!safe)
+                break;
+        }
+        if (!safe)
+            continue;
+
+        ldel_obj(parent->children, target_block_node);
+        int head_pos = lfind_object(parent->children, head);
+        if (head_pos < 0)
+            continue;
+        ladd_obj_at(parent->children, target_block_node, (size_t) head_pos);
+        target_block_node->parent = parent;
+
+        for (int j = 0; j < node_count; ++j) {
+            jd_node *block_node = lget_obj(m->nodes, j);
+            if (!node_is_basic_block(block_node) ||
+                block_node->type == JD_NODE_DELETED)
+                continue;
+            if (!node_in_chain(chain, chain_count, block_node))
+                continue;
+            jd_node *owner = NULL;
+            for (int c = 0; c < chain_count; ++c) {
+                if (block_node == chain[c] ||
+                    node_is_ancestor_of(chain[c], block_node)) {
+                    owner = chain[c];
+                    break;
+                }
+            }
+            if (owner == NULL || !node_is_branch_last(block_node, owner))
+                continue;
+            jd_exp *end = get_exp(m, block_node->end_idx);
+            if (end == NULL || !exp_is_goto(end) || exp_is_nopped(end))
+                continue;
+            jd_exp_goto *ge = end->data;
+            jd_exp *t = exp_of_offset(m, ge->goto_offset);
+            if (t != NULL && (t->idx == target_block_node->start_idx ||
+                              t->idx == target_block_node->end_idx + 1))
+                exp_mark_nopped(end);
+        }
+    }
+}
+
+void unwrap_if_branch_nodes(jd_method *m)
+{
+    int count = m->nodes->size;
+    for (int i = 0; i < count; ++i) {
+        jd_node *node = lget_obj(m->nodes, i);
+        if (node->type != JD_NODE_IF_TRUE &&
+            node->type != JD_NODE_IF_FALSE)
+            continue;
+        jd_node *parent = node->parent;
+        if (parent == NULL || parent->children == NULL)
+            continue;
+        int index = lfind_object(parent->children, node);
+        if (index < 0)
+            continue;
+
+        ldel_obj(parent->children, node);
+        for (int j = 0; j < node->children->size; ++j) {
+            jd_node *child = lget_obj(node->children, j);
+            ladd_obj_at(parent->children, child, (size_t) index + j);
+            child->parent = parent;
+        }
+        node->type = JD_NODE_DELETED;
+        node->children->size = 0;
+    }
+}
+
+static bool node_in_switch_case(jd_node *case_node, jd_node *block_node)
+{
+    if (block_node == case_node)
+        return true;
+    if (node_is_ancestor_of(case_node, block_node))
+        return true;
+    return block_node->start_idx >= case_node->start_idx &&
+           block_node->end_idx <= case_node->end_idx;
+}
+
+static void move_switch_shared_tail(jd_method *m)
+{
+    int count = m->nodes->size;
+    for (int i = 0; i < count; ++i) {
+        jd_node *switch_node = lget_obj(m->nodes, i);
+        if (!node_is_switch(switch_node) ||
+            switch_node->type == JD_NODE_DELETED)
+            continue;
+        if (switch_node->parent == NULL || switch_node->children->size < 2)
+            continue;
+
+        jd_node *tail = NULL;
+        for (int j = switch_node->children->size - 1; j >= 0; --j) {
+            jd_node *child = lget_obj(switch_node->children, j);
+            if (child->type == JD_NODE_CASE) {
+                tail = child;
+                break;
+            }
+        }
+        if (tail == NULL || tail->children->size == 0)
+            continue;
+
+        jd_node *gotos[64];
+        int goto_count = 0;
+        bool shared = false;
+        bool too_many = false;
+        for (int j = 0; j < count; ++j) {
+            jd_node *block_node = lget_obj(m->nodes, j);
+            if (!node_is_basic_block(block_node) ||
+                block_node->type == JD_NODE_DELETED)
+                continue;
+            jd_node *owner = NULL;
+            for (int k = 0; k < switch_node->children->size; ++k) {
+                jd_node *c = lget_obj(switch_node->children, k);
+                if (c == tail || c->type != JD_NODE_CASE)
+                    continue;
+                if (node_in_switch_case(c, block_node)) {
+                    owner = c;
+                    break;
+                }
+            }
+            if (owner == NULL)
+                continue;
+            jd_exp *end = get_exp(m, block_node->end_idx);
+            if (end == NULL || !exp_is_goto(end) || exp_is_nopped(end))
+                continue;
+            jd_exp_goto *ge = end->data;
+            jd_exp *target = exp_of_offset(m, ge->goto_offset);
+            if (target == NULL ||
+                target->idx < tail->start_idx ||
+                target->idx > tail->end_idx)
+                continue;
+            if (!node_is_branch_last(block_node, owner)) {
+                too_many = true;
+                break;
+            }
+            gotos[goto_count] = block_node;
+            goto_count++;
+            if (goto_count >= 64) {
+                too_many = true;
+                break;
+            }
+            shared = true;
+        }
+        if (!shared || too_many || goto_count == 0)
+            continue;
+
+        jd_node *parent = switch_node->parent;
+        int index = lfind_object(parent->children, switch_node);
+        if (index < 0)
+            continue;
+
+        int moved = 0;
+        while (tail->children->size > 0) {
+            jd_node *child = lget_obj(tail->children, 0);
+            ldel_obj(tail->children, child);
+            ladd_obj_at(parent->children, child, (size_t) index + 1 + moved);
+            child->parent = parent;
+            moved++;
+        }
+
+        for (int j = 0; j < goto_count; ++j) {
+            jd_exp *end = get_exp(m, gotos[j]->end_idx);
+            if (end != NULL)
+                end->type = JD_EXPRESSION_BREAK;
+        }
+    }
+}
+
 void identify_branches(jd_method *m)
 {
     identify_if_and_switch(m);
@@ -1504,6 +1925,8 @@ void identify_branches(jd_method *m)
     identify_else_of_method(m);
 
     remove_single_node_of_if_branch(m);
+
+    move_switch_shared_tail(m);
 }
 
 

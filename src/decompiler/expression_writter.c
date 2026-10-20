@@ -623,6 +623,8 @@ static void write_method(FILE *stream, jsource_file *jf, jd_node *node)
         return;
 
     write_method_annotation(jf, node);
+    if (m->is_override)
+        fprintf(stream, "%s@Override\n", ident);
     if (method_is_empty(m)) {
         fprintf(stream, "%s%s;\n\n", ident,
                 create_method_defination(m));

@@ -898,6 +898,10 @@ struct jd_method {
 
     string          signature;
 
+    string          throws_types;
+
+    bool            is_override;
+
     string          defination;
 
     jd_descriptor   *desc;

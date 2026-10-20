@@ -10,6 +10,8 @@
 #include "jvm_optimizer.h"
 #include "jvm/jvm_exception.h"
 #include "jvm/jvm_annotation.h"
+#include "common/str_tools.h"
+#include "decompiler/klass.h"
 #include "jvm/jvm_descriptor.h"
 
 void jvm_method_access_flags(jd_method *m, str_list *list) {
@@ -456,6 +458,33 @@ static void init_jvm_instruction_graph(jd_method *m)
     }
 }
 
+static string jvm_method_throws(jclass_file *jc, jmethod *item)
+{
+    int count = be16toh(item->attributes_count);
+    for (int i = 0; i < count; ++i) {
+        jattr *attr = &item->attributes[i];
+        if (attr == NULL || attr->name == NULL ||
+            !STR_EQL(attr->name, "Exceptions"))
+            continue;
+        jattr_exception *ex = (jattr_exception *) attr->info;
+        if (ex == NULL)
+            return NULL;
+        int n = be16toh(ex->number_of_exceptions);
+        str_list *list = str_list_init();
+        for (int j = 0; j < n; ++j) {
+            string cname = pool_str(jc, ex->exception_index_table[j]);
+            if (cname != NULL) {
+                class_import(jc->jfile, cname);
+                str_concat(list, class_simple_name(cname));
+            }
+        }
+        if (list->count == 0)
+            return NULL;
+        return str_join_with(list, ", ");
+    }
+    return NULL;
+}
+
 void jvm_method_init(jclass_file *jc, jd_method *m, jmethod *item)
 {
     jsource_file *jf = jc->jfile;
@@ -468,6 +497,7 @@ void jvm_method_init(jclass_file *jc, jd_method *m, jmethod *item)
     m->desc = descriptor;
     m->meta_method = item;
     m->type = JD_TYPE_JVM;
+    m->throws_types = jvm_method_throws(jc, item);
     m->fn = jf->method_fn;
 
     jattr_code *code_attribute = item->code_attribute;

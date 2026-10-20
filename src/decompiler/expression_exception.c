@@ -87,6 +87,57 @@ static void collect_normal_reachable(jd_bblock *block, list_object *seen)
     }
 }
 
+static void sort_part_children(jd_node *part)
+{
+    if (part->children == NULL || part->children->size < 2)
+        return;
+
+    list_object *groups = linit_object();
+    list_object *group = NULL;
+    for (int i = 0; i < part->children->size; ++i) {
+        jd_node *child = lget_obj(part->children, i);
+        if ((node_is_else(child) || node_is_else_if(child)) &&
+            group != NULL) {
+            ladd_obj(group, child);
+        }
+        else {
+            group = linit_object();
+            ladd_obj(group, child);
+            ladd_obj(groups, group);
+        }
+    }
+
+    for (int i = 0; i < groups->size; ++i) {
+        for (int j = 0; j + 1 < groups->size - i; ++j) {
+            list_object *g1 = lget_obj(groups, j);
+            list_object *g2 = lget_obj(groups, j + 1);
+            jd_node *n1 = lget_obj_first(g1);
+            jd_node *n2 = lget_obj_first(g2);
+            if (n1->start_idx > n2->start_idx)
+                lswap_obj(groups, j, j + 1);
+        }
+    }
+
+    list_object *ordered = linit_object();
+    for (int i = 0; i < groups->size; ++i) {
+        list_object *g = lget_obj(groups, i);
+        for (int j = 0; j < g->size; ++j)
+            ladd_obj(ordered, lget_obj(g, j));
+    }
+
+    for (int i = 0; i < ordered->size; ++i) {
+        jd_node *want = lget_obj(ordered, i);
+        if (lget_obj(part->children, i) == want)
+            continue;
+        for (int j = i + 1; j < part->children->size; ++j) {
+            if (lget_obj(part->children, j) == want) {
+                lswap_obj(part->children, i, j);
+                break;
+            }
+        }
+    }
+}
+
 static void move_handler_block_to_catch(jd_method *m, jd_node *node,
                                         jd_node *catch_node)
 {
@@ -116,38 +167,52 @@ void fix_exception_handler_blocks(jd_method *m)
         jd_node *exception = lget_obj(m->nodes, i);
         if (!node_is_exception(exception))
             continue;
+        for (int j = 0; j < exception->children->size; ++j) {
+            jd_node *part = lget_obj(exception->children, j);
+            if ((node_is_try(part) || node_is_catch(part) ||
+                 node_is_finally(part)) && part->children != NULL)
+                sort_part_children(part);
+        }
         jd_node *try_node = child_of_type(exception, JD_NODE_TRY);
-        jd_node *catch_node = child_of_type(exception, JD_NODE_CATCH);
-        if (try_node == NULL || catch_node == NULL)
+        if (try_node == NULL)
             continue;
 
-        jd_node *handler = find_block_containing(try_node,
-                                                 catch_node->start_idx);
-        if (handler == NULL)
-            continue;   // handler already lives under the catch node
-
-        list_object *reachable = linit_object();
-        collect_normal_reachable(handler->data, reachable);
-
-        for (int j = 0; j < try_node->children->size; ++j) {
-            jd_node *child = lget_obj(try_node->children, j);
-            if (node_is_basic_block(child) &&
-                lcontains_obj(reachable, child->data))
-                move_handler_block_to_catch(m, child, catch_node);
-        }
-
-        for (int j = 0; j < catch_node->children->size; ++j) {
-            jd_node *child = lget_obj(catch_node->children, j);
-            if (!node_is_basic_block(child))
+        for (int j = 0; j < exception->children->size; ++j) {
+            jd_node *catch_node = lget_obj(exception->children, j);
+            if (!node_is_catch(catch_node))
                 continue;
-            jd_bblock *block = child->data;
-            if (block == NULL || block->ub == NULL || block->ub->nblock == NULL)
-                continue;
-            if (child->start_idx > try_node->end_idx &&
-                !lcontains_obj(reachable, block)) {
-                ldel_obj(catch_node->children, child);
-                ladd_obj(try_node->children, child);
-                child->parent = try_node;
+
+            jd_node *handler = find_block_containing(try_node,
+                                                     catch_node->start_idx);
+            if (handler == NULL)
+                continue;   // handler already lives under the catch node
+
+            list_object *reachable = linit_object();
+            collect_normal_reachable(handler->data, reachable);
+
+            for (int k = 0; k < try_node->children->size; ++k) {
+                jd_node *child = lget_obj(try_node->children, k);
+                if (node_is_basic_block(child) &&
+                    lcontains_obj(reachable, child->data)) {
+                    move_handler_block_to_catch(m, child, catch_node);
+                    k--;
+                }
+            }
+
+            for (int k = 0; k < catch_node->children->size; ++k) {
+                jd_node *child = lget_obj(catch_node->children, k);
+                if (!node_is_basic_block(child))
+                    continue;
+                jd_bblock *block = child->data;
+                if (block == NULL || block->ub == NULL ||
+                    block->ub->nblock == NULL)
+                    continue;
+                if (child->start_idx > try_node->end_idx &&
+                    !lcontains_obj(reachable, block)) {
+                    ldel_obj(catch_node->children, child);
+                    ladd_obj(try_node->children, child);
+                    child->parent = try_node;
+                }
             }
         }
     }
