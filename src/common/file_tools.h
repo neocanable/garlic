@@ -25,7 +25,14 @@ static inline void make_dir(const char *dir)
     size_t len;
 
     snprintf(tmp, sizeof(tmp),"%s",dir);
+#ifdef _WIN32
+    for (p = tmp; *p; p++)
+        if (*p == '\\')
+            *p = '/';
+#endif
     len = strlen(tmp);
+    if (len == 0)
+        return;
     if (tmp[len - 1] == '/')
         tmp[len - 1] = 0;
     for (p = tmp + 1; *p; p++)

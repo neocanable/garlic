@@ -333,6 +333,22 @@ int identify_synchronized(jd_method *m)
         sync_dump_nodes(m, "before");
 
         jd_node *try = child_of_type(node, JD_NODE_TRY);
+        list_object *nested = linit_object();
+        for (int k = 0; k < finally->children->size; ++k) {
+            jd_node *child = lget_obj(finally->children, k);
+            if (!node_is_exception(child))
+                continue;
+            bool live = false;
+            for (int x = child->start_idx; x <= child->end_idx; ++x) {
+                jd_ins *ins = get_ins(m, x);
+                if (ins != NULL && !ins_is_nopped(ins)) {
+                    live = true;
+                    break;
+                }
+            }
+            if (live && child_of_type(child, JD_NODE_CATCH) != NULL)
+                ladd_obj(nested, child);
+        }
         ldel_obj(node->children, finally);
 
         nop_monitor_exit_recursive(m, try);
@@ -350,6 +366,12 @@ int identify_synchronized(jd_method *m)
 
         if (keeps_catch) {
             node->type = JD_NODE_SYNCHRONIZED;
+            for (int k = 0; k < nested->size; ++k) {
+                jd_node *child = lget_obj(nested, k);
+                ldel_obj(finally->children, child);
+                child->parent = node;
+                ladd_obj(node->children, child);
+            }
         }
         else {
             jd_node *parent = node->parent;
@@ -358,6 +380,12 @@ int identify_synchronized(jd_method *m)
             ldel_obj(parent->children, node);
             try->parent = parent;
             try->type = JD_NODE_SYNCHRONIZED;
+            for (int k = 0; k < nested->size; ++k) {
+                jd_node *child = lget_obj(nested, k);
+                ldel_obj(finally->children, child);
+                child->parent = try;
+                ladd_obj(try->children, child);
+            }
             ldel_obj(m->nodes, node);
             i--;
         }

@@ -7,6 +7,7 @@
 #include "decompiler/method.h"
 #include "decompiler/control_flow.h"
 #include "dex_pre_optimizer.h"
+#include "dalvik/dex_cfg_opt.h"
 
 static jd_dex_ins *try_item_end_ins(jd_method *m, dex_try_item *try)
 {
@@ -120,6 +121,8 @@ void dex_method_exception_edge(jd_method *m)
 
     cfg_create(m);
 
+    optimize_exception_cfg(m);
+
     if (m->cfg_exceptions == NULL ||
         m->cfg_exceptions->size == 0) {
         m->mix_exceptions = linit_object();
@@ -141,4 +144,5 @@ void dex_method_exception_edge(jd_method *m)
     identify_finally_excpetion_handler_block_end(m);
 
     flatten_exceptions(m);
+
 }

@@ -65,6 +65,7 @@ static inline string node_name(jd_node *node) {
         case JD_NODE_SWITCH:       return "switch";
         case JD_NODE_CASE:         return "case";
         case JD_NODE_SYNCHRONIZED: return "synchronized";
+        case JD_NODE_TRY_RESOURCES: return "try";
         case JD_NODE_IF:           return "if";
         case JD_NODE_ELSE_IF:      return "else if";
         case JD_NODE_ELSE:         return "else";

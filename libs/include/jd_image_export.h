@@ -13,7 +13,7 @@
  *  使用方（Thyme 的 garlic_bridge）dlopen 本库之后照常按名字取函数即可。
  *
  *  典型用法：
- *      jd_elf *elf = jd_analysis_macho_from_path("/path/libfoo.dylib");
+ *      jd_native *elf = jd_analysis_macho_from_path("/path/libfoo.dylib");
  *      if (elf) {
  *          unsigned long long base = jd_image_base(elf);   // Mach-O 才有意义
  *          size_t n = jd_image_segment_count(elf);
@@ -25,7 +25,7 @@
  *      }
  *
  *  所有字符串都由库持有，在 elf 句柄存活期间一直有效 —— 不要 free，也不要
- *  在 jd_elf_release() 之后再使用。
+ *  在 jd_native_release() 之后再使用。
  * ============================================================================
  */
 
@@ -40,7 +40,7 @@ extern "C" {
 #endif
 
 /* 不透明句柄：使用方不需要知道内部结构 */
-struct jd_elf;
+struct jd_native;
 struct jd_image;
 
 /* ---- 容器 / 架构 -------------------------------------------------- */
@@ -55,6 +55,8 @@ struct jd_image;
 #define JD_IMG_ISA_T32     1
 #define JD_IMG_ISA_A32     2
 #define JD_IMG_ISA_A64     3
+#define JD_IMG_ISA_X64     4
+#define JD_IMG_ISA_X86     5   /* 32 位 x86（i386） */
 #endif
 
 /* 段权限（已统一成 ELF 的 PF_ 位序） */
@@ -157,44 +159,44 @@ typedef struct {
  * **下面所有地址都是归一化之后的**。要还原成 Mach-O 的真实地址，把 base
  * 加回去。ELF 恒为 0。
  */
-ROSEMARY_API unsigned long long jd_image_base(struct jd_elf *elf);
+ROSEMARY_API unsigned long long jd_image_base(struct jd_native *native);
 
-ROSEMARY_API unsigned jd_image_format(struct jd_elf *elf);   /* JD_IMG_FMT_* */
-ROSEMARY_API unsigned jd_image_isa(struct jd_elf *elf);      /* JD_IMG_ISA_* */
+ROSEMARY_API unsigned jd_image_format(struct jd_native *native);   /* JD_IMG_FMT_* */
+ROSEMARY_API unsigned jd_image_isa(struct jd_native *native);      /* JD_IMG_ISA_* */
 
 /* 段 */
-ROSEMARY_API size_t jd_image_segment_count(struct jd_elf *elf);
-ROSEMARY_API int    jd_image_get_segment(struct jd_elf *elf, size_t index,
-                                        jd_image_segment_info *out);
+ROSEMARY_API size_t jd_image_segment_count(struct jd_native *native);
+ROSEMARY_API int    jd_image_get_segment(struct jd_native *native, size_t index,
+                                         jd_image_segment_info *out);
 
 /* 节 */
-ROSEMARY_API size_t jd_image_section_count(struct jd_elf *elf);
-ROSEMARY_API int    jd_image_get_section(struct jd_elf *elf, size_t index,
-                                        jd_image_section_info *out);
+ROSEMARY_API size_t jd_image_section_count(struct jd_native *native);
+ROSEMARY_API int    jd_image_get_section(struct jd_native *native, size_t index,
+                                         jd_image_section_info *out);
 
 /* 按 (段名, 节名) 查节；某个名字传 NULL 表示不限定。命中返回 1 并填 out */
-ROSEMARY_API int jd_image_find_section(struct jd_elf *elf,
+ROSEMARY_API int jd_image_find_section(struct jd_native *native,
                                        const char *seg_name, const char *sect_name,
                                        jd_image_section_info *out);
 
 /* 符号 */
-ROSEMARY_API size_t jd_image_symbol_count(struct jd_elf *elf);
-ROSEMARY_API int    jd_image_get_symbol(struct jd_elf *elf, size_t index,
-                                       jd_image_symbol_info *out);
+ROSEMARY_API size_t jd_image_symbol_count(struct jd_native *native);
+ROSEMARY_API int    jd_image_get_symbol(struct jd_native *native, size_t index,
+                                        jd_image_symbol_info *out);
 
 /* 重定位 / 导入（同一张表；用 flags 的 JD_IMG_RELOC_IMPORT 位筛导入） */
-ROSEMARY_API size_t jd_image_reloc_count(struct jd_elf *elf);
-ROSEMARY_API int    jd_image_get_reloc(struct jd_elf *elf, size_t index,
-                                      jd_image_reloc_info *out);
+ROSEMARY_API size_t jd_image_reloc_count(struct jd_native *native);
+ROSEMARY_API int    jd_image_get_reloc(struct jd_native *native, size_t index,
+                                       jd_image_reloc_info *out);
 
 /* 容器给出的入口点（不含 PLT 扫描、序言扫描那些启发式结果） */
-ROSEMARY_API size_t jd_image_entry_count(struct jd_elf *elf);
-ROSEMARY_API int    jd_image_get_entry(struct jd_elf *elf, size_t index,
-                                      jd_image_entry_info *out);
+ROSEMARY_API size_t jd_image_entry_count(struct jd_native *native);
+ROSEMARY_API int    jd_image_get_entry(struct jd_native *native, size_t index,
+                                       jd_image_entry_info *out);
 
 /* 依赖库。index 0 是主二进制自身，1 起对应 Mach-O 的 lib_ordinal */
-ROSEMARY_API size_t      jd_image_dylib_count(struct jd_elf *elf);
-ROSEMARY_API const char* jd_image_get_dylib(struct jd_elf *elf, size_t index);
+ROSEMARY_API size_t      jd_image_dylib_count(struct jd_native *native);
+ROSEMARY_API const char* jd_image_get_dylib(struct jd_native *native, size_t index);
 
 #ifdef __cplusplus
 }

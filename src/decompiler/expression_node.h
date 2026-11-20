@@ -7,6 +7,8 @@
 
 jd_node* create_expression_node(jd_method *m, jd_exp *exp);
 
+jd_node* create_new_node(jd_method *m, jd_node_type type, int start, int end);
+
 void create_node_tree(jd_method *m);
 
 void expand_suffix_copy_nodes(jd_method *m);

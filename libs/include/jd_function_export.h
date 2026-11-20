@@ -52,7 +52,7 @@ extern "C" {
 #endif
 
 /* 不透明句柄：使用方不需要知道内部结构 */
-struct jd_elf;
+struct jd_native;
 
 /* ---- 返回值 -------------------------------------------------------- */
 
@@ -131,15 +131,15 @@ typedef struct {
  * 成功返回 JD_FUNC_OK 并填 out；失败返回负的错误码，out 不动。
  * 成功的那些调用**允许重复**（同一个 pc 反复调是幂等的）。
  */
-ROSEMARY_API int jd_analysis_function_at(struct jd_elf *elf, unsigned long long pc,
+ROSEMARY_API int jd_analysis_function_at(struct jd_native *elf, unsigned long long pc,
                                          jd_function_info *out);
 
 /* 第 index 个基本块。越界返回 0 */
-ROSEMARY_API int jd_function_bb_at(struct jd_elf *elf, unsigned long long func_pc,
+ROSEMARY_API int jd_function_bb_at(struct jd_native *elf, unsigned long long func_pc,
                                    unsigned index, jd_function_bb_info *out);
 
 /* 第 index 张跳转表。越界返回 0 */
-ROSEMARY_API int jd_function_jt_at(struct jd_elf *elf, unsigned long long func_pc,
+ROSEMARY_API int jd_function_jt_at(struct jd_native *elf, unsigned long long func_pc,
                                    unsigned index, jd_function_jt_info *out);
 
 /*
@@ -149,7 +149,7 @@ ROSEMARY_API int jd_function_jt_at(struct jd_elf *elf, unsigned long long func_p
  * （1 = ins_bitmap 里有它，0 = 没有 —— 后者说明这次分析没能覆盖到那儿）。
  * 两个出参都可空。越界或该表 valid 为 0 返回 0。
  */
-ROSEMARY_API int jd_function_jt_case_at(struct jd_elf *elf, unsigned long long func_pc,
+ROSEMARY_API int jd_function_jt_case_at(struct jd_native *elf, unsigned long long func_pc,
                                         unsigned jt_index, unsigned case_index,
                                         unsigned long long *out_target,
                                         int *out_decoded);
@@ -158,7 +158,7 @@ ROSEMARY_API int jd_function_jt_case_at(struct jd_elf *elf, unsigned long long f
  * 第 index 张表的 default 目标。语义同 jd_function_jt_case_at。
  * 该表没有 default（或 valid 为 0）返回 0。
  */
-ROSEMARY_API int jd_function_jt_default_at(struct jd_elf *elf, unsigned long long func_pc,
+ROSEMARY_API int jd_function_jt_default_at(struct jd_native *elf, unsigned long long func_pc,
                                            unsigned jt_index,
                                            unsigned long long *out_target,
                                            int *out_decoded);

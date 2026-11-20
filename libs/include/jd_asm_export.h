@@ -45,11 +45,17 @@ extern "C" {
 /* ---------------------------------------------------------------------------
  *  ISA
  * ------------------------------------------------------------------------- */
+/*
+ * 和内部的 jd_isa（jd_arm_disassembler.h）**逐值对应**，两边必须同步改。
+ * 只往末尾追加：这是对外的稳定 ABI，中间插值会让老的使用方错位。
+ */
 typedef enum {
     JD_ISA_UNKNOWN = 0,
     JD_ISA_T32     = 1,     /* Thumb-2 */
     JD_ISA_A32     = 2,     /* ARM (AArch32) */
     JD_ISA_A64     = 3,     /* AArch64 */
+    JD_ISA_X64     = 4,     /* x86-64 (Intel/AMD) */
+    JD_ISA_X86     = 5,     /* 32 位 x86 (i386) */
 } jd_isa_t;
 
 /*
@@ -61,13 +67,22 @@ typedef enum {
  */
 typedef struct {
     uint64_t pc;            /* 指令地址 */
-    uint32_t code;          /* 原始 32 位指令字 */
+    uint32_t code;          /* ARM：整条指令的编码；x86：前 4 字节的小端视图 */
     uint32_t isa;           /* jd_isa_t */
     uint16_t tpl_index;     /* 模板下标，喂回 jd_arm_disasm 用 */
     uint16_t flags;         /* JD_ASM_INS_F_* */
+    /*
+     * 指令占用的字节数。x86 是变长（1..15），使用方没有它就没法在 .asmbin
+     * 上步进；ARM 写 2 或 4，两者都写在原本的尾部补齐里，结构体仍是 24 字节。
+     *
+     * **0 表示没写**：这是给旧 .asmbin 留的余地（旧 dumper 的补齐是 memset
+     * 出来的零）。这时使用方按 ISA 退回 2/4，x86 则需要自己解长度。
+     */
+    uint8_t len;
+    uint8_t reserved[3];
 } jd_asm_ins;
 
-#define JD_ASM_INS_F_16BIT  0x01    /* T32 16 位指令 */
+#define JD_ASM_INS_F_16BIT  0x01    /* T32 16 位指令（x86 不用这一位） */
 #define JD_ASM_INS_F_INVALID 0x02   /* dump 时就没解析出叶子模板，tpl_index 不可用 */
 
 /* ---------------------------------------------------------------------------
@@ -282,6 +297,21 @@ ROSEMARY_API size_t jd_arm_disasm_many(const jd_asm_ins *ins, size_t count,
 ROSEMARY_API int jd_arm_disasm_text(const jd_asm_ins *ins, char *out, size_t cap);
 
 /*
+ * x86 / x86-64 的文本渲染。
+ *
+ * 不能走 jd_arm_disasm_text：x86 是 1~15 字节变长，光凭 ins->code（前 4 字节）
+ * 解不出来，整条指令的字节要从镜像里按 pc 取出来一起传进来。使用方手里有
+ * 文件映射（Thyme 的 disasm_render 就是），传 avail 个字节即可，内部只用
+ * 前 15 个。
+ *
+ * isa 取 JD_ISA_X64 或 JD_ISA_X86（后者按 32 位模式解）。
+ * 成功返回指令长度并渲染到 out（总是 NUL 结尾）；解不出来返回 0。
+ */
+ROSEMARY_API int jd_x86_disasm_text(uint32_t isa, unsigned long long pc,
+                                    const unsigned char *bytes, size_t avail,
+                                    char *out, size_t cap);
+
+/*
  * 助记符 / 寄存器名。使用方自己按 token 渲染时需要它们：
  *   - JD_ASM_TOK_MNEMONIC 的 aux 是助记符下标，isd = 该 token 的 value
  *     （也就是模板下标），传 1 表示取助记符名、0 表示取别名指令的真名
@@ -308,18 +338,27 @@ ROSEMARY_API size_t jd_asm_serialize(const jd_asm_buf *buf,
 ROSEMARY_API int jd_asm_deserialize(jd_asm_buf *buf, const uint8_t *in, size_t len);
 
 /* ---------------------------------------------------------------------------
- *  C++ 符号名 demangle（Itanium C++ ABI）
+ *  C++ 符号名 demangle（Itanium C++ ABI / Microsoft ABI）
  *
  *  符号表里的 C++ 名字是 mangled 的，直接显示给用户没法看：
  *
+ *      Itanium（ELF / Mach-O，`_Z` 开头）：
  *      _ZNSt6__ndk113basic_ostreamIcNS_11char_traitsIcEEElsEj
  *      -> std::__ndk1::basic_ostream<char, std::__ndk1::char_traits<char>
  *         >::operator<<(unsigned int)
  *
+ *      MSVC（PE，`?` 开头，RTTI type descriptor 是 `.?A` 开头）：
+ *      ?meth1@A@@QAEXH@Z        -> A::meth1
+ *      ??0_Mutex@std@@QAE@...   -> std::_Mutex::_Mutex
+ *      .?AVAlbum@@              -> Album
+ *
+ *  两套前缀互斥，本函数按前缀自己分派。MSVC 那套**只解名字**：访问级别、
+ *  调用约定、返回值和参数表不输出。
+ *
  *  out 由调用方提供，size 是它的字节数。返回非 0 表示成功并写出了结果。
  *
  *  返回 0 的两种情况，调用方都按“没有 demangle 结果”处理即可，不要当错误：
- *    - mangled 不是 Itanium ABI 名（必须 _Z 开头），比如 C 符号、汇编标签；
+ *    - mangled 不是上面两种 ABI 的名字，比如 C 符号、汇编标签；
  *    - 名字太怪，这个实现解析不了。
  *  这两种情况下 out 都是空串（失败时可能被写过一半，本函数负责清干净）。
  * ------------------------------------------------------------------------- */
@@ -333,7 +372,7 @@ ROSEMARY_API int jd_demangle(char *out, size_t size, const char *mangled);
  *  调用方按前缀自己分派即可：
  *
  *      if (jd_swift_is_mangled(sym))   jd_swift_demangle(buf, n, sym);
- *      else if (sym[0]=='_' && sym[1]=='Z')  jd_demangle(buf, n, sym);
+ *      else                            jd_demangle(buf, n, sym);  // C++ 两种 ABI
  *
  *      $s4main3FooC                       -> main.Foo
  *      $sSaySiG                           -> [Swift.Int]

@@ -358,6 +358,7 @@ static void merge_exception_split_by_branch_without_finally(jd_method *m)
             cur->try_start_idx = MIN(cur->try_start_idx, next->try_start_idx);
             cur->end_pc = MAX(cur->end_pc, next->end_pc);
             cur->start_pc = MIN(cur->start_pc, next->start_pc);
+            cur->merged_split = true;
 
             lremove_object(m->closed_exceptions, i + 1);
             i--;
@@ -429,6 +430,7 @@ static void merge_exception_split_by_branch_with_finally(jd_method *m)
             cur->try_start_idx = MIN(cur->try_start_idx, other->try_start_idx);
             cur->end_pc = MAX(cur->end_pc, other->end_pc);
             cur->start_pc = MIN(cur->start_pc, other->start_pc);
+            cur->merged_split = true;
 
         }
         int index = lfind_object(m->closed_exceptions,other);
@@ -997,6 +999,21 @@ static void remove_share_handler_finally(jd_method *m)
         if (finally->catch_type_index > 0)
             continue;
         bool crossed = false;
+        if (finally->handler_start_idx == finally->try_end_idx + 1) {
+            bool grouped = false;
+            for (int k = 0; k < m->closed_exceptions->size; ++k) {
+                jd_exc *cb = lget_obj(m->closed_exceptions, k);
+                if (cb->catch_type_index == 0)
+                    continue;
+                if (cb->try_start == finally->try_start &&
+                    cb->try_end == finally->try_end) {
+                    grouped = true;
+                    break;
+                }
+            }
+            if (grouped)
+                continue;
+        }
         for (int j = 0; j < m->closed_exceptions->size; ++j)
         {
             jd_exc *other = lget_obj(m->closed_exceptions, j);
@@ -1018,6 +1035,18 @@ static void remove_share_handler_finally(jd_method *m)
     }
 }
 
+static bool catch_has_finally_sibling(jd_method *m, jd_exc *catch_block)
+{
+    for (int i = 0; i < m->closed_exceptions->size; ++i) {
+        jd_exc *e = lget_obj(m->closed_exceptions, i);
+        if (e->catch_type_index != 0)
+            continue;
+        if (e->try_start == catch_block->try_start)
+            return true;
+    }
+    return false;
+}
+
 static void remove_share_hanlder_catch(jd_method *m)
 {
     for (int i = 0; i < m->closed_exceptions->size; ++i) {
@@ -1029,6 +1058,9 @@ static void remove_share_hanlder_catch(jd_method *m)
         {
             jd_exc *other = lget_obj(m->closed_exceptions, j);
             if (other == catch_block)
+                continue;
+            if (other->handler_start != catch_block->handler_start &&
+                catch_has_finally_sibling(m, catch_block))
                 continue;
             if (catch_block->try_start >= other->handler_start &&
                 ((catch_block->handler_start >= other->try_start &&
@@ -1483,6 +1515,89 @@ static void exc_watch_after(jd_method *m, const char *pass)
     }
 }
 
+
+static bool offset_in_handler(jd_method *m, uint32_t off)
+{
+    for (int i = 0; i < m->closed_exceptions->size; ++i) {
+        jd_exc *e = lget_obj(m->closed_exceptions, i);
+        if (off >= e->handler_start && off <= e->handler_end)
+            return true;
+    }
+    return false;
+}
+
+static bool range_has_back_edge(jd_method *m, uint32_t start, uint32_t end)
+{
+    for (int i = 0; i < m->basic_blocks->size; ++i) {
+        jd_bblock *b = lget_obj(m->basic_blocks, i);
+        if (b->type != JD_BB_NORMAL)
+            continue;
+        uint32_t boff = b->ub->nblock->start_offset;
+        if (boff < start || boff > end)
+            continue;
+        for (int j = 0; b->out != NULL && j < b->out->size; ++j) {
+            jd_edge *edge = lget_obj(b->out, j);
+            if (edge->type != JD_EDGE_NORMAL || edge->target_block == NULL ||
+                edge->target_block->type != JD_BB_NORMAL)
+                continue;
+            if (edge->target_block->ub->nblock->start_offset <= boff)
+                return true;
+        }
+    }
+    return false;
+}
+
+static void expand_try_to_branch(jd_method *m)
+{
+    if (m->type != JD_TYPE_DALVIK)
+        return;
+    size_t n = m->closed_exceptions->size;
+    u1 *expanded = make_obj_arr_zero(u1, n < 1 ? 1 : n);
+    for (int i = 0; i < m->closed_exceptions->size; ++i) {
+        jd_exc *exc = lget_obj(m->closed_exceptions, i);
+        if (!exc->merged_split)
+            continue;
+        if (range_has_back_edge(m, exc->try_start, exc->try_end))
+            continue;
+        for (int guard = 0; guard < 8; ++guard) {
+            jd_ins *start = get_ins(m, exc->try_start_idx);
+            if (start == NULL)
+                break;
+            jd_ins *prev = start->prev;
+            if (prev == NULL || !ins_fn_of(prev)->is_block_end(prev))
+                break;
+            if (!dex_ins_is_conditional_jump((jd_dex_ins *) prev))
+                break;
+            uint32_t target = dex_ins_if_jump_offset((jd_dex_ins *) prev);
+            if (target < exc->try_start || target > exc->try_end)
+                break;
+            if (prev->offset >= exc->try_start)
+                break;
+            if (offset_in_handler(m, prev->offset))
+                break;
+            bool in_try = false;
+            for (int j = 0; j < m->closed_exceptions->size; ++j) {
+                jd_exc *other = lget_obj(m->closed_exceptions, j);
+                if (other == exc || expanded[j])
+                    continue;
+                if (other->try_start == exc->try_start &&
+                    other->try_end == exc->try_end)
+                    continue;
+                if (prev->offset >= other->try_start &&
+                    prev->offset <= other->try_end) {
+                    in_try = true;
+                    break;
+                }
+            }
+            if (in_try)
+                break;
+            exc->try_start = prev->offset;
+            exc->try_start_idx = prev->idx;
+            expanded[i] = 1;
+        }
+    }
+}
+
 #define EXC_PASS(name, call) do { \
         exc_watch_before(m); \
         if (exc_on) { double t0 = exc_now_ms(); call; exc_time_add(name, exc_now_ms() - t0); } \
@@ -1618,6 +1733,7 @@ void cleanup_full_exception_table(jd_method *m)
     DEBUG_EXCEPTION_PRINT("\n4 ----------->\n");
     print_full_exception_table(m);
     EXC_PASS("merge_exception_split_by_branch_with_finally", merge_exception_split_by_branch_with_finally(m));
+    EXC_PASS("expand_try_to_branch", expand_try_to_branch(m));
 
     DEBUG_EXCEPTION_PRINT("\n5 ----------->\n");
     print_full_exception_table(m);

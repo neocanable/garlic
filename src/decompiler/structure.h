@@ -290,6 +290,7 @@ typedef struct {
     int         handler_end_idx;
 
     int         catch_type_index;
+    bool        merged_split;
 } jd_exc;
 
 typedef struct {
@@ -304,6 +305,12 @@ typedef struct {
     list_object     *catches;
     jd_range        *finally;
 } jd_mix_exception;
+
+typedef struct {
+    string          cname;
+    string          name;
+    string          init;
+} jd_try_resource;
 
 typedef enum {
     JD_OP_UNKNOWN = -1,
@@ -731,6 +738,7 @@ typedef enum {
     JD_NODE_CATCH,
     JD_NODE_FINALLY,
     JD_NODE_SYNCHRONIZED,
+    JD_NODE_TRY_RESOURCES,
     JD_NODE_LOOP,
     JD_NODE_WHILE,
     JD_NODE_FOR,

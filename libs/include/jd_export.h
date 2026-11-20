@@ -6,7 +6,7 @@
  *  ROSEMARY_API —— 对外符号的可见性宏
  *
  *  这个宏原来在四个对外头里各抄了一份，而且已经漂移了：jd_asm_export.h 和
- *  jd_elf_export.h 是**无条件重定义**，jd_image_export.h 和 jd_plist_export.h
+ *  jd_native_export.h 是**无条件重定义**，jd_image_export.h 和 jd_plist_export.h
  *  带 #ifndef 保护。同一个库里两种写法。
  *
  *  后果不只是难看：一个使用方的 TU 先包含带保护的头（宏已定义），再包含不带

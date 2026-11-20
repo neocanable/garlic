@@ -11,6 +11,8 @@ static void variables_declaration(jd_method *m);
 
 static void variables_scope(jd_method *m);
 
+static void merge_loop_carried_versions(jd_method *m);
+
 static bool is_var_processed(jd_method *m, string name)
 {
     for (int i = 0; i < m->var_scopes->size; ++i) {
@@ -184,6 +186,280 @@ void analyse_local_variables(jd_method *m)
     variables_scope(m);
 
     variables_declaration(m);
+
+    merge_loop_carried_versions(m);
+}
+
+static bool pending_throwable(jd_val *v)
+{
+    return v->data != NULL && v->data->cname != NULL &&
+           (STR_EQL(v->data->cname, "Throwable") ||
+            STR_EQL(v->data->cname, "Exception"));
+}
+
+static void collect_local_uses(jd_exp *e, list_object *list, bool all)
+{
+    if (e == NULL)
+        return;
+    switch (e->type) {
+        case JD_EXPRESSION_LOCAL_VARIABLE: {
+            jd_val *v = e->data;
+            if (all && v != NULL && v->name != NULL)
+                ladd_obj(list, v);
+            return;
+        }
+        case JD_EXPRESSION_ASSIGNMENT: {
+            jd_exp_assignment *a = e->data;
+            collect_local_uses(a->left, list, all);
+            collect_local_uses(a->right, list, all);
+            return;
+        }
+        case JD_EXPRESSION_ASSIGNMENT_CHAIN: {
+            jd_exp_assignment_chain *c = e->data;
+            for (int i = 0; c->left != NULL && i < c->left->size; ++i)
+                collect_local_uses(lget_obj(c->left, i), list, all);
+            collect_local_uses(c->right, list, all);
+            return;
+        }
+        case JD_EXPRESSION_IF: {
+            jd_exp_if *f = e->data;
+            collect_local_uses(f->expression, list, all);
+            collect_local_uses(f->target_exp, list, all);
+            return;
+        }
+        case JD_EXPRESSION_INVOKE:
+        case JD_EXPRESSION_INVOKE_VIRTUAL:
+        case JD_EXPRESSION_INVOKE_STATIC:
+        case JD_EXPRESSION_INVOKE_INTERFACE:
+        case JD_EXPRESSION_INVOKE_SPECIAL:
+        case JD_EXPRESSION_INVOKE_DYNAMIC: {
+            jd_exp_invoke *inv = e->data;
+            if (inv->method_name != NULL &&
+                STR_EQL(inv->method_name, "addSuppressed") &&
+                inv->list != NULL && inv->list->len > 0) {
+                jd_exp *recv = &inv->list->args[inv->list->len - 1];
+                if (recv->type == JD_EXPRESSION_LOCAL_VARIABLE) {
+                    jd_val *v = recv->data;
+                    if (v != NULL && v->name != NULL &&
+                        v->name_type != JD_VAR_NAME_DEBUG &&
+                        pending_throwable(v))
+                        ladd_obj_no_dup(list, v);
+                }
+            }
+            for (int i = 0; inv->list != NULL && i < inv->list->len; ++i)
+                collect_local_uses(&inv->list->args[i], list, all);
+            return;
+        }
+        case JD_EXPRESSION_OPERATOR:
+        case JD_EXPRESSION_NEW_ARRAY:
+        case JD_EXPRESSION_RETURN:
+        case JD_EXPRESSION_NEW_OBJ:
+        case JD_EXPRESSION_ARRAY_STORE:
+        case JD_EXPRESSION_SWITCH:
+        case JD_EXPRESSION_TERNARY:
+        case JD_EXPRESSION_PUT_STATIC:
+        case JD_EXPRESSION_PUT_FIELD:
+        case JD_EXPRESSION_STORE:
+        case JD_EXPRESSION_DEFINE_STACK_VAR:
+        case JD_EXPRESSION_ATHROW:
+        case JD_EXPRESSION_INSTANCEOF:
+        case JD_EXPRESSION_CAST:
+        case JD_EXPRESSION_INITIALIZE:
+        case JD_EXPRESSION_ARRAYLENGTH:
+        case JD_EXPRESSION_SINGLE_OPERATOR:
+        case JD_EXPRESSION_SINGLE_LIST:
+        case JD_EXPRESSION_COMPARE:
+        case JD_EXPRESSION_LAMBDA:
+        case JD_EXPRESSION_ANONYMOUS:
+        case JD_EXPRESSION_ARRAY_LOAD:
+        case JD_EXPRESSION_IINC:
+        case JD_EXPRESSION_UNINITIALIZE:
+        case JD_EXPRESSION_FOR:
+        case JD_EXPRESSION_WHILE:
+        case JD_EXPRESSION_DO_WHILE:
+        case JD_EXPRESSION_LOGIC_NOT: {
+            jd_exp_reader *reader = e->data;
+            for (int i = 0; reader != NULL && reader->list != NULL &&
+                            i < reader->list->len; ++i)
+                collect_local_uses(&reader->list->args[i], list, all);
+            return;
+        }
+        default:
+            return;
+    }
+}
+
+static bool name_is_declared(list_object *names, string name)
+{
+    for (int i = 0; i < names->size; ++i) {
+        string n = lget_obj(names, i);
+        if (n != NULL && STR_EQL(n, name))
+            return true;
+    }
+    return false;
+}
+
+void ensure_undeclared_variables(jd_method *m)
+{
+    list_object *declared = linit_object();
+    for (int i = 0; i < m->var_scopes->size; ++i) {
+        jd_variable_scope *r = lget_obj(m->var_scopes, i);
+        if (r->name != NULL)
+            ladd_obj(declared, r->name);
+    }
+    for (int i = 0; i < m->enter->local_vars_count; ++i) {
+        jd_val *v = m->enter->local_vars[i];
+        if (v != NULL && v->name != NULL)
+            ladd_obj(declared, v->name);
+    }
+    for (int i = 0; i < m->nodes->size; ++i) {
+        jd_node *n = lget_obj(m->nodes, i);
+        if (n->param_exp == NULL ||
+            n->param_exp->type != JD_EXPRESSION_LOCAL_VARIABLE)
+            continue;
+        jd_val *v = n->param_exp->data;
+        if (v != NULL && v->name != NULL)
+            ladd_obj(declared, v->name);
+    }
+
+    list_object *used = linit_object();
+    for (int i = 0; i < m->expressions->size; ++i) {
+        jd_exp *e = lget_obj(m->expressions, i);
+        if (exp_is_nopped(e))
+            continue;
+        collect_local_uses(e, used, false);
+    }
+
+    jd_node *root = lget_obj_first(m->nodes);
+    for (int i = 0; i < used->size; ++i) {
+        jd_val *v = lget_obj(used, i);
+        if (name_is_declared(declared, v->name))
+            continue;
+        jd_variable_scope *scope = make_obj(jd_variable_scope);
+        scope->name = v->name;
+        scope->cname = (v->data != NULL && v->data->cname != NULL)
+                       ? v->data->cname : (string) "Object";
+        scope->start_idx = root->start_idx;
+        scope->end_idx = root->end_idx;
+        scope->declaration_idx = -2;
+        scope->stores = bitset_create();
+        ladd_obj(declared, v->name);
+        insert_declaration_to(m, scope, root);
+    }
+}
+
+
+static bool exp_store_pair(jd_exp *e, jd_exp **left, jd_exp **right)
+{
+    if (e->type == JD_EXPRESSION_STORE) {
+        jd_exp_store *s = e->data;
+        if (s->list != NULL && s->list->len >= 2) {
+            *left = &s->list->args[0];
+            *right = &s->list->args[1];
+            return true;
+        }
+    }
+    else if (e->type == JD_EXPRESSION_ASSIGNMENT) {
+        jd_exp_assignment *a = e->data;
+        if (a->left != NULL && a->right != NULL) {
+            *left = a->left;
+            *right = a->right;
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool exp_in_loop(jd_exp *e)
+{
+    if (e->block == NULL || e->block->node == NULL)
+        return false;
+    for (jd_node *n = e->block->node; n != NULL; n = n->parent) {
+        if (node_is_while(n) || node_is_for(n) ||
+            node_is_do_while(n) || node_is_loop(n))
+            return true;
+    }
+    return false;
+}
+
+static int val_ref_count(list_object *refs, jd_val *val)
+{
+    int count = 0;
+    for (int i = 0; i < refs->size; ++i) {
+        if (lget_obj(refs, i) == val)
+            count++;
+    }
+    return count;
+}
+
+static void merge_loop_carried_versions(jd_method *m)
+{
+    list_object *refs = linit_object();
+    for (int i = 0; i < m->expressions->size; ++i) {
+        jd_exp *e = lget_obj(m->expressions, i);
+        if (exp_is_nopped(e))
+            continue;
+        collect_local_uses(e, refs, true);
+    }
+    list_object *unique = linit_object();
+    for (int i = 0; i < refs->size; ++i)
+        ladd_obj_no_dup(unique, lget_obj(refs, i));
+
+    for (int i = 0; i < unique->size; ++i) {
+        jd_val *v = lget_obj(unique, i);
+        if (v->data == NULL || v->data->cname == NULL)
+            continue;
+
+        jd_exp *store = NULL;
+        int stores = 0;
+        for (int j = 0; j < m->expressions->size; ++j) {
+            jd_exp *e = lget_obj(m->expressions, j);
+            if (exp_is_nopped(e))
+                continue;
+            jd_exp *left = NULL;
+            jd_exp *right = NULL;
+            if (!exp_store_pair(e, &left, &right))
+                continue;
+            if (left->type != JD_EXPRESSION_LOCAL_VARIABLE ||
+                left->data != v)
+                continue;
+            store = e;
+            stores++;
+        }
+        if (stores != 1 || store == NULL)
+            continue;
+        if (val_ref_count(refs, v) != 1)
+            continue;
+        if (!exp_in_loop(store))
+            continue;
+
+        jd_exp *left = NULL;
+        jd_exp *right = NULL;
+        if (!exp_store_pair(store, &left, &right))
+            continue;
+        list_object *rhs = linit_object();
+        collect_local_uses(right, rhs, true);
+        jd_val *target = NULL;
+        for (int j = 0; j < rhs->size; ++j) {
+            jd_val *w = lget_obj(rhs, j);
+            if (w == v || w->slot != v->slot || w->name == NULL ||
+                w->data == NULL || w->data->cname == NULL)
+                continue;
+            if (!STR_EQL(w->data->cname, v->data->cname))
+                continue;
+            if (val_ref_count(refs, w) <= 1)
+                continue;
+            target = w;
+            break;
+        }
+        if (target == NULL)
+            continue;
+
+        v->name = target->name;
+        v->data = target->data;
+        if (m->declarations != NULL)
+            bitset_set_to_value(m->declarations, store->idx, false);
+    }
 }
 
 static void variables_declaration(jd_method *m)

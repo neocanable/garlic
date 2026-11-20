@@ -5,4 +5,6 @@
 
 void identify_loop(jd_method *m);
 
+void insert_catch_fallthrough_break(jd_method *m);
+
 #endif //GARLIC_EXPRESSION_LOOP_H

@@ -11,4 +11,6 @@ void fix_exception_handler_blocks(jd_method *m);
 
 void nop_catch_handler_gotos(jd_method *m);
 
+void identify_try_with_resources(jd_method *m);
+
 #endif //GARLIC_EXPRESSION_EXCEPTION_H

@@ -617,3 +617,102 @@ void identify_loop(jd_method *m)
         identify_loops_recursive(m, node, false);
     }
 }
+
+static bool loop_node_type(jd_node *node)
+{
+    return node_is_while(node) || node_is_for(node) ||
+           node_is_do_while(node) || node_is_loop(node);
+}
+
+static jd_bblock* catch_last_block(jd_node *catch_node)
+{
+    jd_bblock *last = NULL;
+    for (int i = 0; i < catch_node->children->size; ++i) {
+        jd_node *child = lget_obj(catch_node->children, i);
+        if (!node_is_basic_block(child))
+            continue;
+        jd_bblock *block = child->data;
+        if (block == NULL || block->ub == NULL ||
+            block->ub->nblock == NULL)
+            continue;
+        if (last == NULL ||
+            block->ub->nblock->end_idx > last->ub->nblock->end_idx)
+            last = block;
+    }
+    return last;
+}
+
+static bool catch_block_has_terminator(jd_method *m, jd_bblock *block)
+{
+    jd_nblock *nb = block->ub->nblock;
+    for (int i = nb->start_idx; i <= nb->end_idx; ++i) {
+        jd_exp *e = get_exp(m, i);
+        if (e == NULL || exp_is_nopped(e))
+            continue;
+        if (exp_is_break(e) || exp_is_continue(e) ||
+            exp_is_goto(e) || exp_is_return(e) || exp_is_athrow(e))
+            return true;
+    }
+    return false;
+}
+
+void insert_catch_fallthrough_break(jd_method *m)
+{
+    if (m->type != JD_TYPE_DALVIK)
+        return;
+
+    size_t count = m->nodes->size;
+    for (int i = 0; i < count; ++i) {
+        jd_node *catch_node = lget_obj(m->nodes, i);
+        if (!node_is_catch(catch_node))
+            continue;
+
+        jd_node *loop = NULL;
+        for (jd_node *p = catch_node->parent; p != NULL; p = p->parent) {
+            if (loop_node_type(p)) {
+                loop = p;
+                break;
+            }
+        }
+        if (loop == NULL)
+            continue;
+
+        jd_bblock *last = catch_last_block(catch_node);
+        if (last == NULL || last->out == NULL)
+            continue;
+        if (catch_block_has_terminator(m, last))
+            continue;
+
+        jd_nblock *nb = last->ub->nblock;
+        jd_ins *end = nb->end_ins;
+        jd_ins_fn *fn = end == NULL ? NULL : ins_fn_of(end);
+        if (fn == NULL || fn->is_block_end(end))
+            continue;
+
+        jd_bblock *succ = NULL;
+        int count_out = 0;
+        for (int j = 0; j < last->out->size; ++j) {
+            jd_edge *edge = lget_obj(last->out, j);
+            if (edge->type != JD_EDGE_NORMAL || edge->target_block == NULL ||
+                edge->target_block->type != JD_BB_NORMAL)
+                continue;
+            count_out++;
+            succ = edge->target_block;
+        }
+        if (count_out != 1 || succ == NULL)
+            continue;
+        if (succ->ub->nblock->start_idx <= loop->end_idx)
+            continue;
+
+        jd_exp *be = make_obj(jd_exp);
+        jd_exp_goto *bg = make_obj(jd_exp_goto);
+        bg->goto_offset = succ->ub->nblock->start_offset;
+        be->type = JD_EXPRESSION_BREAK;
+        be->data = bg;
+        be->idx = catch_node->end_idx;
+        be->ins = end;
+        jd_node *bn = create_expression_node(m, be);
+        bn->parent = catch_node;
+        ladd_obj(catch_node->children, bn);
+    }
+}

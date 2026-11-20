@@ -854,6 +854,21 @@ static void write_synchronized(FILE *stream, jsource_file *jf, jd_node *n)
     fprintf(stream, "%s}\n", ident);
 }
 
+static void write_try_resources_node(FILE *stream, jsource_file *jf, jd_node *n)
+{
+    string ident = get_node_ident(n);
+    jd_try_resource *r = n->data;
+    fprintf(stream, "%stry (", ident);
+    if (r != NULL) {
+        fprintf(stream, "%s %s = %s", r->cname, r->name,
+                r->init == NULL ? r->name : r->init);
+    }
+    fprintf(stream, ") {");
+    write_node_debug_info(jf, n);
+    writter_for_class(jf, n);
+    fprintf(stream, "%s}\n", ident);
+}
+
 static void write_default(FILE *stream, jsource_file *jf, jd_node *n)
 {
     string ident = get_node_ident(n);
@@ -924,6 +939,9 @@ void writter_for_class(jsource_file *jf, jd_node *node)
             case JD_NODE_SYNCHRONIZED:
                 write_synchronized(stream, jf, child);
                 break;
+            case JD_NODE_TRY_RESOURCES:
+                write_try_resources_node(stream, jf, child);
+                break;
             default:
                 write_default(stream, jf, child);
                 break;
@@ -986,6 +1004,9 @@ void writter_for_anonymous_class(jsource_file *jf, jd_node *node)
                 break;
             case JD_NODE_SYNCHRONIZED:
                 write_synchronized(stream, jf, child);
+                break;
+            case JD_NODE_TRY_RESOURCES:
+                write_try_resources_node(stream, jf, child);
                 break;
             default:
                 write_default(stream, jf, child);
